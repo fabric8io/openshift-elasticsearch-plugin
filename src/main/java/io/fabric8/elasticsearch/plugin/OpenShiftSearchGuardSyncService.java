@@ -87,8 +87,6 @@ public class OpenShiftSearchGuardSyncService extends AbstractLifecycleComponent<
       public void eventReceived(Action action, PolicyBinding policyBinding) {
         logger.trace("Received {}: {}", action, policyBinding);
 
-        System.out.println("Hello!");
-
         policyBindingsResourceVersion.set(policyBinding.getMetadata().getResourceVersion());
       }
     });
