@@ -17,33 +17,28 @@ package io.fabric8.elasticsearch.plugin;
 
 import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.component.LifecycleComponent;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.plugins.AbstractPlugin;
 
 import java.util.Collection;
 
-public class OpenShiftSearchGuardSync extends AbstractPlugin {
+public class OpenShiftSearchGuardSyncPlugin extends AbstractPlugin {
 
-  private final Settings settings;
+	@Override
+	public String name() {
+		return "openshift-searchguard-sync";
+	}
 
-  public OpenShiftSearchGuardSync(Settings settings) {
-    this.settings = settings;
-  }
+	@Override
+	public String description() {
+		return "OpenShift Search Guard Sync Plugin";
+	}
 
-  @Override
-  public String name() {
-    return "openshift-searchguard-sync";
-  }
+	@SuppressWarnings("rawtypes")
+	@Override
+	public Collection<Class<? extends LifecycleComponent>> services() {
+		Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
+		services.add(OpenShiftSearchGuardSyncService.class);
+		return services;
+	}
 
-  @Override
-  public String description() {
-    return "OpenShift Search Guard Sync Plugin";
-  }
-
-  @Override
-  public Collection<Class<? extends LifecycleComponent>> services() {
-    Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
-    services.add(OpenShiftSearchGuardSyncService.class);
-    return services;
-  }
 }

@@ -15,95 +15,77 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
-import io.fabric8.kubernetes.client.Watch;
-import io.fabric8.kubernetes.client.Watcher;
-import io.fabric8.openshift.api.model.PolicyBinding;
-import io.fabric8.openshift.api.model.PolicyBindingList;
-import io.fabric8.openshift.client.DefaultOpenshiftClient;
-import io.fabric8.openshift.client.OpenShiftClient;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.cluster.ClusterService;
-import org.elasticsearch.cluster.LocalNodeMasterListener;
+import org.elasticsearch.client.Client;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.threadpool.ThreadPool;
+import org.elasticsearch.common.util.concurrent.EsExecutors;
+import org.elasticsearch.common.util.concurrent.FutureUtils;
+import org.elasticsearch.rest.RestController;
 
-import java.util.concurrent.atomic.AtomicReference;
 
-public class OpenShiftSearchGuardSyncService extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService> implements LocalNodeMasterListener {
+public class OpenShiftSearchGuardSyncService 
+	extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService> {
 
-  private static final String SETTINGS_PREFIX = "os.sg.sync.";
 
-  private final AtomicReference<String> policyBindingsResourceVersion = new AtomicReference<>();
-  private final ClusterService clusterService;
+	private final ESLogger logger;
+	private final UserProjectCache cache;
+	private final Settings settings;
+	private ScheduledThreadPoolExecutor scheduler;
+	
+	@SuppressWarnings("rawtypes")
+	private ScheduledFuture scheduledFuture;
 
-  private OpenShiftClient osClient;
-  private Watch watch;
+	@Inject
+	protected OpenShiftSearchGuardSyncService(final Settings settings, final Client esClient, final RestController restController) {
+		super(settings);
+		this.settings = settings;
+		this.logger = Loggers.getLogger(getClass(), settings);
+		cache = new UserProjectCacheMapAdapter(logger);
+		restController.registerFilter(new DynamicACLFilter(cache, settings, esClient, logger));
+	}
 
-  @Inject
-  protected OpenShiftSearchGuardSyncService(Settings settings, ClusterService clusterService) {
-    super(settings);
+	@Override
+	protected void doStart() throws ElasticsearchException {
+        this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
+                EsExecutors.daemonThreadFactory(settings, "openshift_searchguard_sync_service"));
+        this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        
+        Runnable expire = new Runnable() {
+			@Override
+			public void run() {
+				cache.expire();
+			}
+		};
+        this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
+        logger.debug("Started");
+  
+	}
 
-    this.osClient = new DefaultOpenshiftClient();
-    this.clusterService = clusterService;
+	@Override
+	protected void doStop() throws ElasticsearchException {
+        FutureUtils.cancel(this.scheduledFuture);
+        this.scheduler.shutdown();
+		logger.debug("Stopped");
+	}
 
-    logger.info("Initialized {}", getClass().getSimpleName());
-  }
+	@Override
+	protected void doClose() throws ElasticsearchException {
+        FutureUtils.cancel(this.scheduledFuture);
+        if(this.scheduler != null){
+        	this.scheduler.shutdown();
+        }
+		logger.debug("Closed");
+	}
 
-  @Override
-  protected void doStart() throws ElasticsearchException {
-    clusterService.add(this);
-  }
 
-  @Override
-  protected void doStop() throws ElasticsearchException {
-    logger.debug("Stopping watching OpenShift policy bindings");
-    if (watch != null && watch.isOpen()) {
-      watch.close();
-    }
-    logger.debug("Stopped watching OpenShift policy bindings");
-    clusterService.remove(this);
-  }
-
-  @Override
-  protected void doClose() throws ElasticsearchException {
-    logger.debug("Stopping watching OpenShift policy bindings");
-    if (watch != null && watch.isOpen()) {
-      watch.close();
-    }
-    logger.debug("Stopped watching OpenShift policy bindings");
-  }
-
-  @Override
-  public void onMaster() {
-    logger.debug("Starting watching OpenShift policy bindings");
-    PolicyBindingList policyBindings = osClient.policyBindings().list();
-
-    policyBindingsResourceVersion.set(policyBindings.getMetadata().getResourceVersion());
-
-    watch = osClient.policyBindings().watch(policyBindings.getMetadata().getResourceVersion(), new Watcher<PolicyBinding>() {
-      @Override
-      public void eventReceived(Action action, PolicyBinding policyBinding) {
-        logger.trace("Received {}: {}", action, policyBinding);
-
-        policyBindingsResourceVersion.set(policyBinding.getMetadata().getResourceVersion());
-      }
-    });
-    logger.debug("Started watching OpenShift policy bindings");
-  }
-
-  @Override
-  public void offMaster() {
-    logger.debug("Stopping watching OpenShift policy bindings");
-    if (watch != null && watch.isOpen()) {
-      watch.close();
-    }
-    logger.debug("Stopped watching OpenShift policy bindings");
-  }
-
-  @Override
-  public String executorName() {
-    return ThreadPool.Names.GENERIC;
-  }
 }
