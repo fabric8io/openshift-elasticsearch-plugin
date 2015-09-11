@@ -78,4 +78,9 @@ public class ProjectUserCache implements OpenShiftPolicyCache{
 		}
 		return Collections.unmodifiableSet(userToProjects.get(username));
 	}
+
+	@Override
+	public Map<String, Set<String>> getUserProjects() {
+		return Collections.unmodifiableMap(userToProjects);
+	}
 }

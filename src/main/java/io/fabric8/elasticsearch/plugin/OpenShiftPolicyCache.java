@@ -15,6 +15,7 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
+import java.util.Map;
 import java.util.Set;
 
 import io.fabric8.openshift.api.model.NamedRoleBinding;
@@ -31,6 +32,12 @@ public interface OpenShiftPolicyCache {
 	 * @param binding  the binding to get user info
 	 */
 	void add(final String project, NamedRoleBinding binding);
+	
+	/**
+	 * Retrieve an unmodifiable mapping of users to their projects
+	 * @return
+	 */
+	Map<String, Set<String>> getUserProjects();
 	
 	/**
 	 * the users that have access to a project 

@@ -10,6 +10,10 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 
+# Eclipse
+.project
+.classpath
+.settings/
 
 ### JetBrains template
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion
@@ -60,3 +64,4 @@ crashlytics.properties
 crashlytics-build.properties
 
 
+/test/

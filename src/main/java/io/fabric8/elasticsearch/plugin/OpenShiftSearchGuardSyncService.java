@@ -17,7 +17,8 @@ package io.fabric8.elasticsearch.plugin;
 
 import static org.elasticsearch.node.NodeBuilder.*;
 
-import io.fabric8.elasticsearch.plugin.SearchGuardACL.Acl;
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
 import io.fabric8.kubernetes.api.model.Namespace;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
@@ -62,7 +63,6 @@ public class OpenShiftSearchGuardSyncService
 		extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService>
 		implements LocalNodeMasterListener, Watcher<PolicyBinding> {
 	
-	private static final String PLUGIN_ACL_SOURCE = "OpenShiftSearchGuardSyncPlugin";
 	private static final String SETTINGS_PREFIX = "os.sg.sync.";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
@@ -174,21 +174,7 @@ public class OpenShiftSearchGuardSyncService
 
 	private void seedAcls() {
 		SearchGuardACL acls = retrieveAcl();
-		for (Acl acl : acls) {
-			if(PLUGIN_ACL_SOURCE.equals(acl.getAclSource())){
-				//should only be on but...
-				List<String> projects = new ArrayList<>();
-				for (String user : acl.getUsers()) {
-					projects.addAll(cache.getProjectsFor(user));
-				}
-				if(!projects.isEmpty()){
-					acl.setIndices(projects);
-				}else{
-					acls.remove(acl);
-				}
-			}
-		}
-		
+		acls.syncFrom(cache);
 		update(acls);
 	}
 

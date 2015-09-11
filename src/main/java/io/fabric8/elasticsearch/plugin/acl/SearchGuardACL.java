@@ -13,13 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.fabric8.elasticsearch.plugin;
+package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.commons.lang.builder.ToStringBuilder;
+import org.apache.commons.lang.builder.ToStringStyle;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import io.fabric8.elasticsearch.plugin.OpenShiftPolicyCache;
 
 /**
  * Class representation of a ElasticSearch SearchGuard plugin ACL
@@ -32,9 +39,11 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	@JsonProperty(value="acl")
 	private List<Acl> acls;
 	
-	static class Acl {
+	public static class Acl {
 		
-		@JsonProperty(value="aclSource")
+		public static final String PLUGIN_ACL_SOURCE = "OpenShiftSearchGuardSyncPlugin";
+
+		@JsonProperty(value="acl_source")
 		private String aclSource = "";
 
 		@JsonProperty(value="__Comment__")
@@ -115,6 +124,11 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		public void setAclSource(String aclSource) {
 			this.aclSource = aclSource;
 		}
+		@Override
+		public String toString() {
+			return ToStringBuilder.reflectionToString(this, ToStringStyle.MULTI_LINE_STYLE);
+		}
+		
 		
 	}
 
@@ -123,7 +137,7 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	 * while spinning through the ACLs
 	 */
 	@Override
-	public Iterator<io.fabric8.elasticsearch.plugin.SearchGuardACL.Acl> iterator() {
+	public Iterator<io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl> iterator() {
 		return new ArrayList<>(acls).iterator();
 	}
 	
@@ -136,6 +150,26 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	}
 	
 	public void syncFrom(OpenShiftPolicyCache cache){
-		
+		removeSyncAcls();
+		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
+			acls.add(new AclBuilder()
+					.user(userProjects.getKey())
+					.projects(formatIndicies(userProjects.getValue()))
+					.build());
+		}
+	}
+	private List<String> formatIndicies(Set<String> projects){
+		ArrayList<String> indicies = new ArrayList<>(projects.size());
+		for (String project : projects) {
+			indicies.add(String.format("%s.*", project));
+		}
+		return indicies;
+	}
+	private void removeSyncAcls() {
+		for (Acl acl : acls) {
+			if(Acl.PLUGIN_ACL_SOURCE.equals(acl.getAclSource())){
+				remove(acl);
+			}
+		}
 	}
 }
