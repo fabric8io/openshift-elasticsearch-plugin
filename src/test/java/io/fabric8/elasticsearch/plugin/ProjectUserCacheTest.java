@@ -19,7 +19,11 @@ import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.elasticsearch.common.logging.ESLogger;
 import org.junit.Before;
@@ -34,12 +38,12 @@ public class ProjectUserCacheTest {
 	private static final String USERNAME = "ausername";
 	private static final String PROJECT_NAME = "aprojectName";
 	private ProjectUserCache cache;
+	private ESLogger logger;
 
 	@Before
 	public void setUp() throws Exception {
-		ESLogger logger = mock(ESLogger.class);
+		logger = mock(ESLogger.class);
 		doNothing().when(logger).debug(anyString(),anyObject());
-		cache = new ProjectUserCache(logger);
 	}
 
 	@Test
@@ -50,11 +54,69 @@ public class ProjectUserCacheTest {
 		NamedRoleBinding binding = spy(new NamedRoleBinding());
 		when(binding.getRoleBinding()).thenReturn(roles);
 		
+		cache = new ProjectUserCache(logger);
 		cache.add(PROJECT_NAME, binding);
 		
 		assertArrayEquals(users.toArray(), cache.getUsersFor(PROJECT_NAME).toArray());
 		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(USERNAME).toArray());
 	}
 
+	@Test
+	public void updateShouldAddUsersToProjectWhenUsersAreAdded(){
+		Map<String, Set<String>> projectToUsers = new HashMap<String, Set<String>>();
+		projectToUsers.put(PROJECT_NAME, new HashSet<>(Arrays.asList(USERNAME)));
+		Map<String, Set<String>> usersToProjects = new HashMap<String, Set<String>>();
+		usersToProjects.put(USERNAME, new HashSet<>(Arrays.asList(PROJECT_NAME)));
+		
+		cache = new ProjectUserCache(logger, projectToUsers, usersToProjects);
+		
+		final String ANOTHER_USER= "anotheruser";
+		List<String> users = Arrays.asList(USERNAME, ANOTHER_USER);
+		RoleBinding roles = spy(new RoleBinding());
+//		when(roles.getMetadata()).thenReturn
+		when(roles.getUserNames()).thenReturn(users);
+		
+		cache.update(PROJECT_NAME, roles);
+		
+		assertArrayEquals(users.toArray(), cache.getUsersFor(PROJECT_NAME).toArray());
+		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(USERNAME).toArray());
+		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(ANOTHER_USER).toArray());
+		
+	}
+
+	@Test
+	public void updateShouldRemoveUsersFromProjectWhenUsersAreRemoved(){
+		final String ALT_PROJECT_NAME = "altprojectname";
+		Map<String, Set<String>> projectToUsers = new HashMap<String, Set<String>>();
+		projectToUsers.put(PROJECT_NAME, new HashSet<>(Arrays.asList(USERNAME)));
+		projectToUsers.put(ALT_PROJECT_NAME, new HashSet<>(Arrays.asList(USERNAME)));
+		Map<String, Set<String>> usersToProjects = new HashMap<String, Set<String>>();
+		usersToProjects.put(USERNAME, new HashSet<>(Arrays.asList(PROJECT_NAME, ALT_PROJECT_NAME)));
+
+		//these should get dropped
+		HashSet<String> prunedUsers = new HashSet<String>(4);
+		projectToUsers.put("athirdproject", prunedUsers);
+		HashSet<String> prunedProjects = new HashSet<String>(5);
+		usersToProjects.put("athirduser", prunedProjects);
+		
+		cache = new ProjectUserCache(logger, projectToUsers, usersToProjects);
+		
+		final String ANOTHER_USER= "anotheruser";
+		List<String> users = Arrays.asList(ANOTHER_USER);
+		RoleBinding roleBinding = spy(new RoleBinding());
+		when(roleBinding.getUserNames()).thenReturn(users);
+		
+		cache.update(PROJECT_NAME, roleBinding);
+		
+		assertArrayEquals(users.toArray(), cache.getUsersFor(PROJECT_NAME).toArray());
+		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(ANOTHER_USER).toArray());
+		
+		assertArrayEquals(new String[]{USERNAME}, cache.getUsersFor(ALT_PROJECT_NAME).toArray());
+		assertArrayEquals(new String[]{ALT_PROJECT_NAME}, cache.getProjectsFor(USERNAME).toArray());
+		
+		assertNotSame(prunedUsers, cache.getUsersFor("athirduser"));
+		assertNotSame(prunedProjects, cache.getProjectsFor("athirdproject"));
+		
+	}
 	
 }

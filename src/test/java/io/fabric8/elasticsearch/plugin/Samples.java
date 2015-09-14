@@ -23,7 +23,8 @@ import org.apache.commons.io.IOUtils;
 public enum Samples {
 	
 	ACL("searchguard_acl.json"),
-	OPENSHIFT_ACL("searchguard_acl.json");
+	OPENSHIFT_ACL("searchguard_acl.json"),
+	OPENSHIFT_POLICY_WATCH_RESPONSE("openshift_policy_watch_response.json");
 
 	private String path;
 	

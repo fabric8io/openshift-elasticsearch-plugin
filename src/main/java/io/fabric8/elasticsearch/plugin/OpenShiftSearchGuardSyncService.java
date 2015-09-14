@@ -18,7 +18,6 @@ package io.fabric8.elasticsearch.plugin;
 import static org.elasticsearch.node.NodeBuilder.*;
 
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
 import io.fabric8.kubernetes.api.model.Namespace;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
@@ -49,14 +48,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class OpenShiftSearchGuardSyncService 
@@ -85,15 +78,16 @@ public class OpenShiftSearchGuardSyncService
 
 		this.osClient = new DefaultOpenshiftClient(initConfig());
 		this.clusterService = clusterService;
+		searchGuardIndex = Utils.getSystemPropertyOrEnvVar("AOS_SG_INDEX","searchguard");
 
 		logger.info("Initialized {}", getClass().getSimpleName());
 	}
 
 	private Config initConfig() {
 		ConfigBuilder builder = new ConfigBuilder();
-		final String caPath = Utils.getSystemPropertyOrEnvVar("AOP_SG_SYNC_CA_PATH",
+		final String caPath = Utils.getSystemPropertyOrEnvVar("AOS_SG_SYNC_CA_PATH",
 				OpenshiftConfig.KUBERNETES_SERVICE_ACCOUNT_CA_CRT_PATH);
-		final String tokenPath = Utils.getSystemPropertyOrEnvVar("AOP_SG_SYNC_SA_PATH",
+		final String tokenPath = Utils.getSystemPropertyOrEnvVar("AOS_SG_SYNC_SA_PATH",
 				OpenshiftConfig.KUBERNETES_SERVICE_ACCOUNT_TOKEN_PATH);
 		final String masterApiUrl = Utils.getSystemPropertyOrEnvVar("K8S_HOST_URL");
 
@@ -117,9 +111,6 @@ public class OpenShiftSearchGuardSyncService
 	protected void doStart() throws ElasticsearchException {
 		logger.debug("Starting OpenShift Policy Sync Plugin");
 		clusterService.add(this);
-
-		// get the searchguard index from config
-		searchGuardIndex = "searchguard";
 	}
 
 	@Override
@@ -166,8 +157,9 @@ public class OpenShiftSearchGuardSyncService
 		// retrieve allowable roles from config
 		final SearchGuardACL acl = retrieveAcl();
 		for (NamedRoleBinding binding : policyBinding.getRoleBindings()) {
-			
-//					evaluateRole(acl, binding);
+			if(loggingRoles.contains(binding.getName())){
+				cache.update(binding.getRoleBinding().getMetadata().getNamespace(), binding.getRoleBinding());
+			}
 		}
 		update(acl);
 	}

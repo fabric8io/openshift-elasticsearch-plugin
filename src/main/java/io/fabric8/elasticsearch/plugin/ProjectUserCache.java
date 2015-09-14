@@ -16,6 +16,7 @@
 package io.fabric8.elasticsearch.plugin;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.elasticsearch.common.logging.ESLogger;
 
 import io.fabric8.openshift.api.model.NamedRoleBinding;
+import io.fabric8.openshift.api.model.RoleBinding;
 
 /**
  * Cache of users and projects to assist when updating and
@@ -35,12 +37,53 @@ import io.fabric8.openshift.api.model.NamedRoleBinding;
 public class ProjectUserCache implements OpenShiftPolicyCache{
 	
 	private ESLogger logger;
-	private Map<String, Set<String>> projectToUsers = new ConcurrentHashMap<>();
-	private Map<String, Set<String>> userToProjects = new ConcurrentHashMap<>();
+	private Map<String, Set<String>> projectToUsers;
+	private Map<String, Set<String>> userToProjects;
 	
-
 	public ProjectUserCache(ESLogger logger){
+		this(logger, new ConcurrentHashMap<String, Set<String>>(), new ConcurrentHashMap<String, Set<String>>());
+	}
+
+	public ProjectUserCache(ESLogger logger, Map<String, Set<String>> projectToUsers, Map<String, Set<String>> userToProjects){
 		this.logger = logger;
+		this.projectToUsers = projectToUsers;
+		this.userToProjects = userToProjects;
+	}
+	
+	@Override
+	public synchronized void update(final String project, RoleBinding binding){
+		List<String> userNames = binding.getUserNames();
+		Set<String> cachedUsers = projectToUsers.get(project);
+		
+		for (String user : userNames) {
+			//added
+			if(!cachedUsers.contains(user)){
+				if(!userToProjects.containsKey(user)){
+					userToProjects.put(user, new HashSet<String>());
+				}
+				userToProjects.get(user).add(project);
+			}
+		}
+		for (String cachedUser : cachedUsers) {
+			//removed
+			if(!userNames.contains(cachedUser)){
+				userToProjects.get(cachedUser).remove(project);
+			}
+		}
+		
+		cachedUsers.clear();
+		cachedUsers.addAll(userNames);
+		
+		pruneCache(projectToUsers);
+		pruneCache(userToProjects);
+	}
+	
+	private void pruneCache(Map<String, Set<String>> map){
+		for (Map.Entry<String, Set<String>> entry : new HashMap<>(map).entrySet()) {
+			if(entry.getValue().isEmpty()){
+				map.remove(entry.getKey());
+			}
+		}
 	}
 	
 	@Override

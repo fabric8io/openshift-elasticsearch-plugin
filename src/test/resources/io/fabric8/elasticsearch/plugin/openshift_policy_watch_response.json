@@ -1,0 +1,106 @@
+{
+  "type": "MODIFIED",
+  "object": {
+    "kind": "PolicyBinding",
+    "apiVersion": "v1",
+    "metadata": {
+      "name": ":default",
+      "namespace": "hello-world",
+      "selfLink": "\/oapi\/v1\/namespaces\/hello-world\/policybindings\/:default",
+      "uid": "8181bf5c-503c-11e5-910d-080027893417",
+      "resourceVersion": "72287",
+      "creationTimestamp": "2015-09-01T00:00:50Z"
+    },
+    "lastModified": "2015-09-03T20:06:37Z",
+    "policyRef": {
+      "name": "default"
+    },
+    "roleBindings": [
+      {
+        "name": "admins",
+        "roleBinding": {
+          "metadata": {
+            "name": "admins",
+            "namespace": "hello-world",
+            "uid": "8156ad08-503c-11e5-910d-080027893417",
+            "resourceVersion": "56152",
+            "creationTimestamp": "2015-09-01T00:00:50Z"
+          },
+          "userNames": [
+            "admin",
+            "atestadminuser"
+          ],
+          "groupNames": [
+            
+          ],
+          "roleRef": {
+            "name": "admin"
+          }
+        }
+      },
+      {
+        "name": "system:deployers",
+        "roleBinding": {
+          "metadata": {
+            "name": "system:deployers",
+            "namespace": "hello-world",
+            "uid": "81961783-503c-11e5-910d-080027893417",
+            "resourceVersion": "56149",
+            "creationTimestamp": "2015-09-01T00:00:50Z"
+          },
+          "userNames": [
+            "system:serviceaccount:hello-world:deployer"
+          ],
+          "groupNames": [
+            
+          ],
+          "roleRef": {
+            "name": "system:deployer"
+          }
+        }
+      },
+      {
+        "name": "system:image-builders",
+        "roleBinding": {
+          "metadata": {
+            "name": "system:image-builders",
+            "namespace": "hello-world",
+            "uid": "81917ea6-503c-11e5-910d-080027893417",
+            "resourceVersion": "56147",
+            "creationTimestamp": "2015-09-01T00:00:50Z"
+          },
+          "userNames": [
+            "system:serviceaccount:hello-world:builder"
+          ],
+          "groupNames": [
+            
+          ],
+          "roleRef": {
+            "name": "system:image-builder"
+          }
+        }
+      },
+      {
+        "name": "system:image-pullers",
+        "roleBinding": {
+          "metadata": {
+            "name": "system:image-pullers",
+            "namespace": "hello-world",
+            "uid": "81883422-503c-11e5-910d-080027893417",
+            "resourceVersion": "56140",
+            "creationTimestamp": "2015-09-01T00:00:50Z"
+          },
+          "userNames": [
+            
+          ],
+          "groupNames": [
+            "system:serviceaccounts:hello-world"
+          ],
+          "roleRef": {
+            "name": "system:image-puller"
+          }
+        }
+      }
+    ]
+  }
+}

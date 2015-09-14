@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 
 import io.fabric8.openshift.api.model.NamedRoleBinding;
+import io.fabric8.openshift.api.model.RoleBinding;
 
 /**
  * Cache of SearchGuard ACLs
@@ -32,6 +33,14 @@ public interface OpenShiftPolicyCache {
 	 * @param binding  the binding to get user info
 	 */
 	void add(final String project, NamedRoleBinding binding);
+	
+	/**
+	 * Update the cache using the given binding
+	 * 
+	 * @param project
+	 * @param binding
+	 */
+	void update(final String project, RoleBinding binding);
 	
 	/**
 	 * Retrieve an unmodifiable mapping of users to their projects
