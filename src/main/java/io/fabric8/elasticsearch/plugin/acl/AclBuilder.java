@@ -31,7 +31,6 @@ public class AclBuilder {
 
 	public Acl build(){
 		Acl acl = new Acl();
-		acl.setAclSource(Acl.PLUGIN_ACL_SOURCE);
 		acl.setIndices(new ArrayList<>(indexes));
 		acl.setUsers(new ArrayList<>(users));
 		acl.setFiltersBypass(Arrays.asList("*"));

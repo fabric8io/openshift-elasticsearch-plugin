@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.common.logging.ESLogger;
 
 import io.fabric8.openshift.api.model.NamedRoleBinding;
@@ -51,7 +52,8 @@ public class ProjectUserCache implements OpenShiftPolicyCache{
 	}
 	
 	@Override
-	public synchronized void update(final String project, RoleBinding binding){
+	public synchronized void update(final RoleBinding binding){
+		final String project = binding.getMetadata().getNamespace();
 		List<String> userNames = binding.getUserNames();
 		Set<String> cachedUsers = projectToUsers.get(project);
 		
@@ -62,17 +64,20 @@ public class ProjectUserCache implements OpenShiftPolicyCache{
 					userToProjects.put(user, new HashSet<String>());
 				}
 				userToProjects.get(user).add(project);
+				logger.debug("Added '{}' user to cache", user);
 			}
 		}
 		for (String cachedUser : cachedUsers) {
 			//removed
 			if(!userNames.contains(cachedUser)){
 				userToProjects.get(cachedUser).remove(project);
+				logger.debug("removed '{}' user from cache", cachedUser);
 			}
 		}
 		
 		cachedUsers.clear();
 		cachedUsers.addAll(userNames);
+		logger.debug("Added users '{}' to project cache '{}'", userNames , project);
 		
 		pruneCache(projectToUsers);
 		pruneCache(userToProjects);

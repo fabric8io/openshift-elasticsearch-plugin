@@ -21,6 +21,7 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
 import io.fabric8.kubernetes.api.model.Namespace;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.internal.Utils;
@@ -32,6 +33,7 @@ import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.openshift.client.OpenshiftConfig;
 
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.action.PrimaryMissingActionException;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterService;
@@ -43,6 +45,7 @@ import org.elasticsearch.node.Node;
 import org.elasticsearch.threadpool.ThreadPool;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -50,7 +53,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class OpenShiftSearchGuardSyncService 
 		extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService>
@@ -61,7 +63,6 @@ public class OpenShiftSearchGuardSyncService
 	private static final String SEARCHGUARD_ID = "ac";
 	private static final List<String> loggingRoles = Arrays.asList("admins");
 
-	private final AtomicReference<String> policyBindingsResourceVersion = new AtomicReference<>();
 	private final ClusterService clusterService;
 	private String searchGuardIndex;
 
@@ -79,7 +80,7 @@ public class OpenShiftSearchGuardSyncService
 		this.osClient = new DefaultOpenshiftClient(initConfig());
 		this.clusterService = clusterService;
 		searchGuardIndex = Utils.getSystemPropertyOrEnvVar("AOS_SG_INDEX","searchguard");
-
+		
 		logger.info("Initialized {}", getClass().getSimpleName());
 	}
 
@@ -137,7 +138,7 @@ public class OpenShiftSearchGuardSyncService
 	public void onMaster() {
 		logger.debug("Elected as Master. Starting watch of policy bindings");
 		PolicyBindingList policyBinding = osClient.policyBindings().list();
-		policyBindingsResourceVersion.set(policyBinding.getMetadata().getResourceVersion());
+		final String resourceVersion = policyBinding.getMetadata().getResourceVersion();
 
 		esNode = nodeBuilder().node();
 		esClient = esNode.client();
@@ -146,22 +147,27 @@ public class OpenShiftSearchGuardSyncService
 		seedAcls();
 		
 		logger.debug("Starting watch of OpenShift policy bindings");
-		watch = osClient.policyBindings().watch(policyBindingsResourceVersion.get(), this);
+		watch = osClient.policyBindings().watch(resourceVersion, this);
 		logger.debug("Started watching OpenShift policy bindings"); 
 	}
 	
 	@Override
-	public void eventReceived(Action action, PolicyBinding policyBinding) {
-		logger.trace("Received {}: {}", action, policyBinding);
-		policyBindingsResourceVersion.set(policyBinding.getMetadata().getResourceVersion());
+	public synchronized void eventReceived(Action action, PolicyBinding policyBinding) {
+		logger.debug("Received {}: {}", action, policyBinding);
+		boolean updateAcl = false;
 		// retrieve allowable roles from config
 		final SearchGuardACL acl = retrieveAcl();
 		for (NamedRoleBinding binding : policyBinding.getRoleBindings()) {
 			if(loggingRoles.contains(binding.getName())){
-				cache.update(binding.getRoleBinding().getMetadata().getNamespace(), binding.getRoleBinding());
+				updateAcl = true;
+				logger.debug("Trying to update cache for binding {}", binding.getName());
+				cache.update(binding.getRoleBinding());
 			}
 		}
-		update(acl);
+		if(updateAcl){
+			acl.syncFrom(cache);
+			update(acl);
+		}
 	}
 
 	private void seedAcls() {
@@ -192,27 +198,12 @@ public class OpenShiftSearchGuardSyncService
 
 	}
 
-//	private void evaluateRole(SearchGuardACL acl, NamedRoleBinding binding) {
-//		if (true) { // list of configured roles
-//			// get namespace from binding
-//			RoleBinding role = binding.getRoleBinding();
-//			String project = role.getMetadata().getNamespace();
-//			// get users from binding
-//			for (String user : role.getUserNames()) {
-//				// get acl for user
-//				String id = null; // id is what?
-//				if (!response.isExists()) { // probably remove since it should
-//											// be seeded initially?
-//					// stub if none
-//				}
-//				// update
-//				// response.
-//			}
-//		}
-//	}
-
 	private void update(SearchGuardACL acl) {
 		try {
+			if(logger.isDebugEnabled()){
+				logger.debug("Writing ACLs {}",
+						mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
+			}
 			esClient.prepareUpdate(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID)
 					.setDoc(mapper.writeValueAsBytes(acl)).execute();
 		} catch (JsonProcessingException e) {
@@ -243,5 +234,10 @@ public class OpenShiftSearchGuardSyncService
 	@Override
 	public String executorName() {
 		return ThreadPool.Names.GENERIC;
+	}
+
+	@Override
+	public void onClose(KubernetesClientException e) {
+		logger.error("PolicyBinding Watch exception", e);
 	}
 }

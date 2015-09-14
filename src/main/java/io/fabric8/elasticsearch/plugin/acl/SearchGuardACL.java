@@ -16,6 +16,7 @@
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import java.util.Set;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.fabric8.elasticsearch.plugin.OpenShiftPolicyCache;
@@ -34,6 +36,7 @@ import io.fabric8.elasticsearch.plugin.OpenShiftPolicyCache;
  * @author jeff.cantrill
  *
  */
+@JsonIgnoreProperties(ignoreUnknown=true)
 public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
 	@JsonProperty(value="acl")
@@ -41,11 +44,6 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
 	public static class Acl {
 		
-		public static final String PLUGIN_ACL_SOURCE = "OpenShiftSearchGuardSyncPlugin";
-
-		@JsonProperty(value="acl_source")
-		private String aclSource = "";
-
 		@JsonProperty(value="__Comment__")
 		private String comment = "";
 		
@@ -118,12 +116,6 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		public void setFiltersExecute(List<String> filterExecute) {
 			this.filtersExecute = filterExecute;
 		}
-		public String getAclSource() {
-			return aclSource;
-		}
-		public void setAclSource(String aclSource) {
-			this.aclSource = aclSource;
-		}
 		@Override
 		public String toString() {
 			return ToStringBuilder.reflectionToString(this, ToStringStyle.MULTI_LINE_STYLE);
@@ -151,6 +143,13 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
 	public void syncFrom(OpenShiftPolicyCache cache){
 		removeSyncAcls();
+		Acl denyAll = new Acl();
+		denyAll.setFiltersExecute(Arrays.asList("actionrequestfilter.none"));
+		acls.add(denyAll);
+		Acl admin = new Acl();
+		admin.setRoles(Arrays.asList("admin"));
+		admin.setFiltersBypass(Arrays.asList("*"));
+		acls.add(admin);
 		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
 			acls.add(new AclBuilder()
 					.user(userProjects.getKey())
@@ -166,10 +165,8 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		return indicies;
 	}
 	private void removeSyncAcls() {
-		for (Acl acl : acls) {
-			if(Acl.PLUGIN_ACL_SOURCE.equals(acl.getAclSource())){
-				remove(acl);
-			}
+		for (Acl acl : new ArrayList<>(acls)) {
+			remove(acl);
 		}
 	}
 }

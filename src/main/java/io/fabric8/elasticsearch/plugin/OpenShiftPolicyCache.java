@@ -40,7 +40,7 @@ public interface OpenShiftPolicyCache {
 	 * @param project
 	 * @param binding
 	 */
-	void update(final String project, RoleBinding binding);
+	void update(RoleBinding binding);
 	
 	/**
 	 * Retrieve an unmodifiable mapping of users to their projects

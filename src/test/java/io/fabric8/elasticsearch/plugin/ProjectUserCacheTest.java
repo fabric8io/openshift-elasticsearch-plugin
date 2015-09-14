@@ -29,6 +29,7 @@ import org.elasticsearch.common.logging.ESLogger;
 import org.junit.Before;
 import org.junit.Test;
 
+import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.openshift.api.model.NamedRoleBinding;
 import io.fabric8.openshift.api.model.RoleBinding;
 
@@ -72,11 +73,9 @@ public class ProjectUserCacheTest {
 		
 		final String ANOTHER_USER= "anotheruser";
 		List<String> users = Arrays.asList(USERNAME, ANOTHER_USER);
-		RoleBinding roles = spy(new RoleBinding());
-//		when(roles.getMetadata()).thenReturn
-		when(roles.getUserNames()).thenReturn(users);
+		RoleBinding roles = givenARoleBindingFor(PROJECT_NAME, users);
 		
-		cache.update(PROJECT_NAME, roles);
+		cache.update(roles);
 		
 		assertArrayEquals(users.toArray(), cache.getUsersFor(PROJECT_NAME).toArray());
 		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(USERNAME).toArray());
@@ -103,10 +102,9 @@ public class ProjectUserCacheTest {
 		
 		final String ANOTHER_USER= "anotheruser";
 		List<String> users = Arrays.asList(ANOTHER_USER);
-		RoleBinding roleBinding = spy(new RoleBinding());
-		when(roleBinding.getUserNames()).thenReturn(users);
+		RoleBinding roleBinding = givenARoleBindingFor(PROJECT_NAME, users);
 		
-		cache.update(PROJECT_NAME, roleBinding);
+		cache.update(roleBinding);
 		
 		assertArrayEquals(users.toArray(), cache.getUsersFor(PROJECT_NAME).toArray());
 		assertArrayEquals(new String[]{PROJECT_NAME}, cache.getProjectsFor(ANOTHER_USER).toArray());
@@ -117,6 +115,15 @@ public class ProjectUserCacheTest {
 		assertNotSame(prunedUsers, cache.getUsersFor("athirduser"));
 		assertNotSame(prunedProjects, cache.getProjectsFor("athirdproject"));
 		
+	}
+	
+	private RoleBinding givenARoleBindingFor(String project, List<String> users){
+		RoleBinding roles = spy(new RoleBinding());
+		ObjectMeta meta = mock(ObjectMeta.class);
+		when(meta.getNamespace()).thenReturn(PROJECT_NAME);
+		when(roles.getMetadata()).thenReturn(meta);
+		when(roles.getUserNames()).thenReturn(users);
+		return roles;
 	}
 	
 }

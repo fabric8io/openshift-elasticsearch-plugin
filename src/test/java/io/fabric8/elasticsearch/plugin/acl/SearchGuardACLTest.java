@@ -103,7 +103,6 @@ public class SearchGuardACLTest {
 	private void assertAclsHas(SearchGuardACL acls, Acl exp) {
 		int found = 0;
 		for (Acl acl : acls) {
-			if(!acl.getAclSource().equals(Acl.PLUGIN_ACL_SOURCE)) continue;
 			if(acl.getUsers().containsAll(exp.getUsers())){
 				found++;
 				assertArrayEquals("acl.users", exp.getUsers().toArray(), acl.getUsers().toArray());
