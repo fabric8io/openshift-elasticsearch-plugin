@@ -31,6 +31,7 @@ public class AclBuilder {
 
 	public Acl build(){
 		Acl acl = new Acl();
+		acl.setComment(SearchGuardACL.OPENSHIFT_SYNC);
 		acl.setIndices(new ArrayList<>(indexes));
 		acl.setUsers(new ArrayList<>(users));
 		acl.setFiltersBypass(Arrays.asList("*"));

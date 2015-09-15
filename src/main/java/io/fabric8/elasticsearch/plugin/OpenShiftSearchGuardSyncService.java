@@ -33,7 +33,6 @@ import io.fabric8.openshift.client.OpenShiftClient;
 import io.fabric8.openshift.client.OpenshiftConfig;
 
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.action.PrimaryMissingActionException;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterService;
@@ -58,7 +57,6 @@ public class OpenShiftSearchGuardSyncService
 		extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService>
 		implements LocalNodeMasterListener, Watcher<PolicyBinding> {
 	
-	private static final String SETTINGS_PREFIX = "os.sg.sync.";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
 	private static final List<String> loggingRoles = Arrays.asList("admins");

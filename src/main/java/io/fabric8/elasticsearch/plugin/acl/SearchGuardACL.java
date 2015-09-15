@@ -16,7 +16,6 @@
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +38,7 @@ import io.fabric8.elasticsearch.plugin.OpenShiftPolicyCache;
 @JsonIgnoreProperties(ignoreUnknown=true)
 public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
+	public static final String OPENSHIFT_SYNC = "[openshift-searchguard-policy-sync]";
 	@JsonProperty(value="acl")
 	private List<Acl> acls;
 	
@@ -143,13 +143,6 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
 	public void syncFrom(OpenShiftPolicyCache cache){
 		removeSyncAcls();
-		Acl denyAll = new Acl();
-		denyAll.setFiltersExecute(Arrays.asList("actionrequestfilter.none"));
-		acls.add(denyAll);
-		Acl admin = new Acl();
-		admin.setRoles(Arrays.asList("admin"));
-		admin.setFiltersBypass(Arrays.asList("*"));
-		acls.add(admin);
 		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
 			acls.add(new AclBuilder()
 					.user(userProjects.getKey())
@@ -166,7 +159,9 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	}
 	private void removeSyncAcls() {
 		for (Acl acl : new ArrayList<>(acls)) {
-			remove(acl);
+			if(acl.getComment() != null && acl.getComment().startsWith(OPENSHIFT_SYNC)){
+				remove(acl);
+			}
 		}
 	}
 }
