@@ -21,23 +21,23 @@ import org.elasticsearch.plugins.AbstractPlugin;
 
 import java.util.Collection;
 
-public class OpenShiftSearchGuardSyncPlugin extends AbstractPlugin {
+public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 
 	@Override
 	public String name() {
-		return "openshift-searchguard-sync";
+		return "openshift-elasticsearch-plugin";
 	}
 
 	@Override
 	public String description() {
-		return "OpenShift Search Guard Sync Plugin";
+		return "OpenShift ElasticSearch Plugin";
 	}
 
 	@SuppressWarnings("rawtypes")
 	@Override
 	public Collection<Class<? extends LifecycleComponent>> services() {
 		Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
-		services.add(OpenShiftSearchGuardSyncService.class);
+		services.add(OpenShiftElasticSearchService.class);
 		return services;
 	}
 

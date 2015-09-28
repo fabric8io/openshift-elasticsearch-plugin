@@ -1,7 +1,7 @@
 {
     "acl": [
       { 
-    	"__Comment__" : "[openshift-searchguard-policy-sync]",
+    	"__Comment__" : "[openshift-elasticsearch-plugin]",
     	"users": [
           "mytestuser"
         ],
@@ -12,7 +12,7 @@
         "filters_execute": []
      },
      { 
-    	 "__Comment__" : "[openshift-searchguard-policy-sync]",
+    	 "__Comment__" : "[openshift-elasticsearch-plugin]",
 		 "users": [
            "myotheruser"
            ],

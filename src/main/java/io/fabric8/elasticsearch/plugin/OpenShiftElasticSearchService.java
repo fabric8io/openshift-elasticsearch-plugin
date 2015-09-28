@@ -31,9 +31,13 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.rest.RestController;
 
+import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
+import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
+import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
 
-public class OpenShiftSearchGuardSyncService 
-	extends AbstractLifecycleComponent<OpenShiftSearchGuardSyncService> {
+
+public class OpenShiftElasticSearchService 
+	extends AbstractLifecycleComponent<OpenShiftElasticSearchService> {
 
 
 	private final ESLogger logger;
@@ -45,7 +49,7 @@ public class OpenShiftSearchGuardSyncService
 	private ScheduledFuture scheduledFuture;
 
 	@Inject
-	protected OpenShiftSearchGuardSyncService(final Settings settings, final Client esClient, final RestController restController) {
+	protected OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController) {
 		super(settings);
 		this.settings = settings;
 		this.logger = Loggers.getLogger(getClass(), settings);
@@ -56,7 +60,7 @@ public class OpenShiftSearchGuardSyncService
 	@Override
 	protected void doStart() throws ElasticsearchException {
         this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
-                EsExecutors.daemonThreadFactory(settings, "openshift_searchguard_sync_service"));
+                EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
         this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
         

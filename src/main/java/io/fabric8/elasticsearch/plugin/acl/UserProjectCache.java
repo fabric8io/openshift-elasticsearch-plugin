@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.fabric8.elasticsearch.plugin;
+package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.Map;
 import java.util.Set;
