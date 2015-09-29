@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.fabric8.elasticsearch.plugin;
+package io.fabric8.elasticsearch.plugin.acl;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -35,21 +35,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.openshift.api.model.Project;
 import io.fabric8.openshift.client.DefaultOpenshiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
-public class DynamicACLFilter extends RestFilter {
+public class DynamicACLFilter extends RestFilter implements ConfigurationSettings {
 
 	private static final String AUTHORIZATION_HEADER = "Authorization";
-	private static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
-	private static final String DEFAULT_AUTH_PROXY_HEADER = "X-Authenticated-User";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
-	private static final String SEARCHGUARD_AUTHENTICATION_PROXY_HEADER = "searchguard.authentication.proxy.header";
-	private static final String SEARCHGUARD_CONFIG_INDEX_NAME = "searchguard.config_index_name";
 
 
 	private final ObjectMapper mapper = new ObjectMapper();
@@ -58,6 +54,8 @@ public class DynamicACLFilter extends RestFilter {
 	private final String proxyUserHeader;
 	private final Client esClient;
 	private final String searchGuardIndex;
+	private final int aclSyncDelay;
+	private final String userProfilePrefix;
 
 	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client, final ESLogger logger){
 		this.cache = cache;
@@ -65,6 +63,8 @@ public class DynamicACLFilter extends RestFilter {
 		this.esClient = client;
 		this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
 		this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
+		this.aclSyncDelay = Integer.valueOf(settings.get(OPENSHIFT_ES_ACL_DELAY_IN_MILLIS, String.valueOf(DEFAULT_ES_ACL_DELAY)));
+		this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
 		
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
 	}
@@ -72,10 +72,10 @@ public class DynamicACLFilter extends RestFilter {
 	@Override
 	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
 		try {
-			logger.debug("Handling Request in SearchGuard Sync filter...");
+			logger.debug("Handling Request in {}...", this.getClass().getSimpleName());
 			final String user = getUser(request);
 			final String token = getBearerToken(request);
-			logger.debug("Evaluating OpenShift SearchGuard Sync filter for user '{}' with a {} token", user,
+			logger.debug("Evaluating request for user '{}' with a {} token", user,
 					(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
 			logger.debug("Cache has user: {}", cache.hasUser(user));
 			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
@@ -85,7 +85,7 @@ public class DynamicACLFilter extends RestFilter {
 			}
 
 		} catch (Exception e) {
-			logger.error("Error handling request in OpenShift SearchGuard filter", e);
+			logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
 		} finally {
 			chain.continueProcessing(request, channel);
 		}
@@ -111,7 +111,7 @@ public class DynamicACLFilter extends RestFilter {
 			Set<String> projects = listProjectsFor(token);
 			cache.update(user, projects);
 		} catch (Exception e) {
-			logger.error("Error retrieving project list for {}",e, user);
+			logger.error("Error retrieving project list for '{}'",e, user);
 			return false;
 		}
 		return true;
@@ -133,13 +133,13 @@ public class DynamicACLFilter extends RestFilter {
 	private synchronized void syncAcl() {
 		logger.debug("Syncing the ACL to ElasticSearch");
 		try {
-			logger.debug("Loading SearchGuard ACL..");
+			logger.debug("Loading SearchGuard ACL...");
 			final SearchGuardACL acl = loadAcl(esClient);
-			logger.debug("Syncing from cache to ACL");
-			acl.syncFrom(cache);
+			logger.debug("Syncing from cache to ACL...");
+			acl.syncFrom(cache, userProfilePrefix);
 			write(esClient, acl);
 		} catch (Exception e) {
-			logger.error("Exception why syncing ACL with cache", e);
+			logger.error("Exception while syncing ACL with cache", e);
 		}
 	}
 	
@@ -154,7 +154,7 @@ public class DynamicACLFilter extends RestFilter {
 
 	private void write(Client esClient, SearchGuardACL acl) throws JsonProcessingException, InterruptedException {
 		if (logger.isDebugEnabled()) {
-			logger.debug("Writing ACLs {}", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
+			logger.debug("Writing ACLs '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
 		}
 		esClient.prepareUpdate(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID).setDoc(mapper.writeValueAsBytes(acl))
 			.setRefresh(true)
@@ -163,7 +163,7 @@ public class DynamicACLFilter extends RestFilter {
 		 * TODO Replace with ActionFilter and thread suspension
 		 * Allow searchguard to sync ACL
 		 */
-		Thread.sleep(2500); //1 sec for ES & 1 sec for SG
+		Thread.sleep(aclSyncDelay); //1 sec for ES & 1 sec for SG
 
 	}
 

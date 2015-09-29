@@ -32,7 +32,7 @@ import org.junit.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.fabric8.elasticsearch.plugin.UserProjectCache;
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
@@ -71,7 +71,7 @@ public class SearchGuardACLTest {
 		when(cache.getUserProjects()).thenReturn(map);
 		
 		
-		acls.syncFrom(cache);
+		acls.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX);
 		
 		//assert acl added
 		assertAclsHas(acls, createAcl("mythirduser","projectzz"));

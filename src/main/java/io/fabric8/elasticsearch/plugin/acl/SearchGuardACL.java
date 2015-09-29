@@ -27,8 +27,6 @@ import org.apache.commons.lang.builder.ToStringStyle;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import io.fabric8.elasticsearch.plugin.UserProjectCache;
-
 /**
  * Class representation of a ElasticSearch SearchGuard plugin ACL
  * 
@@ -38,8 +36,7 @@ import io.fabric8.elasticsearch.plugin.UserProjectCache;
 @JsonIgnoreProperties(ignoreUnknown=true)
 public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
-	public static final String OPENSHIFT_SYNC = "[openshift-searchguard-policy-sync]";
-	public static final String USER_PROFILE_PREFIX = ".kibana";
+	public static final String OPENSHIFT_SYNC = "[openshift-elasticsearch-plugin]";
 	
 	@JsonProperty(value="acl")
 	private List<Acl> acls;
@@ -143,18 +140,18 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		acls.remove(acl);
 	}
 	
-	public void syncFrom(UserProjectCache cache){
+	public void syncFrom(UserProjectCache cache, final String userProfilePrefix){
 		removeSyncAcls();
 		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
 			acls.add(new AclBuilder()
 					.user(userProjects.getKey())
-					.projects(formatIndicies(userProjects.getKey(), userProjects.getValue()))
+					.projects(formatIndicies(userProjects.getKey(), userProjects.getValue(), userProfilePrefix))
 					.build());
 		}
 	}
-	private List<String> formatIndicies(String user, Set<String> projects){
+	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){
 		ArrayList<String> indicies = new ArrayList<>(projects.size());
-		indicies.add(String.format("%s.%s", USER_PROFILE_PREFIX, user));
+		indicies.add(String.format("%s.%s", userProfilePrefix, user));
 		for (String project : projects) {
 			indicies.add(String.format("%s.*", project));
 		}

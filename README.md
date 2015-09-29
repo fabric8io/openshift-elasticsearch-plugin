@@ -1,4 +1,4 @@
-# OpenShift SearchGuard Sync
+# OpenShift ElasticSearch plugin
 This is an OpenShift plugin to ElasticSearch to:
 
 * Dynamically update the SearchGuard ACL based on a user's name
