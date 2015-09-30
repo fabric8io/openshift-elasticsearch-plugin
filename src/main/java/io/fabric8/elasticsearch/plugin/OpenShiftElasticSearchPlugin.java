@@ -15,6 +15,7 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
+import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.component.LifecycleComponent;
 import org.elasticsearch.plugins.AbstractPlugin;
@@ -41,4 +42,8 @@ public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 		return services;
 	}
 
+	public void onModule(ActionModule module){
+		module.registerFilter(ActionForbiddenActionFilter.class);
+	}
+	
 }
