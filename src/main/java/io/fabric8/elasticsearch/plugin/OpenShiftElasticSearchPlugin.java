@@ -15,6 +15,8 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
+import java.util.Collection;
+
 import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.component.LifecycleComponent;
@@ -48,9 +50,10 @@ public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 		return services;
 	}
 
-	public void onModule(ActionModule module){
+	public void onModule(final ActionModule module) {
 		module.registerFilter(ActionForbiddenActionFilter.class);
 		module.registerFilter(SearchGuardACLRequestActionFilter.class);
+		module.registerFilter(KibanaUserReindexAction.class);
 	}
 
 	@Override
@@ -59,5 +62,4 @@ public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 		modules.add(OpenShiftElasticSearchModule.class);
 		return modules;
 	}
-	
 }

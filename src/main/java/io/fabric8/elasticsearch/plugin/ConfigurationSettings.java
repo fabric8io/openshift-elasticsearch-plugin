@@ -25,6 +25,8 @@ public interface ConfigurationSettings {
 	static final String SEARCHGUARD_TYPE = "ac";
 	static final String SEARCHGUARD_ID = "ac";
 	
+	public static final String KIBANA_CONFIG_INDEX_NAME = "kibana.config_index_name";
+	
 	/**
 	 * The maximum time time in milliseconds to wait for SearchGuard to sync the ACL from 
 	 * a write from this plugin until load by searchguard

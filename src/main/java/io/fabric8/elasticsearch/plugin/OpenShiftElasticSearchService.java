@@ -65,6 +65,7 @@ public class OpenShiftElasticSearchService
 		this.cache = cache;
 		this.aclNotifier = aclNotifer;
 		restController.registerFilter(aclFilter);
+		restController.registerFilter(new KibanaUserReindexFilter(settings, logger));
 	}
 
 	@Override
