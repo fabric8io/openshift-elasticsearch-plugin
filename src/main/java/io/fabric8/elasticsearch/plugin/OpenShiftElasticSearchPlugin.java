@@ -18,12 +18,18 @@ package io.fabric8.elasticsearch.plugin;
 import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.collect.Lists;
 import org.elasticsearch.common.component.LifecycleComponent;
+import org.elasticsearch.common.inject.Module;
 import org.elasticsearch.plugins.AbstractPlugin;
+
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardACLRequestActionFilter;
 
 import java.util.Collection;
 
 public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 
+	public OpenShiftElasticSearchPlugin(){
+		
+	}
 	@Override
 	public String name() {
 		return "openshift-elasticsearch-plugin";
@@ -44,6 +50,14 @@ public class OpenShiftElasticSearchPlugin extends AbstractPlugin {
 
 	public void onModule(ActionModule module){
 		module.registerFilter(ActionForbiddenActionFilter.class);
+		module.registerFilter(SearchGuardACLRequestActionFilter.class);
+	}
+
+	@Override
+	public Collection<Class<? extends Module>> modules() {
+		Collection<Class<? extends Module>> modules = Lists.newArrayList();
+		modules.add(OpenShiftElasticSearchModule.class);
+		return modules;
 	}
 	
 }

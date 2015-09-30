@@ -21,7 +21,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.common.settings.Settings;
 
 
 /**
@@ -37,8 +40,9 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 	private final Map<String, Long> createTimes = new ConcurrentHashMap<>();
 	private static final long EXPIRE = 1000 * 60; //1 MIN 
 
-	public UserProjectCacheMapAdapter(final ESLogger logger){
-		this.logger = logger;
+	@Inject
+	public UserProjectCacheMapAdapter(final Settings settings){
+		this.logger = Loggers.getLogger(getClass(), settings);
 	}
 	
 	@Override

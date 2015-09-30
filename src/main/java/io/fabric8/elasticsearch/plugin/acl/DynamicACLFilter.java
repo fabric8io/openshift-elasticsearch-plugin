@@ -19,12 +19,19 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
@@ -41,12 +48,19 @@ import io.fabric8.openshift.api.model.Project;
 import io.fabric8.openshift.client.DefaultOpenshiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
-public class DynamicACLFilter extends RestFilter implements ConfigurationSettings {
+/**
+ * REST filter to update the ACL when a user
+ * first makes a request
+ * @author jeff.cantrill
+ *
+ */
+public class DynamicACLFilter 
+	extends RestFilter 
+	implements ConfigurationSettings, SearchGuardACLActionRequestListener {
 
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
-
 
 	private final ObjectMapper mapper = new ObjectMapper();
 	private final ESLogger logger;
@@ -56,28 +70,44 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 	private final String searchGuardIndex;
 	private final int aclSyncDelay;
 	private final String userProfilePrefix;
+	private final ReentrantLock lock = new ReentrantLock();
+	private final Condition syncing = lock.newCondition();
 
-	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client, final ESLogger logger){
+	@Inject
+	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client, final ACLNotifierService notifierService){
 		this.cache = cache;
-		this.logger = logger;
+		this.logger = Loggers.getLogger(getClass(), settings);
 		this.esClient = client;
 		this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
 		this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
 		this.aclSyncDelay = Integer.valueOf(settings.get(OPENSHIFT_ES_ACL_DELAY_IN_MILLIS, String.valueOf(DEFAULT_ES_ACL_DELAY)));
 		this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
-		
+		notifierService.addActionRequestListener(this);
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
 	}
 	
 	@Override
+	public void onSearchGuardACLActionRequest(String method) {
+		logger.debug("Received notification that SearchGuard ACL was loaded");
+		lock.lock();
+		try{
+			syncing.signalAll();
+		}finally{
+			lock.unlock();
+		}
+	}
+
+	@Override
 	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
 		try {
-			logger.debug("Handling Request in {}...", this.getClass().getSimpleName());
 			final String user = getUser(request);
 			final String token = getBearerToken(request);
-			logger.debug("Evaluating request for user '{}' with a {} token", user,
-					(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-			logger.debug("Cache has user: {}", cache.hasUser(user));
+			if(logger.isDebugEnabled()){
+				logger.debug("Handling Request...");
+				logger.debug("Evaluating request for user '{}' with a {} token", user,
+						(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
+				logger.debug("Cache has user: {}", cache.hasUser(user));
+			}
 			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
 				if(updateCache(user, token)){
 					syncAcl();
@@ -106,7 +136,6 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
 	private boolean updateCache(final String user, final String token) {
 		logger.debug("Updating the cache for user '{}'", user);
-		
 		try{
 			Set<String> projects = listProjectsFor(token);
 			cache.update(user, projects);
@@ -144,10 +173,10 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 	}
 	
 	private SearchGuardACL loadAcl(Client esClient) throws IOException {
-		GetResponse response = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID)
-				.setRefresh(true)
-				.execute()
-				.actionGet(); // need to worry about timeout?
+		GetRequest request = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID)
+				.setRefresh(true).request();
+		request.putInContext(OS_ES_REQ_ID, ACL_FILTER_ID);
+		GetResponse response = esClient.get(request).actionGet(); // need to worry about timeout?
 		return mapper.readValue(response.getSourceAsBytes(), SearchGuardACL.class);
 	}
 	
@@ -156,15 +185,20 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 		if (logger.isDebugEnabled()) {
 			logger.debug("Writing ACLs '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
 		}
-		esClient.prepareUpdate(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID).setDoc(mapper.writeValueAsBytes(acl))
-			.setRefresh(true)
-			.execute();
-		/*
-		 * TODO Replace with ActionFilter and thread suspension
-		 * Allow searchguard to sync ACL
-		 */
-		Thread.sleep(aclSyncDelay); //1 sec for ES & 1 sec for SG
-
+		UpdateRequest request = esClient.prepareUpdate(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID)
+			.setDoc(mapper.writeValueAsBytes(acl))
+			.setRefresh(true).request();
+		request.putInContext(OS_ES_REQ_ID, ACL_FILTER_ID);
+		esClient.update(request).actionGet();
+		lock.lock();
+		try{
+			logger.debug("Waiting up to {} ms. to be notified that SearchGuard has refreshed the ACLs", aclSyncDelay);
+			syncing.await(aclSyncDelay, TimeUnit.MILLISECONDS);
+		}catch(InterruptedException e){
+			logger.error("Error while awaiting notification of ACL load by SearchGuard", e);
+		}finally{
+			lock.unlock();
+		}
 	}
 
 	@Override

@@ -17,21 +17,25 @@ package io.fabric8.elasticsearch.plugin;
 
 public interface ConfigurationSettings {
 	
+	static final String ACL_FILTER_ID = "openshift.elasticsearch";
 	
-	public static final String SEARCHGUARD_AUTHENTICATION_PROXY_HEADER = "searchguard.authentication.proxy.header";
-	public static final String SEARCHGUARD_CONFIG_INDEX_NAME = "searchguard.config_index_name";
+	static final String SEARCHGUARD_AUTHENTICATION_PROXY_HEADER = "searchguard.authentication.proxy.header";
+	static final String SEARCHGUARD_CONFIG_INDEX_NAME = "searchguard.config_index_name";
+	
+	static final String SEARCHGUARD_TYPE = "ac";
+	static final String SEARCHGUARD_ID = "ac";
 	
 	/**
 	 * The maximum time time in milliseconds to wait for SearchGuard to sync the ACL from 
 	 * a write from this plugin until load by searchguard
 	 */
-	public static final String OPENSHIFT_ES_ACL_DELAY_IN_MILLIS = "io.fabric8.elasticsearch.acl.sync_delay_millis";
-	public static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
+	static final String OPENSHIFT_ES_ACL_DELAY_IN_MILLIS = "io.fabric8.elasticsearch.acl.sync_delay_millis";
+	static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
 	
-	public static final String DEFAULT_AUTH_PROXY_HEADER = "X-Authenticated-User";
-	public static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
-	public static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";
+	static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
+	static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
+	static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";
 
-	public static final int DEFAULT_ES_ACL_DELAY = 2500;
+	static final int DEFAULT_ES_ACL_DELAY = 2500;
 
 }

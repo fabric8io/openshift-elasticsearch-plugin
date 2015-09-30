@@ -15,6 +15,7 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -31,13 +32,18 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.rest.RestController;
 
+import io.fabric8.elasticsearch.plugin.acl.ACLNotifierService;
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
 
-
+/**
+ * Service to handle spawning threads, lifecycles,
+ * and REST filter registrations
+ * @author jeff.cantrill
+ *
+ */
 public class OpenShiftElasticSearchService 
-	extends AbstractLifecycleComponent<OpenShiftElasticSearchService> {
+	extends AbstractLifecycleComponent<OpenShiftElasticSearchService>{
 
 
 	private final ESLogger logger;
@@ -47,18 +53,30 @@ public class OpenShiftElasticSearchService
 	
 	@SuppressWarnings("rawtypes")
 	private ScheduledFuture scheduledFuture;
+	private ExecutorService notifier;
+	private ACLNotifierService aclNotifier;
 
 	@Inject
-	protected OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController) {
+	protected OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController, 
+			final UserProjectCache cache, final ACLNotifierService aclNotifer, final DynamicACLFilter aclFilter) {
 		super(settings);
 		this.settings = settings;
 		this.logger = Loggers.getLogger(getClass(), settings);
-		cache = new UserProjectCacheMapAdapter(logger);
-		restController.registerFilter(new DynamicACLFilter(cache, settings, esClient, logger));
+		this.cache = cache;
+		this.aclNotifier = aclNotifer;
+		restController.registerFilter(aclFilter);
 	}
 
 	@Override
 	protected void doStart() throws ElasticsearchException {
+        //thread for ACL load callbacks
+        logger.debug("Starting the acl notification thread...");
+		notifier = Executors.newSingleThreadExecutor(
+                EsExecutors.daemonThreadFactory(settings, "openshift_acl_notifier"));	
+		aclNotifier.setExecutorService(notifier);
+		
+		//expiration thread
+		logger.debug("Starting the expiration thread...");
         this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
                 EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
         this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
@@ -71,14 +89,21 @@ public class OpenShiftElasticSearchService
 			}
 		};
         this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
-        logger.debug("Started");
+		
+		logger.debug("Started");
   
 	}
 
 	@Override
 	protected void doStop() throws ElasticsearchException {
+		if(notifier != null){
+			notifier.shutdownNow();
+		}		
+		//cleanup expire thread
         FutureUtils.cancel(this.scheduledFuture);
-        this.scheduler.shutdown();
+        if(scheduler != null){
+        	this.scheduler.shutdown();
+        }
 		logger.debug("Stopped");
 	}
 
@@ -90,6 +115,5 @@ public class OpenShiftElasticSearchService
         }
 		logger.debug("Closed");
 	}
-
 
 }
