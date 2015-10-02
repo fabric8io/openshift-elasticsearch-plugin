@@ -33,10 +33,12 @@ public interface ConfigurationSettings {
 	 */
 	static final String OPENSHIFT_ES_ACL_DELAY_IN_MILLIS = "io.fabric8.elasticsearch.acl.sync_delay_millis";
 	static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
+	static final String OPENSHIFT_WHITELISTED_USERS = "io.fabric8.elasticsearch.authentication.users";
 	
 	static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
 	static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
 	static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";
+	static final String [] DEFAULT_WHITELISTED_USERS = new String []{"$logging.$infra.$fluentd","$logging.$infra.$kibana"};
 
 	static final int DEFAULT_ES_ACL_DELAY = 2500;
 
