@@ -15,6 +15,12 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.openshift.api.model.Project;
+import io.fabric8.openshift.client.DefaultOpenshiftClient;
+import io.fabric8.openshift.client.OpenShiftClient;
+
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,12 +54,6 @@ import com.ning.http.client.AsyncHttpClientConfig;
 import com.ning.http.client.Request;
 import com.ning.http.client.Response;
 
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
-import io.fabric8.kubernetes.client.ConfigBuilder;
-import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.client.DefaultOpenshiftClient;
-import io.fabric8.openshift.client.OpenShiftClient;
-
 /**
  * REST filter to update the ACL when a user
  * first makes a request
@@ -74,6 +74,8 @@ public class DynamicACLFilter
 	private final String proxyUserHeader;
 	private final Client esClient;
 	private final String searchGuardIndex;
+	private final String kibanaIndex;
+	private final String kibanaVersion;
 	private final int aclSyncDelay;
 	private final String userProfilePrefix;
 	private final ReentrantLock lock = new ReentrantLock();
@@ -88,6 +90,8 @@ public class DynamicACLFilter
 		this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
 		this.aclSyncDelay = Integer.valueOf(settings.get(OPENSHIFT_ES_ACL_DELAY_IN_MILLIS, String.valueOf(DEFAULT_ES_ACL_DELAY)));
 		this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
+		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
+		this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
 		notifierService.addActionRequestListener(this);
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
 	}
@@ -116,8 +120,10 @@ public class DynamicACLFilter
 			}
 			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
 				final boolean isClusterAdmin = isClusterAdmin(token);
+				Set<String> roles = new HashSet<String>();
 				if(isClusterAdmin){
 					request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+					roles.add("cluster-admin");
 				}
 				if(updateCache(user, token, isClusterAdmin)){
 					syncAcl();

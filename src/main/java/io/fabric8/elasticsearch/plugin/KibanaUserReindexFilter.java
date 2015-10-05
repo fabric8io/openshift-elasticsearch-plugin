@@ -17,7 +17,10 @@ package io.fabric8.elasticsearch.plugin;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.common.bytes.BytesArray;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.netty.buffer.BigEndianHeapChannelBuffer;
 import org.elasticsearch.common.netty.handler.codec.http.HttpRequest;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.http.netty.NettyHttpRequest;
@@ -25,7 +28,6 @@ import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class KibanaUserReindexFilter extends RestFilter implements ConfigurationSettings {
 
@@ -36,7 +38,7 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 	public KibanaUserReindexFilter(final Settings settings, final ESLogger logger){
 		this.logger = logger;
 		this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
-		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, KIBANA_CONFIG_INDEX_NAME);
+		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
 	}
 	
 	@Override
@@ -56,6 +58,17 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 				
 				logger.debug("URI for request is '{}' after update", request.uri());
 			}
+			else {
+				if ( StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex) && requestedIndex.startsWith("_mget") ) {
+					String userIndex = ".kibana." + getUsernameHash(user);
+					logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
+					
+					//update the request URI here
+					request = updateMGetRequest(request, ".kibana", userIndex);
+					
+					logger.debug("URI for request is '{}' after update", request.uri());
+				}
+			}
 
 		} catch (Exception e) {
 			logger.error("Error handling request in OpenShift SearchGuard filter", e);
@@ -66,6 +79,26 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 
 	private String getUser(RestRequest request) {
 		return StringUtils.defaultIfBlank(request.header(proxyUserHeader), "");
+	}
+	
+	private RestRequest updateMGetRequest(RestRequest request, String oldIndex, String newIndex) {
+		
+		BytesReference content = request.content();
+		String stringContent = content.toUtf8();
+		
+		logger.debug("Received MGet request '{}' with content '{}'", request, stringContent);
+		
+		String replaced = stringContent.replaceAll("_index\":\"" + oldIndex + "\"", "_index\":\"" + newIndex + "\"");
+		
+		NettyHttpRequest nettyRequest = (NettyHttpRequest) request;
+		HttpRequest httpRequest = nettyRequest.request();
+		
+		BytesReference replacedContent = new BytesArray(replaced);
+		BigEndianHeapChannelBuffer buffer = new BigEndianHeapChannelBuffer(replacedContent.array());
+		
+		httpRequest.setContent(buffer);
+		
+		return new NettyHttpRequest(httpRequest, nettyRequest.getChannel());
 	}
 	
 	private RestRequest updateRequestIndex(RestRequest request, String oldIndex, String newIndex) {
@@ -95,7 +128,7 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 		return Integer.MAX_VALUE;
 	}
 	
-	private String getUsernameHash(String username) {
+	public static String getUsernameHash(String username) {
 		return DigestUtils.sha1Hex(username);
 	}
 }

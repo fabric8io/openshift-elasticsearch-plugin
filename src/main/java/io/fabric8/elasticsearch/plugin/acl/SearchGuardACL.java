@@ -15,6 +15,8 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
+import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -154,7 +156,7 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	}
 	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){
 		ArrayList<String> indicies = new ArrayList<>(projects.size());
-		indicies.add(String.format("%s.%s", userProfilePrefix, user));
+		indicies.add(String.format("%s.%s", userProfilePrefix, getUsernameHash(user)));
 		for (String project : projects) {
 			indicies.add(String.format("%s.*", project));
 		}

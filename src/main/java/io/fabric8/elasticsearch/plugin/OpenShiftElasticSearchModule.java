@@ -16,13 +16,13 @@
 package io.fabric8.elasticsearch.plugin;
 
 
-import org.elasticsearch.common.inject.AbstractModule;
-
 import io.fabric8.elasticsearch.plugin.acl.ACLNotifierService;
 import io.fabric8.elasticsearch.plugin.acl.DefaultACLNotifierService;
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
+
+import org.elasticsearch.common.inject.AbstractModule;
 
 /**
  * The module controls loading and specific implementations

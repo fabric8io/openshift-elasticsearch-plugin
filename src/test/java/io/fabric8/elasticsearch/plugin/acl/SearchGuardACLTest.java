@@ -15,8 +15,16 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
+import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.Samples;
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
+
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,11 +39,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
-import io.fabric8.elasticsearch.plugin.Samples;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
 
 public class SearchGuardACLTest {
 	
@@ -96,7 +99,7 @@ public class SearchGuardACLTest {
 		for (String project : projects) {
 			indicies.add(project +".*");
 		}
-		indicies.add(".kibana."+user);
+		indicies.add(".kibana."+getUsernameHash(user));
 		acl.setIndices(indicies);
 		acl.setFiltersBypass(Arrays.asList("*"));
 		return acl;
@@ -112,6 +115,7 @@ public class SearchGuardACLTest {
 				assertArrayEquals("acl.filter_execute", exp.getFiltersExecute().toArray(), acl.getFiltersExecute().toArray());
 				Object[] expIndexes = exp.getIndices().toArray();
 				Object[] actualIndexes = acl.getIndices().toArray();
+				
 				Arrays.sort(expIndexes);
 				Arrays.sort(actualIndexes);
 				assertArrayEquals("acl.indices", expIndexes, actualIndexes);
