@@ -24,7 +24,6 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.inject.Singleton;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
 
 @Singleton
 public class DefaultACLNotifierService implements ACLNotifierService {
@@ -34,15 +33,25 @@ public class DefaultACLNotifierService implements ACLNotifierService {
 	private ESLogger logger;
 
 	@Inject
-	public DefaultACLNotifierService(final Settings settings){
-		this.logger = Loggers.getLogger(getClass());
-		this.listeners = new ConcurrentLinkedQueue<>();
-
+	public DefaultACLNotifierService(){
+		this(Loggers.getLogger(DefaultACLNotifierService.class));
 	}
+	
+	/*
+	 * Testing Constructor
+	 */
+	public DefaultACLNotifierService(ESLogger logger){
+		this.logger = logger;
+		this.listeners = new ConcurrentLinkedQueue<>();
+	}
+	
 	@Override
 	public void notify(final String action) {
 		if(notifier == null){
 			logger.debug("Unable to notify callbacks because notifier thread is null");
+			return;
+		}
+		if(listeners.isEmpty()){
 			return;
 		}
 		notifier.execute(new Runnable() {
@@ -68,7 +77,7 @@ public class DefaultACLNotifierService implements ACLNotifierService {
 
 	@Override
 	public void removeActionRequestListener(SearchGuardACLActionRequestListener listener){
-		listeners.remove(listener);
+		logger.debug("Removed listener: {}", listeners.remove(listener));
 	}
 	
 	@Override
