@@ -2,11 +2,15 @@
 This is an OpenShift plugin to ElasticSearch to:
 
 * Dynamically update the SearchGuard ACL based on a user's name
+* Correctly return Unauthorized or Forbidden response codes
+* Transform kibana index requests to support multitent deployments
+* Support proxy auth with fallback to client certificate auth
 
 ## Development
 Following are the dependencies
 
-* ElasticSearch 1.5.2
+* [ElasticSearch 1.5.2] (https://www.elastic.co/downloads/past-releases/elasticsearch-1-5-2)
+* [Search-Guard 0.5] (https://github.com/floragunncom/search-guard/tree/v0.5)
 
 ### Debugging and running from Eclipse
 
