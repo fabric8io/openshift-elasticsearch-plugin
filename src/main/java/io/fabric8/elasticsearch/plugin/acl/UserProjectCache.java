@@ -29,7 +29,7 @@ public interface UserProjectCache {
 	 * @param project  the project
 	 * @param binding  the binding to get user info
 	 */
-	void update(final String user, Set<String> projects);
+	void update(final String user, Set<String> projects, boolean clusterAdmin);
 	
 	/**
 	 * Retrieve an unmodifiable mapping of users to their projects
@@ -43,6 +43,8 @@ public interface UserProjectCache {
 	 * @return true if the cache has an entry for a user
 	 */
 	boolean hasUser(String user);
+	
+	boolean isClusterAdmin(String user);
 	
 	void expire();
 }

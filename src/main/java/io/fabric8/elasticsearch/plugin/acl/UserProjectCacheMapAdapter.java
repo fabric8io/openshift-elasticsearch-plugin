@@ -38,6 +38,7 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 	private final ESLogger logger;
 	private final Map<String, Set<String>> cache = new ConcurrentHashMap<>();
 	private final Map<String, Long> createTimes = new ConcurrentHashMap<>();
+	private final Map<String, Boolean> clusterAdmins = new ConcurrentHashMap<>();
 	private static final long EXPIRE = 1000 * 60; //1 MIN 
 
 	@Inject
@@ -55,12 +56,18 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 	public boolean hasUser(String user) {
 		return cache.containsKey(user);
 	}
-
+	
 
 	@Override
-	public void update(final String user, final Set<String> projects) {
+	public boolean isClusterAdmin(String user) {
+		return clusterAdmins.containsKey(user) && clusterAdmins.get(user);
+	}
+
+	@Override
+	public void update(final String user, final Set<String> projects, boolean clusterAdmin) {
 		cache.put(user, new HashSet<>(projects));
 		createTimes.put(user, System.currentTimeMillis() + EXPIRE);
+		clusterAdmins.put(user, clusterAdmin);
 	}
 	
 	@Override
@@ -71,6 +78,7 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 				logger.debug("Expiring cache entry for {}", entry.getKey());
 				cache.remove(entry.getKey());
 				createTimes.remove(entry.getKey());
+				clusterAdmins.remove(entry.getKey());
 			}
 		}
 	}

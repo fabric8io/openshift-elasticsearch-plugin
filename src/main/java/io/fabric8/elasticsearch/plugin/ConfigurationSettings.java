@@ -35,6 +35,8 @@ public interface ConfigurationSettings {
 	static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
 	static final String OPENSHIFT_WHITELISTED_USERS = "io.fabric8.elasticsearch.authentication.users";
 	
+	static final String OPENSHIFT_ROLES = "X-OpenShift-Roles";
+	
 	static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
 	static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
 	static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";

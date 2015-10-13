@@ -16,8 +16,10 @@
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -41,6 +43,10 @@ import org.elasticsearch.rest.RestRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ning.http.client.AsyncHttpClient;
+import com.ning.http.client.AsyncHttpClientConfig;
+import com.ning.http.client.Request;
+import com.ning.http.client.Response;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
@@ -109,7 +115,11 @@ public class DynamicACLFilter
 				logger.debug("Cache has user: {}", cache.hasUser(user));
 			}
 			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
-				if(updateCache(user, token)){
+				final boolean isClusterAdmin = isClusterAdmin(token);
+				if(isClusterAdmin){
+					request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+				}
+				if(updateCache(user, token, isClusterAdmin)){
 					syncAcl();
 				}
 			}
@@ -134,11 +144,11 @@ public class DynamicACLFilter
 	}
 	
 
-	private boolean updateCache(final String user, final String token) {
+	private boolean updateCache(final String user, final String token, final boolean isClusterAdmin) {
 		logger.debug("Updating the cache for user '{}'", user);
 		try{
 			Set<String> projects = listProjectsFor(token);
-			cache.update(user, projects);
+			cache.update(user, projects, isClusterAdmin);
 		} catch (Exception e) {
 			logger.error("Error retrieving project list for '{}'",e, user);
 			return false;
@@ -157,6 +167,42 @@ public class DynamicACLFilter
 			}
 		}
 		return names;
+	}
+	
+	/*
+	 * TODO - replace with SAR from fabric8 client
+	 */
+	private boolean isClusterAdmin(final String token){
+		ConfigBuilder builder = new ConfigBuilder()
+				.withOauthToken(token);
+		AsyncHttpClientConfig.Builder clientBuilder = new AsyncHttpClientConfig.Builder()
+			.setFollowRedirect(true)
+			.setAcceptAnyCertificate(true);
+		try(AsyncHttpClient client = new AsyncHttpClient(clientBuilder.build())){
+			ObjectMapper mapper = new ObjectMapper();
+			Map<String,Object> body = new HashMap<>();
+			body.put("kind", "SubjectAccessReview");
+			body.put("apiVersion", "v1");
+			body.put("verb", "*");
+			body.put("resource","*");
+			String requestBody = mapper.writeValueAsString(body);
+			Request request = client.preparePost(String.format("%soapi/%s/subjectaccessreviews", builder.getMasterUrl(), builder.getApiVersion()))
+				.addHeader(AUTHORIZATION_HEADER, "Bearer " + token)
+				.addHeader("Content-Type","application/json")
+				.setBody(requestBody)
+				.setContentLength(requestBody.length())
+				.build();
+			Response response = client.executeRequest(request).get();
+			logger.debug("isAdminResponse {}", response);
+			String responseBody = response.getResponseBody();
+			logger.debug("responseBody: {}", responseBody);
+			Map<String,Object> result =
+			        mapper.readValue(responseBody, HashMap.class);
+			return result.containsKey("allowed") && Boolean.TRUE.equals(result.get("allowed"));
+		}catch(Exception e){
+			logger.error("Exception determining user's role.", e);
+		}
+		return false;
 	}
 	
 	private synchronized void syncAcl() {

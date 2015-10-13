@@ -143,10 +143,13 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	public void syncFrom(UserProjectCache cache, final String userProfilePrefix){
 		removeSyncAcls();
 		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
-			acls.add(new AclBuilder()
-					.user(userProjects.getKey())
-					.projects(formatIndicies(userProjects.getKey(), userProjects.getValue(), userProfilePrefix))
-					.build());
+			AclBuilder builder = new AclBuilder()
+				.user(userProjects.getKey())
+				.projects(formatIndicies(userProjects.getKey(), userProjects.getValue(), userProfilePrefix));
+			if(cache.isClusterAdmin(userProjects.getKey())){
+				builder.project(".operations.*");
+			}
+			acls.add(builder.build());
 		}
 	}
 	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){
