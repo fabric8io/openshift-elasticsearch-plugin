@@ -15,6 +15,7 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
+import static io.fabric8.elasticsearch.plugin.kibana.KibanaSeed.setDashboards;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.openshift.api.model.Project;
@@ -120,14 +121,13 @@ public class DynamicACLFilter
 			}
 			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
 				final boolean isClusterAdmin = isClusterAdmin(token);
-				Set<String> roles = new HashSet<String>();
 				if(isClusterAdmin){
 					request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
-					roles.add("cluster-admin");
 				}
 				if(updateCache(user, token, isClusterAdmin)){
 					syncAcl();
 				}
+				
 			}
 
 		} catch (Exception e) {
@@ -155,6 +155,12 @@ public class DynamicACLFilter
 		try{
 			Set<String> projects = listProjectsFor(token);
 			cache.update(user, projects, isClusterAdmin);
+			
+			Set<String> roles = new HashSet<String>();
+			if (isClusterAdmin)
+				roles.add("cluster-admin");
+			
+			setDashboards(user, projects, roles, esClient, kibanaIndex, kibanaVersion);
 		} catch (Exception e) {
 			logger.error("Error retrieving project list for '{}'",e, user);
 			return false;

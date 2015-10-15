@@ -45,6 +45,7 @@ import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.index.get.GetResult;
 
@@ -120,7 +121,6 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 				
 				ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = gfmResponse.mappings();
 				
-				//String index = ((Map.Entry<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>>)mappings).getKey();
 				String index = "";
 				for ( String key : mappings.keySet() ) {
 				
@@ -152,7 +152,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 		String index = getIndex(response);
 		String replacedIndex = response.getIndex();
 		
-		//update this to check for .kibana.* in the source
+		//Check for .kibana.* in the source
 		BytesReference replacedContent = null;
 		if ( ! response.isSourceEmpty() ) {
 			String source = response.getSourceAsBytesRef().toUtf8();
@@ -277,93 +277,16 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	                    FieldMappingMetaData fieldMapping = fieldEntry.getValue();
 	                    out.writeString(fieldMapping.fullName());
 	                    
+	                    // below replaces logic of out.writeBytesReference(fieldMapping.source);
 	                    Map<String, Object> map = fieldMapping.sourceAsMap();
 	                    
-	                    StringBuffer buffer = new StringBuffer();
-	                    addMapToBuffer(buffer, map);
+	                    XContentBuilder builder = XContentBuilder.builder(JsonXContent.jsonXContent);
 	                    
-	                    logger.debug("==== Built JSON buffer value of '{}' ====", buffer.toString());
-	                    out.writeBytesReference(new BytesArray(buffer.toString()));
+	                    builder.map(map).close();
+	                    out.writeBytesReference(builder.bytes());
 	                }
 	            }
 	        }
-		}
-		
-		private void addMapToBuffer(StringBuffer buffer, Map<String, Object> map) throws IOException {
-			buffer.append('{');
-    		
-    		boolean added = false;
-    		for ( String key : map.keySet() ) {
-    			
-    			if ( added )
-    				buffer.append(',');
-    			
-    			buffer.append('"');
-    			buffer.append(key);
-    			buffer.append("\":");
-    			
-    			Object value = map.get(key);
-    			if ( value instanceof String ) {
-    				buffer.append('"');
-    				buffer.append(value);
-    				buffer.append('"');
-    			}
-    			else if ( value instanceof Map ) {
-    				//recursion!
-    				addMapToBuffer(buffer, (Map<String, Object>)value);
-    			}
-    			/*else if ( value instanceof GetFieldMappingsResponse ) {
-    				ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings 
-    						= ((GetFieldMappingsResponse)value).mappings();
-    				
-    				addImmutableMapToBuffer(buffer, mappings);
-    			}*/
-    			else {
-    				buffer.append(value);
-    			}
-    			
-    			if ( !added )
-    				added = true;
-    		}
-    		
-    		buffer.append('}');	
-		}
-		
-		private void addImmutableMapToBuffer(StringBuffer buffer, ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings) throws IOException {
-			buffer.append('{');
-
-	        for (Map.Entry<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> indexEntry : mappings.entrySet()) {
-	            
-	        	buffer.append('"');
-	            buffer.append(indexEntry.getKey());
-	        	buffer.append("\":{");
-	            
-	            for (Map.Entry<String, ImmutableMap<String, FieldMappingMetaData>> typeEntry : indexEntry.getValue().entrySet()) {
-	                
-	            	buffer.append('"');
-	            	buffer.append(typeEntry.getKey());
-	            	buffer.append("\":{");
-
-	                for (Map.Entry<String, FieldMappingMetaData> fieldEntry : typeEntry.getValue().entrySet()) {
-	                	
-	                	buffer.append('"');
-	                	buffer.append(fieldEntry.getKey());
-	                	buffer.append("\":{");
-	                    //out.writeString(fieldEntry.getKey());
-	                    FieldMappingMetaData fieldMapping = fieldEntry.getValue();
-	                    //out.writeString(fieldMapping.fullName());
-	                    buffer.append('"');
-	                    buffer.append(fieldMapping.fullName());
-	                    buffer.append("\":");
-	                    
-	                    Map<String, Object> map = fieldMapping.sourceAsMap();
-	                    
-	                    addMapToBuffer(buffer, map);
-	                }
-	            }
-	        }
-	        
-	        buffer.append('}');
 		}
 
 		@Override
