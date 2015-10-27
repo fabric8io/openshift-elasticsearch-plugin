@@ -25,17 +25,19 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
 
 public class AclBuilder {
 	
-	
+	private String comment = SearchGuardACL.OPENSHIFT_SYNC;
 	private Set<String> users = new HashSet<>();
 	private Set<String> indexes = new HashSet<>();
+	private Set<String> bypasses = new HashSet<>();
+	private Set<String> executes = new HashSet<>();
 
 	public Acl build(){
 		Acl acl = new Acl();
-		acl.setComment(SearchGuardACL.OPENSHIFT_SYNC);
+		acl.setComment(new String(comment));
 		acl.setIndices(new ArrayList<>(indexes));
 		acl.setUsers(new ArrayList<>(users));
-		acl.setFiltersBypass(Arrays.asList("*"));
-		acl.setFiltersExecute(new ArrayList<String>());
+		acl.setFiltersBypass(new ArrayList<String>(bypasses));
+		acl.setFiltersExecute(new ArrayList<String>(executes));
 		return acl;
 	}
 
@@ -43,9 +45,24 @@ public class AclBuilder {
 		users.add(user);
 		return this;
 	}
+	
+	public AclBuilder comment(String comment) {
+		this.comment = new String(comment);
+		return this;
+	}
 
 	public AclBuilder project(String project) {
 		indexes.add(project);
+		return this;
+	}
+	
+	public AclBuilder bypass(String bypass) {
+		bypasses.add(bypass);
+		return this;
+	}
+	
+	public AclBuilder executes(String execute) {
+		executes.add(execute);
 		return this;
 	}
 
