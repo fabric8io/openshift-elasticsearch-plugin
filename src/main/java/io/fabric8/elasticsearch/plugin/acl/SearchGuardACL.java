@@ -39,6 +39,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	
 	public static final String OPENSHIFT_SYNC = "[openshift-elasticsearch-plugin]";
+	public static final String FLUENTD_USER = "system.logging.fluentd";
+	public static final String KIBANA_USER = "system.logging.kibana";
+	public static final String FLUENTD_EXECUTE_FILTER = "actionrequestfilter.fluentd";
+	public static final String KIBANA_EXECUTE_FILTER = "actionrequestfilter.kibana";
+	public static final String KIBANA_INDEX = ".kibana.*";
 	
 	@JsonProperty(value="acl")
 	private List<Acl> acls;
@@ -147,6 +152,7 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
 			AclBuilder builder = new AclBuilder()
 				.user(userProjects.getKey())
+				.bypass("*")
 				.projects(formatIndicies(userProjects.getKey(), userProjects.getValue(), userProfilePrefix));
 			if(cache.isClusterAdmin(userProjects.getKey())){
 				builder.project(".operations.*");
@@ -154,6 +160,29 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 			acls.add(builder.build());
 		}
 	}
+	
+	public void createInitialACLs() {
+		
+		if ( acls == null )
+			acls = new ArrayList<Acl>();
+
+		// Create the default to deny all
+		Acl defaultAcl = new AclBuilder().comment("Default is to deny all").build();
+		acls.add(defaultAcl);
+		
+		// Create ACL so that fluentd can only write
+		Acl fluentdAcl = new AclBuilder().user(FLUENTD_USER).executes(FLUENTD_EXECUTE_FILTER).comment("Fluentd can only write").build();
+		acls.add(fluentdAcl);
+		
+		// Create ACL so that kibana can do anything in the kibana index
+		Acl kibanaProjectAcl = new AclBuilder().user(KIBANA_USER).project(KIBANA_INDEX).bypass("*").comment("Kibana can do anything in the kibana index").build();
+		acls.add(kibanaProjectAcl);
+		
+		// Create ACL so that kibana can only read every other index
+		Acl kibanaOthersAcl = new AclBuilder().user(KIBANA_USER).executes(KIBANA_EXECUTE_FILTER).comment("Kibana can only read from every other index").build(); 
+		acls.add(kibanaOthersAcl);
+	}
+	
 	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){
 		ArrayList<String> indicies = new ArrayList<>(projects.size());
 		indicies.add(String.format("%s.%s", userProfilePrefix, getUsernameHash(user)));

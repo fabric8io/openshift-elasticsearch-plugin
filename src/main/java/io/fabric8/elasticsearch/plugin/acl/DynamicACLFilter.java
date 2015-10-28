@@ -36,12 +36,15 @@ import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.engine.DocumentMissingException;
+import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
@@ -81,6 +84,8 @@ public class DynamicACLFilter
 	private final String userProfilePrefix;
 	private final ReentrantLock lock = new ReentrantLock();
 	private final Condition syncing = lock.newCondition();
+	
+	private Boolean seeded;
 
 	@Inject
 	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client, final ACLNotifierService notifierService){
@@ -95,6 +100,8 @@ public class DynamicACLFilter
 		this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
 		notifierService.addActionRequestListener(this);
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
+		
+		this.seeded = false;
 	}
 	
 	@Override
@@ -102,6 +109,17 @@ public class DynamicACLFilter
 		logger.debug("Received notification that SearchGuard ACL was loaded");
 		lock.lock();
 		try{
+			//seed initial ACL here
+			if (!seeded) {
+				try {
+					seedInitialACL(esClient);
+				}
+				catch (Exception e) {
+					logger.error("Exception encountered when seeding initial ACL", e);
+				}
+			}
+			//end seeding
+			
 			syncing.signalAll();
 		}finally{
 			lock.unlock();
@@ -257,6 +275,69 @@ public class DynamicACLFilter
 		}finally{
 			lock.unlock();
 		}
+	}
+	
+	private void create(Client esClient, SearchGuardACL acl) throws JsonProcessingException, InterruptedException {
+		if (logger.isDebugEnabled()) {
+			logger.debug("Writing ACLs '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
+		}
+		IndexRequest request = esClient.prepareIndex(searchGuardIndex, SEARCHGUARD_TYPE, SEARCHGUARD_ID)
+			.setSource(mapper.writeValueAsBytes(acl))
+			.setRefresh(true).request();
+		request.putInContext(OS_ES_REQ_ID, ACL_FILTER_ID);
+		esClient.index(request).actionGet();
+		lock.lock();
+		try{
+			logger.debug("Waiting up to {} ms. to be notified that SearchGuard has refreshed the ACLs", aclSyncDelay);
+			syncing.await(aclSyncDelay, TimeUnit.MILLISECONDS);
+		}catch(InterruptedException e){
+			logger.error("Error while awaiting notification of ACL load by SearchGuard", e);
+		}finally{
+			lock.unlock();
+		}
+	}
+	
+	private void seedInitialACL(Client esClient) throws Exception {
+
+		SearchGuardACL acl = new SearchGuardACL();
+		boolean create = false;
+	
+		try {
+			//This should return nothing initially - if it does, we're done
+			acl = loadAcl(esClient);
+			
+			if ( acl.iterator().hasNext() ) {
+				if ( logger.isDebugEnabled() )
+					logger.debug("Have already seeded with '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
+				seeded = true;
+				return;
+			}
+		}
+		catch (IndexMissingException | DocumentMissingException | NullPointerException e) {
+			logger.debug("Caught Exception, ACL has not been seeded yet", e);
+			create = true;
+		}
+		catch (Exception e) {
+			logger.error("Error checking ACL when seeding", e);
+			throw e;
+		}
+		
+		try {
+			acl.createInitialACLs();
+			if ( logger.isDebugEnabled() )
+				logger.debug("Created initial ACL of '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
+			
+			if ( create )
+				create(esClient, acl);
+			else
+				write(esClient, acl);
+		}
+		catch (Exception e) {
+			logger.error("Error seeding initial ACL", e);
+			throw e;
+		}
+		
+		seeded = true;
 	}
 
 	@Override
