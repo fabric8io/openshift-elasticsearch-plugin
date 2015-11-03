@@ -47,6 +47,9 @@ public class KibanaSeed {
 	private static final String INDICIES_TYPE = "index-pattern";
 	
 	private static final String OPERATIONS_PROJECT = ".operations";
+	private static final String BLANK_PROJECT = ".empty-project";
+	
+	//TODO: should these be able to be read from property values?
 	private static final String[] OPERATIONS_ROLES = {"cluster-admin"};
 	private static final String[] BLACKLIST_PROJECTS = {"default", "openshift", "openshift-infra" };
 	
@@ -78,6 +81,9 @@ public class KibanaSeed {
 		List<String> sortedProjects = new ArrayList<String>(projects);
 		Collections.sort(sortedProjects);
 		
+		if ( sortedProjects.isEmpty() )
+			sortedProjects.add(BLANK_PROJECT);
+		
 		logger.debug("Setting dashboards given user '{}' and projects '{}'", user, projects);
 		
 		// If none have been set yet
@@ -100,10 +106,15 @@ public class KibanaSeed {
 			// cull any that are in ES but not in OS (remaining in indexPatterns)
 			remove(user, indexPatterns, esClient, kibanaIndex);
 			
+			common.addAll(sortedProjects);
 			Collections.sort(common);
 			// Set default index to first index in common if we removed the default
 			String defaultIndex = getDefaultIndex(user, esClient, kibanaIndex, kibanaVersion);
+			
+			logger.debug("Checking if '{}' contains '{}'", indexPatterns, defaultIndex);
+			
 			if ( indexPatterns.contains(defaultIndex) || StringUtils.isEmpty(defaultIndex) ) {
+				logger.debug("'{}' does contain '{}' and common size is {}", indexPatterns, defaultIndex, common.size());
 				if ( common.size() > 0 )
 					setDefaultIndex(user, common.get(0), esClient, kibanaIndex, kibanaVersion);
 			}
@@ -223,6 +234,8 @@ public class KibanaSeed {
 		
 		if ( project.equalsIgnoreCase(OPERATIONS_PROJECT) )
 			sourceBuilder.operationsFields();
+		else if ( project.equalsIgnoreCase(BLANK_PROJECT) )
+			sourceBuilder.blankFields();
 		else
 			sourceBuilder.applicationFields();
 		
