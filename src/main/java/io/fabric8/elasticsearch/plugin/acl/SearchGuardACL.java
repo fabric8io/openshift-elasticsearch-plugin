@@ -41,8 +41,10 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 	public static final String OPENSHIFT_SYNC = "[openshift-elasticsearch-plugin]";
 	public static final String FLUENTD_USER = "system.logging.fluentd";
 	public static final String KIBANA_USER = "system.logging.kibana";
+	public static final String CURATOR_USER = "system.logging.curator";
 	public static final String FLUENTD_EXECUTE_FILTER = "actionrequestfilter.fluentd";
 	public static final String KIBANA_EXECUTE_FILTER = "actionrequestfilter.kibana";
+	public static final String CURATOR_EXECUTE_FILTER = "actionrequestfilter.curator";
 	public static final String KIBANA_INDEX = ".kibana.*";
 	
 	@JsonProperty(value="acl")
@@ -181,6 +183,10 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		// Create ACL so that kibana can only read every other index
 		Acl kibanaOthersAcl = new AclBuilder().user(KIBANA_USER).executes(KIBANA_EXECUTE_FILTER).comment("Kibana can only read from every other index").build(); 
 		acls.add(kibanaOthersAcl);
+
+		// Create ACL so that curator can find out what indices are available, and delete them
+		Acl curatorAcl = new AclBuilder().user(CURATOR_USER).executes(CURATOR_EXECUTE_FILTER).comment("Curator can list all indices and delete them").build();
+		acls.add(curatorAcl);
 	}
 	
 	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){

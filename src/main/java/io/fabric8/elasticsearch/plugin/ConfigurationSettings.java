@@ -40,7 +40,7 @@ public interface ConfigurationSettings {
 	static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
 	static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
 	static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";
-	static final String [] DEFAULT_WHITELISTED_USERS = new String []{"$logging.$infra.$fluentd","$logging.$infra.$kibana"};
+	static final String [] DEFAULT_WHITELISTED_USERS = new String []{"$logging.$infra.$fluentd","$logging.$infra.$kibana","$logging.$infra.$curator"};
 	static final String DEFAULT_KIBANA_VERSION = "4.1.1";
 
 	static final int DEFAULT_ES_ACL_DELAY = 2500;
