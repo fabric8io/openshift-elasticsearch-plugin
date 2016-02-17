@@ -19,7 +19,11 @@ import static io.fabric8.elasticsearch.plugin.kibana.KibanaSeed.setDashboards;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.client.DefaultOpenshiftClient;
+import io.fabric8.openshift.api.model.SubjectAccessReview;
+import io.fabric8.openshift.api.model.SubjectAccessReview.ApiVersion;
+import io.fabric8.openshift.api.model.SubjectAccessReviewBuilder;
+import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
+import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 import java.io.IOException;
@@ -53,10 +57,6 @@ import org.elasticsearch.rest.RestRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ning.http.client.AsyncHttpClient;
-import com.ning.http.client.AsyncHttpClientConfig;
-import com.ning.http.client.Request;
-import com.ning.http.client.Response;
 
 /**
  * REST filter to update the ACL when a user
@@ -190,7 +190,7 @@ public class DynamicACLFilter
 		ConfigBuilder builder = new ConfigBuilder()
 				.withOauthToken(token);
 		Set<String> names = new HashSet<>();
-		try(OpenShiftClient client = new DefaultOpenshiftClient(builder.build())){
+		try(OpenShiftClient client = new DefaultOpenShiftClient(builder.build())){
 			List<Project> projects = client.projects().list().getItems();
 			for (Project project : projects) {
 				names.add(project.getMetadata().getName());
@@ -199,36 +199,23 @@ public class DynamicACLFilter
 		return names;
 	}
 	
-	/*
-	 * TODO - replace with SAR from fabric8 client
-	 */
 	private boolean isClusterAdmin(final String token){
 		ConfigBuilder builder = new ConfigBuilder()
 				.withOauthToken(token);
-		AsyncHttpClientConfig.Builder clientBuilder = new AsyncHttpClientConfig.Builder()
-			.setFollowRedirect(true)
-			.setAcceptAnyCertificate(true);
-		try(AsyncHttpClient client = new AsyncHttpClient(clientBuilder.build())){
-			ObjectMapper mapper = new ObjectMapper();
-			Map<String,Object> body = new HashMap<>();
-			body.put("kind", "SubjectAccessReview");
-			body.put("apiVersion", "v1");
-			body.put("verb", "*");
-			body.put("resource","*");
-			String requestBody = mapper.writeValueAsString(body);
-			Request request = client.preparePost(String.format("%soapi/%s/subjectaccessreviews", builder.getMasterUrl(), builder.getApiVersion()))
-				.addHeader(AUTHORIZATION_HEADER, "Bearer " + token)
-				.addHeader("Content-Type","application/json")
-				.setBody(requestBody)
-				.setContentLength(requestBody.length())
-				.build();
-			Response response = client.executeRequest(request).get();
+
+		try {
+			
+			OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build());
+			
+			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*")
+							.withApiVersion(ApiVersion.V_1).build();
+			SubjectAccessReviewResponse response = osClient.subjectAccessReviews().create(request);
+			
+			osClient.close();
+		
 			logger.debug("isAdminResponse {}", response);
-			String responseBody = response.getResponseBody();
-			logger.debug("responseBody: {}", responseBody);
-			Map<String,Object> result =
-			        mapper.readValue(responseBody, HashMap.class);
-			return result.containsKey("allowed") && Boolean.TRUE.equals(result.get("allowed"));
+			
+			return response.getAllowed();
 		}catch(Exception e){
 			logger.error("Exception determining user's role.", e);
 		}
