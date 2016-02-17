@@ -89,7 +89,6 @@ public class KibanaSeed {
 		// If none have been set yet
 		if ( indexPatterns.isEmpty() ) {
 			create(user, sortedProjects, true, esClient, kibanaIndex, kibanaVersion);
-			createSearchProperties(user, esClient, kibanaIndex);
 		}
 		else {
 			List<String> common = new ArrayList<String>(indexPatterns);
@@ -122,12 +121,6 @@ public class KibanaSeed {
 		}
 	}
 	
-	private static void createSearchProperties(String username, Client esClient, String kibanaIndex) {
-		
-		String source = new DocumentBuilder().searchProperties().build();
-		executeCreate(getKibanaIndex(username, kibanaIndex), SEARCH_TYPE, SEARCH_ID, source, esClient);
-	}
-
 	// this may return other than void later...
 	private static void setDefaultIndex(String username, String project, Client esClient, String kibanaIndex, String kibanaVersion) {
 		// this will create a default index of [index.]YYYY.MM.DD in .kibana.username
