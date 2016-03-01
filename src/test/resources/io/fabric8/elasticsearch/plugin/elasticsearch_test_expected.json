@@ -1,0 +1,36 @@
+{
+    "acl": [
+       {
+       	  "__Comment__": "Default is to deny all",
+       	  "filters_bypass": [],
+       	  "filters_execute": []
+       },
+       {
+           "__Comment__": "user can only write",
+           "users": [
+           "system.test.user"
+           ],
+           "filters_bypass": [],
+           "filters_execute": ["actionrequestfilter.test"]
+       },
+       {
+           "__Comment__": "logging can only read from every other index",
+           "users": [
+           "system.logging.test"
+           ],
+           "filters_bypass": [],
+           "filters_execute": ["actionrequestfilter.logging"]
+       },
+       {
+           "__Comment__": "test can do anything in the test index",
+           "users": [
+           "system.logging.test"
+           ],
+           "indices": [
+               ".test.*"
+           ],
+           "filters_bypass": ["*"],
+           "filters_execute": []
+       }
+   ]
+}

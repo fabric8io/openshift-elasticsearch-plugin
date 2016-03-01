@@ -44,5 +44,16 @@ public interface ConfigurationSettings {
 	static final String DEFAULT_KIBANA_VERSION = "4.1.1";
 
 	static final int DEFAULT_ES_ACL_DELAY = 2500;
+	
+	/**
+	 * The configurations for the initial ACL as well
+	 * as what the .operations index consists of
+	 */
 
+	static final String OPENSHIFT_CONFIG_ACL_BASE = "openshift.acl.users.";
+	static final String OPENSHIFT_CONFIG_ACL_NAMES = OPENSHIFT_CONFIG_ACL_BASE + "names";
+	
+	// Below to be used at a later time?
+	static final String OPENSHIFT_CONFIG_OPS_PROJECTS = "openshift.operations.project.names";
+	static final String [] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String []{"default", "openshift", "openshift-infra"};
 }

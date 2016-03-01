@@ -84,6 +84,7 @@ public class DynamicACLFilter
 	private final String userProfilePrefix;
 	private final ReentrantLock lock = new ReentrantLock();
 	private final Condition syncing = lock.newCondition();
+	private final Settings settings;
 	
 	private Boolean seeded;
 
@@ -100,6 +101,8 @@ public class DynamicACLFilter
 		this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
 		notifierService.addActionRequestListener(this);
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
+		
+		this.settings = settings;
 		
 		this.seeded = false;
 	}
@@ -310,7 +313,7 @@ public class DynamicACLFilter
 		}
 		
 		try {
-			acl.createInitialACLs();
+			acl.createInitialACLs(settings);
 			if ( logger.isDebugEnabled() )
 				logger.debug("Created initial ACL of '{}'", mapper.writer(new DefaultPrettyPrinter()).writeValueAsString(acl));
 			

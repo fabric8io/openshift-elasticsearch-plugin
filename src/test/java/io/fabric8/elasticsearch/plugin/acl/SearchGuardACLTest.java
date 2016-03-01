@@ -25,9 +25,13 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardACL.Acl;
 
+import org.elasticsearch.common.settings.ImmutableSettings;
+import org.elasticsearch.common.settings.Settings;
+
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -86,6 +90,24 @@ public class SearchGuardACLTest {
 		assertNoAclForUser(acls, "myotheruser");
 	}
 
+	/**
+	 *  This test should verify that the ACL built from settings is equal to the ACL built using the dynamic builder
+	 * @throws Exception
+	 */
+	@Test
+	public void verifySettingsACL() throws Exception {
+		
+		// source being read in needs to be the contents of the file, not the file name
+		String source = Samples.CONFIG_ACL.getContent();
+		Settings settings = ImmutableSettings.settingsBuilder().loadFromSource(source).build();
+		SearchGuardACL generatedACL = new SearchGuardACL();
+		generatedACL.createInitialACLs(settings);
+		
+		SearchGuardACL expectedACL = mapper.readValue(new StringReader(Samples.CONFIG_EXPECTED_ACL.getContent()), SearchGuardACL.class);
+		
+		assertACLsMatch(expectedACL, generatedACL);
+	}
+	
 	private void assertNoAclForUser(final SearchGuardACL acls, final String user) {
 		for (Acl acl : acls) {
 			assertFalse("Exp. to not find any acls for users not in the cache", acl.getUsers().contains(user));
@@ -122,5 +144,41 @@ public class SearchGuardACLTest {
 			}
 		}
 		assertEquals("Expected the acl to exist and only once for user " + StringUtils.join(exp.getUsers(), ",") , 1, found);
+	}
+	
+	private void assertACLsMatch(SearchGuardACL expected, SearchGuardACL actual) {
+		
+		int expectedCount = 0,
+		    actualCount = 0,
+		    found;
+		
+		for ( Acl exp : expected ) {
+			expectedCount++;
+			found = 0;
+			
+			for ( Acl act : actual ) {
+				
+				if ( exp.getUsers().size() != act.getUsers().size() || !exp.getUsers().containsAll(act.getUsers()) )
+					continue;
+				
+				if ( exp.getFiltersBypass().size() != act.getFiltersBypass().size() || !exp.getFiltersBypass().containsAll(act.getFiltersBypass()) )
+					continue;
+				
+				if ( exp.getFiltersExecute().size() != act.getFiltersExecute().size() || !exp.getFiltersExecute().containsAll(act.getFiltersExecute()) )
+					continue;
+				
+				if ( exp.getIndices().size() != act.getIndices().size() || !exp.getIndices().containsAll(act.getIndices()) )
+					continue;
+				
+				if ( !exp.getComment().equalsIgnoreCase(act.getComment()) )
+					continue;
+				
+				actualCount++;
+				found++;
+			}
+			
+			assertEquals("Expected the acl to exist and only once for user " + StringUtils.join(exp.getUsers(), ",") , 1, found);
+		}
+		assertEquals("Was able to match " + actualCount + " of " + expectedCount + " ACLs", expectedCount, actualCount);
 	}
 }

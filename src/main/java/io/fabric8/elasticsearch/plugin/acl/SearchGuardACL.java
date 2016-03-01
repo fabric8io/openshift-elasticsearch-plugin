@@ -17,6 +17,9 @@ package io.fabric8.elasticsearch.plugin.acl;
 
 import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
 
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import org.elasticsearch.common.settings.Settings;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,7 +39,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  */
 @JsonIgnoreProperties(ignoreUnknown=true)
-public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
+public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>, ConfigurationSettings {
 	
 	public static final String OPENSHIFT_SYNC = "[openshift-elasticsearch-plugin]";
 	public static final String FLUENTD_USER = "system.logging.fluentd";
@@ -163,7 +166,7 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		}
 	}
 	
-	public void createInitialACLs() {
+	public void createInitialACLs(Settings settings) {
 		
 		if ( acls == null )
 			acls = new ArrayList<Acl>();
@@ -172,21 +175,41 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>{
 		Acl defaultAcl = new AclBuilder().comment("Default is to deny all").build();
 		acls.add(defaultAcl);
 		
-		// Create ACL so that fluentd can only write
-		Acl fluentdAcl = new AclBuilder().user(FLUENTD_USER).executes(FLUENTD_EXECUTE_FILTER).comment("Fluentd can only write").build();
-		acls.add(fluentdAcl);
-		
-		// Create ACL so that kibana can do anything in the kibana index
-		Acl kibanaProjectAcl = new AclBuilder().user(KIBANA_USER).project(KIBANA_INDEX).bypass("*").comment("Kibana can do anything in the kibana index").build();
-		acls.add(kibanaProjectAcl);
-		
-		// Create ACL so that kibana can only read every other index
-		Acl kibanaOthersAcl = new AclBuilder().user(KIBANA_USER).executes(KIBANA_EXECUTE_FILTER).comment("Kibana can only read from every other index").build(); 
-		acls.add(kibanaOthersAcl);
+		final String[] aclNames = settings.getAsArray(OPENSHIFT_CONFIG_ACL_NAMES);
+		for ( String name : aclNames ) {
+			
+			String propertyPrefix = OPENSHIFT_CONFIG_ACL_BASE + name;
+			
+			//check for "bypass" and "execute"
+			String[] bypass = settings.getAsArray(propertyPrefix + ".bypass");
+			String[] execute = settings.getAsArray(propertyPrefix + ".execute");
 
-		// Create ACL so that curator can find out what indices are available, and delete them
-		Acl curatorAcl = new AclBuilder().user(CURATOR_USER).executes(CURATOR_EXECUTE_FILTER).comment("Curator can list all indices and delete them").build();
-		acls.add(curatorAcl);
+			for ( String b : bypass ) {
+				String bypassComment = settings.get(propertyPrefix + "." + b + ".comment");
+				AclBuilder bypassAcl = new AclBuilder().user(name).bypass(b).comment(bypassComment);
+				
+				// check for a specified indices
+				String[] indices = settings.getAsArray(propertyPrefix + "." + b + ".indices");
+				for ( String index : indices )
+					bypassAcl.project(index);
+				
+				acls.add(bypassAcl.build());
+			}
+			
+			for ( String e : execute ) {
+				String executeComment = settings.get(propertyPrefix + "." + e + ".comment");
+				AclBuilder executeAcl = new AclBuilder().user(name).executes(e).comment(executeComment);
+				
+				//check for a specified index
+				String[] indices = settings.getAsArray(propertyPrefix + "." + e + ".indices");
+				for ( String index : indices )
+					executeAcl.project(index);
+				
+				acls.add(executeAcl.build());
+			}			
+			
+		}
+
 	}
 	
 	private List<String> formatIndicies(String user, Set<String> projects, final String userProfilePrefix){
