@@ -26,6 +26,10 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
+import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
@@ -46,6 +50,7 @@ public class KibanaSeed {
 	
 	private static final String OPERATIONS_PROJECT = ".operations";
 	private static final String BLANK_PROJECT = ".empty-project";
+	private static final String ADMIN_ALIAS_NAME = ".all";
 	
 	//TODO: should these be able to be read from property values?
 	private static final String[] OPERATIONS_ROLES = {"cluster-admin"};
@@ -55,6 +60,8 @@ public class KibanaSeed {
 	
 	public static void setDashboards(String user, Set<String> projects, Set<String> roles, Client esClient, String kibanaIndex, String kibanaVersion) {
 
+		
+		boolean isAdmin = false;
 		//GET .../.kibana/index-pattern/_search?pretty=true&fields=
 		//  compare results to projects; handle any deltas (create, delete?)
 		//check projects for default, openshift, openshift-infra and remove
@@ -73,6 +80,8 @@ public class KibanaSeed {
 			if ( roles.contains(role) ) {
 				logger.debug("{} is an admin user", user);
 				projects.add(OPERATIONS_PROJECT);
+				isAdmin = true;
+				projects.add(ADMIN_ALIAS_NAME);
 				break;
 			}
 		
@@ -83,6 +92,11 @@ public class KibanaSeed {
 			sortedProjects.add(BLANK_PROJECT);
 		
 		logger.debug("Setting dashboards given user '{}' and projects '{}'", user, projects);
+		
+		if ( isAdmin ) {
+			logger.debug("Adding to alias for {}", user);
+			buildAdminAlias(user, sortedProjects, esClient, kibanaIndex, kibanaVersion);
+		}
 		
 		// If none have been set yet
 		if ( indexPatterns.isEmpty() ) {
@@ -127,6 +141,40 @@ public class KibanaSeed {
 				.build();
 		
 		executeCreate(getKibanaIndex(username, kibanaIndex), DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
+	}
+	
+	private static void buildAdminAlias(String username, List<String> projects, Client esClient, String kibanaIndex, String kibanaVersion) {
+		
+		List<String> toAdd = new ArrayList<String>(projects);
+		
+		try {
+			
+			for ( String project : projects ) {
+				// Check that the index exists before we try to alias it...
+				IndicesExistsResponse existsResponse = esClient.admin().indices().prepareExists(getIndexPattern(project)).get();
+				logger.debug("Checking if index {} exists? {}", project, existsResponse.isExists());
+				if ( !existsResponse.isExists() || project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
+					toAdd.remove(project);
+				}
+			}
+			
+			if ( toAdd.isEmpty() )
+				return;
+			
+			IndicesAliasesRequestBuilder aliasBuilder = esClient.admin().indices().prepareAliases();
+			
+			for ( String project : toAdd ) {
+				logger.debug("Creating alias for {} as {}", project, ADMIN_ALIAS_NAME);
+				aliasBuilder.addAlias(getIndexPattern(project), ADMIN_ALIAS_NAME);
+			}
+		
+			IndicesAliasesResponse response = aliasBuilder.get();
+			logger.debug("Aliases request acknowledged? {}", response.isAcknowledged());
+		} catch (ElasticsearchException e) {
+			// Avoid printing out any kibana specific information?
+			logger.error("Error executing Alias request", e);
+		}
+		
 	}
 	
 	private static String getDefaultIndex(String username, Client esClient, String kibanaIndex, String kibanaVersion) {
@@ -223,7 +271,7 @@ public class KibanaSeed {
 				.title(getIndexPattern(project))
 				.timeFieldName("time");
 		
-		if ( project.equalsIgnoreCase(OPERATIONS_PROJECT) )
+		if ( project.equalsIgnoreCase(OPERATIONS_PROJECT) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
 			sourceBuilder.operationsFields();
 		else if ( project.equalsIgnoreCase(BLANK_PROJECT) )
 			sourceBuilder.blankFields();
@@ -271,13 +319,21 @@ public class KibanaSeed {
 	}
 	
 	private static String getIndexPattern(String project) {
+		
+		if ( project.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
+			return project;
+		
 		return project + ".*";
 	}
 	
 	private static String getProjectFromIndex(String index) {
 		
 		if ( !StringUtils.isEmpty(index) ) {
-			int wildcard = index.indexOf('*');
+			
+			if ( index.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
+				return index;
+			
+			int wildcard = index.lastIndexOf('*');
 
 			if ( wildcard > 0 )
 				return index.substring(0, wildcard - 1);

@@ -161,6 +161,9 @@ public class SearchGuardACL implements Iterable<SearchGuardACL.Acl>, Configurati
 				.projects(formatIndicies(userProjects.getKey(), userProjects.getValue(), userProfilePrefix));
 			if(cache.isClusterAdmin(userProjects.getKey())){
 				builder.project(".operations.*");
+				builder.project(".all");
+				// this allows cluster admins to still view logs for namespaces that have been deleted
+				builder.project("*.*");
 			}
 			acls.add(builder.build());
 		}

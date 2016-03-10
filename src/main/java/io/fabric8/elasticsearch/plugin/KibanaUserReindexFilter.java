@@ -48,7 +48,7 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 			final String user = getUser(request);
 			final String requestedIndex = getRequestedIndex(request);
 			
-			logger.debug("Received user '{}' and index '{}', looking for index '{}'", user, requestedIndex, kibanaIndex);
+			logger.debug("Received user '{}' and index '{}', checking for kibana index '{}'", user, requestedIndex, kibanaIndex);
 			if ( StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex) && requestedIndex.equalsIgnoreCase(kibanaIndex)) {
 				String userIndex = requestedIndex + "." + getUsernameHash(user);
 				logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
