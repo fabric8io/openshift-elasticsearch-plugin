@@ -54,7 +54,6 @@ public class KibanaSeed {
 	
 	//TODO: should these be able to be read from property values?
 	private static final String[] OPERATIONS_ROLES = {"cluster-admin"};
-	private static final String[] BLACKLIST_PROJECTS = {"default", "openshift", "openshift-infra" };
 	
 	public static final String DEFAULT_INDEX_FIELD = "defaultIndex";
 	
@@ -64,12 +63,6 @@ public class KibanaSeed {
 		boolean isAdmin = false;
 		//GET .../.kibana/index-pattern/_search?pretty=true&fields=
 		//  compare results to projects; handle any deltas (create, delete?)
-		//check projects for default, openshift, openshift-infra and remove
-		for ( String project : BLACKLIST_PROJECTS )
-			if ( projects.contains(project) ) {
-				logger.debug("Black-listed project '{}' found.  Not adding as an index pattern", project);
-				projects.remove(project);
-			}
 		
 		Set<String> indexPatterns = getIndexPatterns(user, esClient, kibanaIndex);
 		logger.debug("Found '{}' Index patterns for user", indexPatterns.size());
@@ -105,7 +98,6 @@ public class KibanaSeed {
 		else {
 			List<String> common = new ArrayList<String>(indexPatterns);
 			
-			// Get a list of all projects that are common
 			common.retainAll(sortedProjects);
 			
 			sortedProjects.removeAll(common);
@@ -333,10 +325,10 @@ public class KibanaSeed {
 			if ( index.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
 				return index;
 			
-			int wildcard = index.lastIndexOf('*');
-
+			int wildcard = index.lastIndexOf('.');
+			
 			if ( wildcard > 0 )
-				return index.substring(0, wildcard - 1);
+				return index.substring(0, wildcard);
 		}
 			
 		return index;

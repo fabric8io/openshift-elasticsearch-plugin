@@ -27,10 +27,8 @@ import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -44,6 +42,7 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.lang3.ArrayUtils;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
@@ -71,6 +70,7 @@ public class DynamicACLFilter
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
+	private static final String[] BLACKLIST_PROJECTS = {"default", "openshift", "openshift-infra" };
 
 	private final ObjectMapper mapper = new ObjectMapper();
 	private final ESLogger logger;
@@ -196,10 +196,16 @@ public class DynamicACLFilter
 		try(OpenShiftClient client = new DefaultOpenShiftClient(builder.build())){
 			List<Project> projects = client.projects().list().getItems();
 			for (Project project : projects) {
-				names.add(project.getMetadata().getName());
+				if ( ! isBlacklistProject(project.getMetadata().getName()) )
+					names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
 			}
 		}
 		return names;
+	}
+	
+	private boolean isBlacklistProject(String project) {
+		
+		return ArrayUtils.contains(BLACKLIST_PROJECTS, project.toLowerCase());
 	}
 	
 	private boolean isClusterAdmin(final String token){
