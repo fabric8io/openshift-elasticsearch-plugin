@@ -43,7 +43,8 @@ import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
  *
  */
 public class OpenShiftElasticSearchService 
-	extends AbstractLifecycleComponent<OpenShiftElasticSearchService>{
+	extends AbstractLifecycleComponent<OpenShiftElasticSearchService>
+	implements ConfigurationSettings {
 
 
 	private final ESLogger logger;
@@ -65,31 +66,43 @@ public class OpenShiftElasticSearchService
 		this.cache = cache;
 		this.aclNotifier = aclNotifer;
 		restController.registerFilter(aclFilter);
-		restController.registerFilter(new KibanaUserReindexFilter(settings, logger));
+		
+		boolean reindexEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG, OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
+		logger.debug("Starting with Kibana reindexing feature enabled: {}", reindexEnabled);
+		
+		if ( reindexEnabled ) {
+			restController.registerFilter(new KibanaUserReindexFilter(settings, logger));
+		}
 	}
 
 	@Override
 	protected void doStart() throws ElasticsearchException {
+		
+		boolean dynamicEnabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+		logger.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
+		
         //thread for ACL load callbacks
         logger.debug("Starting the acl notification thread...");
 		notifier = Executors.newSingleThreadExecutor(
                 EsExecutors.daemonThreadFactory(settings, "openshift_acl_notifier"));	
 		aclNotifier.setExecutorService(notifier);
-		
-		//expiration thread
-		logger.debug("Starting the expiration thread...");
-        this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
-                EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
-        this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-        this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-        
-        Runnable expire = new Runnable() {
-			@Override
-			public void run() {
-				cache.expire();
-			}
-		};
-        this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
+			
+		if ( dynamicEnabled ) {
+			//expiration thread
+			logger.debug("Starting the expiration thread...");
+	        this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
+	                EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
+	        this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+	        this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+	        
+	        Runnable expire = new Runnable() {
+				@Override
+				public void run() {
+					cache.expire();
+				}
+			};
+	        this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
+		}
 		
 		logger.debug("Started");
   

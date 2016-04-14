@@ -54,12 +54,16 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	private final ESLogger logger;
 	private final String kibanaIndex;
 	
+	private Boolean enabled;
+	
 	@Inject
 	public KibanaUserReindexAction(final Settings settings, final ClusterService clusterService, final Client client) {
+		this.enabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG, OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
 		this.logger = Loggers.getLogger(KibanaUserReindexAction.class);
 		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
 		
-		logger.debug("Initializing KibanaUserReindexAction");
+		if ( enabled )
+			logger.debug("Initializing KibanaUserReindexAction");
 	}
 
 	@Override
@@ -78,69 +82,71 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	public void apply(String action, ActionResponse response,
 			ActionListener listener, ActionFilterChain chain) {
 		
-		logger.debug("Response with Action '{}' and class '{}'", action, response.getClass());
-		
-		if ( containsKibanaUserIndex(response) ) {
-		
-			if ( response instanceof IndexResponse ) {
-				final IndexResponse ir = (IndexResponse) response;
-				String index = getIndex(ir);
-				
-				response = new IndexResponse(index, ir.getType(), ir.getId(), ir.getVersion(), ir.isCreated());
-			}
-			else if ( response instanceof GetResponse ) {
-				response = new GetResponse(buildNewResult((GetResponse) response));
-			}
-			else if ( response instanceof DeleteResponse ) {
-				final DeleteResponse dr = (DeleteResponse) response;
-				String index = getIndex(dr);
-				
-				response = new DeleteResponse(index, dr.getType(), dr.getId(), dr.getVersion(), dr.isFound());
-			}
-			else if ( response instanceof MultiGetResponse ) {
-				final MultiGetResponse mgr = (MultiGetResponse) response;
-				
-				MultiGetItemResponse[] responses = new MultiGetItemResponse[mgr.getResponses().length];
-				int index = 0;
-				
-				for ( MultiGetItemResponse item : mgr.getResponses() ) {
-					GetResponse itemResponse = item.getResponse();
-					Failure itemFailure = item.getFailure();
+		if ( enabled ) {
+			logger.debug("Response with Action '{}' and class '{}'", action, response.getClass());
+			
+			if ( containsKibanaUserIndex(response) ) {
+			
+				if ( response instanceof IndexResponse ) {
+					final IndexResponse ir = (IndexResponse) response;
+					String index = getIndex(ir);
 					
-					GetResponse getResponse = (itemResponse != null) ? new GetResponse(buildNewResult(itemResponse)) : null;
-					Failure failure = (itemFailure != null) ? buildNewFailure(itemFailure) : null;
-	
-					responses[index] = new MultiGetItemResponse(getResponse, failure);
-					index++;
+					response = new IndexResponse(index, ir.getType(), ir.getId(), ir.getVersion(), ir.isCreated());
 				}
-				
-				response = new MultiGetResponse(responses);
-			}
-			else if ( response instanceof GetFieldMappingsResponse ) {
-				final GetFieldMappingsResponse gfmResponse = (GetFieldMappingsResponse) response;
-				
-				ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = gfmResponse.mappings();
-				
-				String index = "";
-				for ( String key : mappings.keySet() ) {
-				
-					index = key;
-					if ( isKibanaUserIndex(index) ) {
-						index = kibanaIndex;
+				else if ( response instanceof GetResponse ) {
+					response = new GetResponse(buildNewResult((GetResponse) response));
+				}
+				else if ( response instanceof DeleteResponse ) {
+					final DeleteResponse dr = (DeleteResponse) response;
+					String index = getIndex(dr);
+					
+					response = new DeleteResponse(index, dr.getType(), dr.getId(), dr.getVersion(), dr.isFound());
+				}
+				else if ( response instanceof MultiGetResponse ) {
+					final MultiGetResponse mgr = (MultiGetResponse) response;
+					
+					MultiGetItemResponse[] responses = new MultiGetItemResponse[mgr.getResponses().length];
+					int index = 0;
+					
+					for ( MultiGetItemResponse item : mgr.getResponses() ) {
+						GetResponse itemResponse = item.getResponse();
+						Failure itemFailure = item.getFailure();
+						
+						GetResponse getResponse = (itemResponse != null) ? new GetResponse(buildNewResult(itemResponse)) : null;
+						Failure failure = (itemFailure != null) ? buildNewFailure(itemFailure) : null;
+		
+						responses[index] = new MultiGetItemResponse(getResponse, failure);
+						index++;
 					}
-				}
-				
-				BytesStreamOutput bso = new BytesStreamOutput();
-				try {
-	
-					MappingResponseRemapper remapper = new MappingResponseRemapper();
-					remapper.updateMappingResponse(bso, index, mappings);
 					
-					BytesStreamInput input = new BytesStreamInput(bso.bytes());
-	
-					response.readFrom(input);
-				} catch (IOException e) {
-					logger.error("Error while rewriting GetFieldMappingsResponse", e);
+					response = new MultiGetResponse(responses);
+				}
+				else if ( response instanceof GetFieldMappingsResponse ) {
+					final GetFieldMappingsResponse gfmResponse = (GetFieldMappingsResponse) response;
+					
+					ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = gfmResponse.mappings();
+					
+					String index = "";
+					for ( String key : mappings.keySet() ) {
+					
+						index = key;
+						if ( isKibanaUserIndex(index) ) {
+							index = kibanaIndex;
+						}
+					}
+					
+					BytesStreamOutput bso = new BytesStreamOutput();
+					try {
+		
+						MappingResponseRemapper remapper = new MappingResponseRemapper();
+						remapper.updateMappingResponse(bso, index, mappings);
+						
+						BytesStreamInput input = new BytesStreamInput(bso.bytes());
+		
+						response.readFrom(input);
+					} catch (IOException e) {
+						logger.error("Error while rewriting GetFieldMappingsResponse", e);
+					}
 				}
 			}
 		}

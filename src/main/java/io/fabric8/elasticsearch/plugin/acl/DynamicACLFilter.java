@@ -86,6 +86,7 @@ public class DynamicACLFilter
 	private final Condition syncing = lock.newCondition();
 	private final Settings settings;
 	
+	private Boolean enabled;
 	private Boolean seeded;
 
 	@Inject
@@ -105,6 +106,7 @@ public class DynamicACLFilter
 		this.settings = settings;
 		
 		this.seeded = false;
+		this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
 	}
 	
 	@Override
@@ -130,27 +132,28 @@ public class DynamicACLFilter
 	}
 
 	@Override
-	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
+	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception { 
 		try {
-			final String user = getUser(request);
-			final String token = getBearerToken(request);
-			if(logger.isDebugEnabled()){
-				logger.debug("Handling Request...");
-				logger.debug("Evaluating request for user '{}' with a {} token", user,
-						(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-				logger.debug("Cache has user: {}", cache.hasUser(user));
-			}
-			if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
-				final boolean isClusterAdmin = isClusterAdmin(token);
-				if(isClusterAdmin){
-					request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+			if ( enabled ) {
+				final String user = getUser(request);
+				final String token = getBearerToken(request);
+				if(logger.isDebugEnabled()){
+					logger.debug("Handling Request...");
+					logger.debug("Evaluating request for user '{}' with a {} token", user,
+							(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
+					logger.debug("Cache has user: {}", cache.hasUser(user));
 				}
-				if(updateCache(user, token, isClusterAdmin)){
-					syncAcl();
+				if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
+					final boolean isClusterAdmin = isClusterAdmin(token);
+					if(isClusterAdmin){
+						request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+					}
+					if(updateCache(user, token, isClusterAdmin)){
+						syncAcl();
+					}
+					
 				}
-				
 			}
-
 		} catch (Exception e) {
 			logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
 		} finally {
