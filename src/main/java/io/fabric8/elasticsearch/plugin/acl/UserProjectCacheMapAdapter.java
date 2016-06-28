@@ -26,6 +26,8 @@ import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 
+import io.netty.util.internal.ConcurrentSet;
+
 
 /**
  * A simple cache implementation for users->projects
@@ -39,6 +41,7 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 	private final Map<String, Set<String>> cache = new ConcurrentHashMap<>();
 	private final Map<String, Long> createTimes = new ConcurrentHashMap<>();
 	private final Map<String, Boolean> clusterAdmins = new ConcurrentHashMap<>();
+	private final Set<String> projects = new ConcurrentSet<>();
 	private static final long EXPIRE = 1000 * 60; //1 MIN 
 
 	@Inject
@@ -68,6 +71,7 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 		cache.put(user, new HashSet<>(projects));
 		createTimes.put(user, System.currentTimeMillis() + EXPIRE);
 		clusterAdmins.put(user, clusterAdmin);
+		this.projects.addAll(projects);
 	}
 	
 	@Override
@@ -83,5 +87,8 @@ public class UserProjectCacheMapAdapter implements UserProjectCache {
 		}
 	}
 
-	
+	@Override
+	public Set<String> getAllProjects() {
+		return Collections.unmodifiableSet(projects);
+	}	
 }

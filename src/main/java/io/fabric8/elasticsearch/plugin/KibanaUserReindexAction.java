@@ -16,11 +16,13 @@
 package io.fabric8.elasticsearch.plugin;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
+import org.elasticsearch.action.ActionWriteResponse.ShardInfo;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse.FieldMappingMetaData;
 import org.elasticsearch.action.delete.DeleteResponse;
@@ -35,9 +37,8 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.collect.ImmutableMap;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.io.stream.BytesStreamInput;
+import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.logging.ESLogger;
@@ -48,6 +49,9 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.index.get.GetResult;
+import org.elasticsearch.tasks.Task;
+
+import com.google.common.collect.ImmutableMap;
 
 public class KibanaUserReindexAction implements ActionFilter, ConfigurationSettings {
 
@@ -73,14 +77,13 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	}
 
 	@Override
-	public void apply(String action, ActionRequest request,
-			ActionListener listener, ActionFilterChain chain) {
-		chain.proceed(action, request, listener);
+	public void apply(Task task, String action, ActionRequest request, ActionListener listener, ActionFilterChain chain) {
+		chain.proceed(task, action, request, listener);
 	}
-
+	
 	@Override
 	public void apply(String action, ActionResponse response,
-			ActionListener listener, ActionFilterChain chain) {
+			@SuppressWarnings("rawtypes") ActionListener listener, ActionFilterChain chain) {
 		
 		if ( enabled ) {
 			logger.debug("Response with Action '{}' and class '{}'", action, response.getClass());
@@ -89,9 +92,12 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 			
 				if ( response instanceof IndexResponse ) {
 					final IndexResponse ir = (IndexResponse) response;
+					
 					String index = getIndex(ir);
+					ShardInfo shardInfo = ir.getShardInfo();
 					
 					response = new IndexResponse(index, ir.getType(), ir.getId(), ir.getVersion(), ir.isCreated());
+					((IndexResponse) response).setShardInfo(shardInfo);
 				}
 				else if ( response instanceof GetResponse ) {
 					response = new GetResponse(buildNewResult((GetResponse) response));
@@ -99,8 +105,10 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 				else if ( response instanceof DeleteResponse ) {
 					final DeleteResponse dr = (DeleteResponse) response;
 					String index = getIndex(dr);
+					ShardInfo shardInfo = dr.getShardInfo();
 					
 					response = new DeleteResponse(index, dr.getType(), dr.getId(), dr.getVersion(), dr.isFound());
+					((DeleteResponse)response).setShardInfo(shardInfo);
 				}
 				else if ( response instanceof MultiGetResponse ) {
 					final MultiGetResponse mgr = (MultiGetResponse) response;
@@ -109,9 +117,10 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 					int index = 0;
 					
 					for ( MultiGetItemResponse item : mgr.getResponses() ) {
+
 						GetResponse itemResponse = item.getResponse();
 						Failure itemFailure = item.getFailure();
-						
+
 						GetResponse getResponse = (itemResponse != null) ? new GetResponse(buildNewResult(itemResponse)) : null;
 						Failure failure = (itemFailure != null) ? buildNewFailure(itemFailure) : null;
 		
@@ -123,7 +132,6 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 				}
 				else if ( response instanceof GetFieldMappingsResponse ) {
 					final GetFieldMappingsResponse gfmResponse = (GetFieldMappingsResponse) response;
-					
 					ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = gfmResponse.mappings();
 					
 					String index = "";
@@ -141,7 +149,8 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 						MappingResponseRemapper remapper = new MappingResponseRemapper();
 						remapper.updateMappingResponse(bso, index, mappings);
 						
-						BytesStreamInput input = new BytesStreamInput(bso.bytes());
+						ByteBuffer buffer = ByteBuffer.wrap(bso.bytes().toBytes());
+						ByteBufferStreamInput input = new ByteBufferStreamInput(buffer);
 		
 						response.readFrom(input);
 					} catch (IOException e) {
@@ -202,7 +211,9 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 			index = kibanaIndex;
 		}
 		
-		return new Failure(index, failure.getType(), failure.getId(), message);
+		Throwable t = new Throwable(message, failure.getFailure().getCause());
+
+		return new Failure(index, failure.getType(), failure.getId(), t);
 	}
 
 	private boolean isKibanaUserIndex(String index) {
@@ -278,6 +289,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	            for (Map.Entry<String, ImmutableMap<String, FieldMappingMetaData>> typeEntry : indexEntry.getValue().entrySet()) {
 	                out.writeString(typeEntry.getKey());
 	                out.writeVInt(typeEntry.getValue().size());
+	                
 	                for (Map.Entry<String, FieldMappingMetaData> fieldEntry : typeEntry.getValue().entrySet()) {
 	                    out.writeString(fieldEntry.getKey());
 	                    FieldMappingMetaData fieldMapping = fieldEntry.getValue();
@@ -285,7 +297,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 	                    
 	                    // below replaces logic of out.writeBytesReference(fieldMapping.source);
 	                    Map<String, Object> map = fieldMapping.sourceAsMap();
-	                    
+
 	                    XContentBuilder builder = XContentBuilder.builder(JsonXContent.jsonXContent);
 	                    
 	                    builder.map(map).close();
@@ -300,6 +312,5 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 				throws IOException {
 			return null;
 		}
-	}
-	
+	}	
 }

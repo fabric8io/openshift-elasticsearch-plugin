@@ -15,7 +15,6 @@
  */
 package io.fabric8.elasticsearch.plugin;
 
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -32,7 +31,6 @@ import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 import org.elasticsearch.rest.RestController;
 
-import io.fabric8.elasticsearch.plugin.acl.ACLNotifierService;
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 
@@ -54,25 +52,15 @@ public class OpenShiftElasticSearchService
 	
 	@SuppressWarnings("rawtypes")
 	private ScheduledFuture scheduledFuture;
-	private ExecutorService notifier;
-	private ACLNotifierService aclNotifier;
 
 	@Inject
-	protected OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController, 
-			final UserProjectCache cache, final ACLNotifierService aclNotifer, final DynamicACLFilter aclFilter) {
+	public OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController, 
+			final UserProjectCache cache, final DynamicACLFilter aclFilter) {
 		super(settings);
 		this.settings = settings;
 		this.logger = Loggers.getLogger(getClass(), settings);
 		this.cache = cache;
-		this.aclNotifier = aclNotifer;
 		restController.registerFilter(aclFilter);
-		
-		boolean reindexEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG, OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
-		logger.debug("Starting with Kibana reindexing feature enabled: {}", reindexEnabled);
-		
-		if ( reindexEnabled ) {
-			restController.registerFilter(new KibanaUserReindexFilter(settings, logger));
-		}
 	}
 
 	@Override
@@ -80,13 +68,7 @@ public class OpenShiftElasticSearchService
 		
 		boolean dynamicEnabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
 		logger.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
-		
-        //thread for ACL load callbacks
-        logger.debug("Starting the acl notification thread...");
-		notifier = Executors.newSingleThreadExecutor(
-                EsExecutors.daemonThreadFactory(settings, "openshift_acl_notifier"));	
-		aclNotifier.setExecutorService(notifier);
-			
+	
 		if ( dynamicEnabled ) {
 			//expiration thread
 			logger.debug("Starting the expiration thread...");
@@ -110,9 +92,6 @@ public class OpenShiftElasticSearchService
 
 	@Override
 	protected void doStop() throws ElasticsearchException {
-		if(notifier != null){
-			notifier.shutdownNow();
-		}		
 		//cleanup expire thread
         FutureUtils.cancel(this.scheduledFuture);
         if(scheduler != null){

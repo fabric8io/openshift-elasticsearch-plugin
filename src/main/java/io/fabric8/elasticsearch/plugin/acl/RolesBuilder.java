@@ -15,23 +15,21 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.concurrent.ExecutorService;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * A Service to handle registration and notification
- * of those interested when a request is made for the
- * SearchGuard ACL
- * 
- * @author jeff.cantrill
- *
- */
-public interface ACLNotifierService {
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
 
-	void notify(String action);
+public class RolesBuilder {
+
+	private List<Roles> roles = new ArrayList<Roles>();
 	
-	void addActionRequestListener(SearchGuardACLActionRequestListener listener);
-	
-	void removeActionRequestListener(SearchGuardACLActionRequestListener listener);
-	
-	void setExecutorService(ExecutorService service);
+	public List<Roles> build() {
+		return roles;
+	}
+
+	public RolesBuilder addRole(Roles role) {
+		roles.add(role);
+		return this;
+	}
 }

@@ -16,13 +16,11 @@
 package io.fabric8.elasticsearch.plugin;
 
 
-import io.fabric8.elasticsearch.plugin.acl.ACLNotifierService;
-import io.fabric8.elasticsearch.plugin.acl.DefaultACLNotifierService;
+import org.elasticsearch.common.inject.AbstractModule;
+
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
-
-import org.elasticsearch.common.inject.AbstractModule;
 
 /**
  * The module controls loading and specific implementations
@@ -33,10 +31,7 @@ public class OpenShiftElasticSearchModule extends AbstractModule {
 
 	@Override
 	protected void configure() {
-		bind(ACLNotifierService.class)
-			.to(DefaultACLNotifierService.class)
-			.asEagerSingleton();
-		
+
 		bind(UserProjectCache.class)
 			.to(UserProjectCacheMapAdapter.class)
 			.asEagerSingleton();

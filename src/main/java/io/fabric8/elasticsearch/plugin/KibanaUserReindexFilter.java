@@ -20,14 +20,15 @@ import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.logging.ESLogger;
-import org.elasticsearch.common.netty.buffer.BigEndianHeapChannelBuffer;
-import org.elasticsearch.common.netty.handler.codec.http.HttpRequest;
+import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.http.netty.NettyHttpRequest;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
+import org.jboss.netty.buffer.BigEndianHeapChannelBuffer;
+import org.jboss.netty.handler.codec.http.HttpRequest;
 
 public class KibanaUserReindexFilter extends RestFilter implements ConfigurationSettings {
 
@@ -36,7 +37,7 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 	private final String kibanaIndex;
 
 	public KibanaUserReindexFilter(final Settings settings, final ESLogger logger){
-		this.logger = logger;
+		this.logger = Loggers.getLogger(KibanaUserReindexFilter.class);
 		this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
 		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
 	}
@@ -49,7 +50,9 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 			final String requestedIndex = getRequestedIndex(request);
 			
 			logger.debug("Received user '{}' and index '{}', checking for kibana index '{}'", user, requestedIndex, kibanaIndex);
+			
 			if ( StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex) && requestedIndex.equalsIgnoreCase(kibanaIndex)) {
+				
 				String userIndex = requestedIndex + "." + getUsernameHash(user);
 				logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
 				
@@ -63,7 +66,6 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 					String userIndex = ".kibana." + getUsernameHash(user);
 					logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
 					
-					//update the request URI here
 					request = updateMGetRequest(request, ".kibana", userIndex);
 					
 					logger.debug("URI for request is '{}' after update", request.uri());
@@ -86,8 +88,6 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 		BytesReference content = request.content();
 		String stringContent = content.toUtf8();
 		
-		logger.debug("Received MGet request '{}' with content '{}'", request, stringContent);
-		
 		String replaced = stringContent.replaceAll("_index\":\"" + oldIndex + "\"", "_index\":\"" + newIndex + "\"");
 		
 		NettyHttpRequest nettyRequest = (NettyHttpRequest) request;
@@ -98,7 +98,10 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 		
 		httpRequest.setContent(buffer);
 		
-		return new NettyHttpRequest(httpRequest, nettyRequest.getChannel());
+		RestRequest updatedRequest = new NettyHttpRequest(httpRequest, nettyRequest.getChannel());
+		updatedRequest.copyContextAndHeadersFrom(request);
+		
+		return updatedRequest;
 	}
 	
 	private RestRequest updateRequestIndex(RestRequest request, String oldIndex, String newIndex) {
@@ -109,7 +112,10 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
 		HttpRequest httpRequest = nettyRequest.request();
 		httpRequest.setUri(replaced);
 		
-		return new NettyHttpRequest(httpRequest, nettyRequest.getChannel());
+		RestRequest updatedRequest = new NettyHttpRequest(httpRequest, nettyRequest.getChannel());
+		updatedRequest.copyContextAndHeadersFrom(request);
+		
+		return updatedRequest; 
 	}
 	
 	private String getRequestedIndex(RestRequest request) {

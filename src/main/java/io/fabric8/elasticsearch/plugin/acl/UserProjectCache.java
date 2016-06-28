@@ -47,4 +47,11 @@ public interface UserProjectCache {
 	boolean isClusterAdmin(String user);
 	
 	void expire();
+	
+	
+	/**
+	 * Retrieve names of all projects that users belong to
+	 * @return
+	 */
+	Set<String> getAllProjects();
 }

@@ -22,10 +22,10 @@ import org.apache.commons.io.IOUtils;
 
 public enum Samples {
 	
-	ACL("searchguard_acl.json"),
-	OPENSHIFT_ACL("searchguard_acl_with_openshift_projects.json"),
-	CONFIG_ACL("elasticsearch_test_config.yaml"),
-	CONFIG_EXPECTED_ACL("elasticsearch_test_expected.json");
+	ROLES_ACL("searchguard_roles_acl.yml"),
+	ROLESMAPPING_ACL("searchguard_rolesmapping_acl.yml"),
+	OPENSHIFT_ROLES_ACL("searchguard_roles_acl_with_openshift_projects.yml"),
+	OPENSHIFT_ROLESMAPPING_ACL("searchguard_rolesmapping_acl_with_openshift_projects.yml");
 
 	private String path;
 	

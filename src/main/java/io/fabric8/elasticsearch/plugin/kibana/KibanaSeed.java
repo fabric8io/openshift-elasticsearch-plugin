@@ -17,6 +17,7 @@ package io.fabric8.elasticsearch.plugin.kibana;
 
 import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -24,22 +25,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
+import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
+import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.transport.RemoteTransportException;
 
 public class KibanaSeed {
 	
@@ -59,6 +70,10 @@ public class KibanaSeed {
 	
 	public static void setDashboards(String user, Set<String> projects, Set<String> roles, Client esClient, String kibanaIndex, String kibanaVersion) {
 
+		//We want to seed the Kibana user index intially
+		// since the logic from Kibana has changed to create before this plugin
+		// starts...
+		AtomicBoolean changed = new AtomicBoolean(initialSeedKibanaIndex(user, kibanaIndex, esClient));
 		
 		boolean isAdmin = false;
 		//GET .../.kibana/index-pattern/_search?pretty=true&fields=
@@ -94,6 +109,7 @@ public class KibanaSeed {
 		// If none have been set yet
 		if ( indexPatterns.isEmpty() ) {
 			create(user, sortedProjects, true, esClient, kibanaIndex, kibanaVersion);
+			changed.set(true);
 		}
 		else {
 			List<String> common = new ArrayList<String>(indexPatterns);
@@ -102,6 +118,12 @@ public class KibanaSeed {
 			
 			sortedProjects.removeAll(common);
 			indexPatterns.removeAll(common);
+			
+			// check if we're going to be adding or removing any projects
+			if ( sortedProjects.size() > 0 ||
+					indexPatterns.size() > 0 ) {
+				changed.set(true);
+			}
 			
 			// for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
 			create(user, sortedProjects, false, esClient, kibanaIndex, kibanaVersion);
@@ -121,8 +143,63 @@ public class KibanaSeed {
 				if ( common.size() > 0 )
 					setDefaultIndex(user, common.get(0), esClient, kibanaIndex, kibanaVersion);
 			}
-			
 		}
+		
+		if ( changed.get() )
+			refreshKibanaUser(user, kibanaIndex, esClient);
+	}
+	
+	private static void refreshKibanaUser(String username, String kibanaIndex, Client esClient) {
+		
+		String userIndex = getKibanaIndex(username, kibanaIndex);
+		RefreshRequest request = new RefreshRequest().indices(userIndex);
+		RefreshResponse response = esClient.admin().indices().refresh(request).actionGet();
+		
+		logger.debug("Refreshed '{}' successfully on {} of {} shards", userIndex, response.getSuccessfulShards(), response.getTotalShards());
+	}
+	
+	private static boolean initialSeedKibanaIndex(String username, String kibanaIndex, Client esClient) {
+
+		try {	
+			String userIndex = getKibanaIndex(username, kibanaIndex);
+			IndicesExistsResponse existsResponse = esClient.admin()
+					.indices().prepareExists(userIndex).get();
+			
+			logger.debug("Checking if index {} exists? {}", userIndex, existsResponse.isExists());
+			
+			if ( !existsResponse.isExists() ) {
+				logger.debug("Copying '{}' to '{}'", kibanaIndex, userIndex);
+				
+				GetIndexRequest getRequest = new GetIndexRequest()
+						.indices(kibanaIndex);
+				GetIndexResponse getResponse = esClient.admin()
+						.indices().getIndex(getRequest).get();
+				
+				
+				CreateIndexRequest createRequest = new CreateIndexRequest()
+						.index(userIndex);
+				
+				createRequest.settings(getResponse.settings().get(kibanaIndex));
+				
+				Map<String, Object> configMapping = getResponse.mappings().get(kibanaIndex).get("config").getSourceAsMap();
+
+				createRequest.mapping("config", configMapping);
+				
+				esClient.admin().indices().create(createRequest).actionGet();
+
+				// Wait for health status of YELLOW
+				ClusterHealthRequest healthRequest = new ClusterHealthRequest()
+						.indices(new String[]{userIndex}).waitForYellowStatus();
+				
+				esClient.admin().cluster().health(healthRequest).actionGet().getStatus();
+				
+				return true;
+			}
+		} catch (ExecutionException | InterruptedException | IOException e) {
+			logger.error("Unable to create initial Kibana index", e);
+		}
+		
+		return false;
 	}
 	
 	// this may return other than void later...
@@ -132,7 +209,7 @@ public class KibanaSeed {
 				.defaultIndex(getIndexPattern(project))
 				.build();
 		
-		executeCreate(getKibanaIndex(username, kibanaIndex), DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
+		executeUpdate(getKibanaIndex(username, kibanaIndex), DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
 	}
 	
 	private static void buildAdminAlias(String username, List<String> projects, Client esClient, String kibanaIndex, String kibanaVersion) {
@@ -144,7 +221,7 @@ public class KibanaSeed {
 			for ( String project : projects ) {
 				// Check that the index exists before we try to alias it...
 				IndicesExistsResponse existsResponse = esClient.admin().indices().prepareExists(getIndexPattern(project)).get();
-				logger.debug("Checking if index {} exists? {}", project, existsResponse.isExists());
+				logger.debug("Checking if index {} with pattern '{}' exists? {}", project, getIndexPattern(project), existsResponse.isExists());
 				if ( !existsResponse.isExists() || project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
 					toAdd.remove(project);
 				}
@@ -189,7 +266,8 @@ public class KibanaSeed {
 			
 		} catch (InterruptedException | ExecutionException e) {
 			
-			if ( e.getCause() instanceof org.elasticsearch.indices.IndexMissingException ) {
+			if ( e.getCause() instanceof RemoteTransportException && 
+					e.getCause().getCause() instanceof IndexNotFoundException ) {
 				logger.debug("No index found");
 			}
 			else {
@@ -238,7 +316,7 @@ public class KibanaSeed {
 					String id = hit.getId();
 					String project = getProjectFromIndex(id);
 
-					if ( !project.equals(id) )
+					if ( !project.equals(id) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
 						patterns.add(project);
 
 					// else -> this is user created, leave it alone
@@ -246,7 +324,8 @@ public class KibanaSeed {
 				
 		} catch (InterruptedException | ExecutionException e) {
 			// if is ExecutionException with cause of IndexMissingException
-			if ( e.getCause() instanceof org.elasticsearch.indices.IndexMissingException ) {
+			if ( e.getCause() instanceof RemoteTransportException &&
+					e.getCause().getCause() instanceof IndexNotFoundException ) {
 				logger.debug("Encountered IndexMissingException, returning empty response");
 			}
 			else {
@@ -293,10 +372,19 @@ public class KibanaSeed {
 		}
 	}
 	
+	private static void executeUpdate(String index, String type, String id, String source, Client esClient) {
+		
+		logger.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
+		
+		UpdateRequest request = esClient.prepareUpdate(index, type, id).setDoc(source).setDocAsUpsert(true).request();
+
+		logger.debug("Created with update? '{}'", esClient.update(request).actionGet().isCreated());
+	}
+
 	private static void executeDelete(String index, String type, String id, Client esClient) {
 		
 		logger.debug("DELETE: '{}/{}/{}'", index, type, id);
-		
+
 		DeleteRequest request = esClient.prepareDelete(index, type, id).request();
 		try {
 			esClient.delete(request).get();

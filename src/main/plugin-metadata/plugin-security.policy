@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (C) 2015 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,24 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.fabric8.elasticsearch.plugin;
 
-import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.rest.RestStatus;
-
-public class ForbiddenException extends ElasticsearchException {
-
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = -4274241657687277455L;
-	
-	public ForbiddenException(Throwable e){
-		super("Request is forbidden because user does not have the proper access to the requested index", e);
-	}
-
-	@Override
-	public RestStatus status() {
-		return RestStatus.FORBIDDEN;
-	}
-}
+grant {
+  permission java.lang.RuntimePermission "accessDeclaredMembers";
+  permission java.lang.RuntimePermission "setFactory";
+  permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
+  permission java.io.FilePermission "<<ALL FILES>>", "read,execute,readlink";
+  permission java.net.NetPermission "getProxySelector";
+  permission java.net.NetPermission "getCookieHandler";
+};
