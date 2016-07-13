@@ -70,8 +70,7 @@ public class DynamicACLFilter
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String SEARCHGUARD_TYPE = "ac";
 	private static final String SEARCHGUARD_ID = "ac";
-	private static final String[] BLACKLIST_PROJECTS = {"default", "openshift", "openshift-infra" };
-
+	
 	private final ObjectMapper mapper = new ObjectMapper();
 	private final ESLogger logger;
 	private final UserProjectCache cache;
@@ -88,6 +87,7 @@ public class DynamicACLFilter
 	
 	private Boolean enabled;
 	private Boolean seeded;
+	private String[] blacklistProjects;
 
 	@Inject
 	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client, final ACLNotifierService notifierService){
@@ -107,6 +107,7 @@ public class DynamicACLFilter
 		
 		this.seeded = false;
 		this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+		this.blacklistProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
 	}
 	
 	@Override
@@ -208,7 +209,7 @@ public class DynamicACLFilter
 	
 	private boolean isBlacklistProject(String project) {
 		
-		return ArrayUtils.contains(BLACKLIST_PROJECTS, project.toLowerCase());
+		return ArrayUtils.contains(blacklistProjects, project.toLowerCase());
 	}
 	
 	private boolean isClusterAdmin(final String token){

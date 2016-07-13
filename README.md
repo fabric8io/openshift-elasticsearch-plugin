@@ -57,6 +57,19 @@ openshift:
 Note: if you use a "\*" for any of your bypass or execute statements, you will need
 to structure its configuration as a full path, you cannot begin a line with "\*".
 
+## Configure the projects for '.operations'
+You can now configure which projects are deemed part of the .operations index for ACL
+configuration.
+
+In your config file:
+```
+openshift.operations.project.names: ["default", "openshift", "openshift-infra"]
+```
+
+The current default is "default", "openshift", "openshift-infra", "kube-system".
+The names must all be in lower-case to be properly matched.
+
+
 ## Development
 Following are the dependencies
 

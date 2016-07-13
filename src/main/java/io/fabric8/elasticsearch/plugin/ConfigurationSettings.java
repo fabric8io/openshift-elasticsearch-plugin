@@ -53,9 +53,8 @@ public interface ConfigurationSettings {
 	static final String OPENSHIFT_CONFIG_ACL_BASE = "openshift.acl.users.";
 	static final String OPENSHIFT_CONFIG_ACL_NAMES = OPENSHIFT_CONFIG_ACL_BASE + "names";
 	
-	// Below to be used at a later time?
 	static final String OPENSHIFT_CONFIG_OPS_PROJECTS = "openshift.operations.project.names";
-	static final String [] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String []{"default", "openshift", "openshift-infra"};
+	static final String [] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String []{"default", "openshift", "openshift-infra", "kube-system"};
 	
 	/**
 	 * The configurations for enabling/disabling portions of this plugin
