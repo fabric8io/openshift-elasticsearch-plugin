@@ -1,0 +1,44 @@
+#
+# Copyright (C) 2015 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+searchguard:
+  dynamic:
+    http:
+      xff:
+        enabled: true
+        remoteIpHeader: 'remoteAddress'
+        proxiesHeader: 'remoteAddress'
+        trustedProxies: '.*'
+        internalProxies: '.*'
+    authc:
+      authentication_domain_proxy:
+        enabled: true
+        order: 0
+        http_authenticator:
+          challenge: false
+          type: proxy
+          config:
+            user_header: 'x-proxy-remote-user'
+        authentication_backend:
+          type: noop
+      authentication_domain_basic_internal:
+        enabled: true
+        order: 1
+        http_authenticator:
+          type: clientcert
+          challenge: false
+        authentication_backend:
+          type: noop

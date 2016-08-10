@@ -2,60 +2,34 @@
 This is an OpenShift plugin to ElasticSearch to:
 
 * Dynamically update the SearchGuard ACL based on a user's name
-* Correctly return Unauthorized or Forbidden response codes
 * Transform kibana index requests to support multitenant deployments
-* Support proxy auth with fallback to client certificate auth
+* Seed the Searchguard index `config`, `roles`, `rolesmapping`, and `actiongroups` types
 
 ## Configuring your initial ACLs
-We now allow you to configure your initial ACL users, indices, comments, executions and
-bypasses via your elasticsearch config file.
+With the update to use Searchguard-2 and Searchguard-SSL for ES 2.3.x, the
+OpenShift-Elasticsearch-Plugin now populates the initial ACL and configuration in
+a manner similar to how the sgadmin tool from [Searchguard](https://github.com/floragunncom/search-guard#dynamic-configuration)
+describes.  Configurations are read in from `searchguard.config.path` (Default: `/opt/app-root/src/sgconfig/`).
+The files should match the name patterns ["sg_config.yml", "sg_roles.yml",
+"sg_rolesmapping.yml", "sg_actiongroups.yml"].  The plugin does not use internal_users
+as Searchguard does. Roles are used to define actions that are allowed for
+particular indices and types. RolesMapping map user names to specific roles.
 
-To maintain the same ACL definitions as the previous release of the OpenShift
-Elasticsearch Plugin add the following to your config file:
-```
-openshift:
-  acl:
-    users:
-      names: ["system.logging.fluentd", "system.logging.kibana", "system.logging.curator"]
-      system.logging.fluentd:
-        execute: ["actionrequestfilter.fluentd"]
-        actionrequestfilter.fluentd.comment: "Fluentd can only write"
-      system.logging.kibana:
-        bypass: ["*"]
-        execute: ["actionrequestfilter.kibana"]
-        actionrequestfilter.kibana.comment: "Kibana can only read from every other index"
-      system.logging.kibana.*.comment: "Kibana can do anything in the kibana index"
-      system.logging.kibana.*.indices: [".kibana.*"]
-      system.logging.curator:
-        execute: ["actionrequestfilter.curator"]
-        actionrequestfilter.curator.comment: "Curator can list all indices and delete them"
-```
+You can view sample configurations [here] (./samples/).
 
-The structure follows the configuration structure for Search-guard.
-At the upper level you define the users you will be using within your ACL:
-`openshift.acl.users.names: []`.
+As with `sgadmin`, the plugin needs to use the certificate with a DN that matches
+the `searchguard.authcz.admin_dn` as defined in the ES config to be able to
+update the Searchguard index. You can specify the certificate and truststore information
+for the esClient with the following properties.
 
-Then for each user, you can define what they can execute or bypass.  For each
-execute or bypass you can then further configure the indices they apply to
-and the comments you would like for them.
-
-E.g. for the following user, we will configure the ACL to execute
-'actionrequestfilter.readonly' for the index 'myIndex' with a comment to describe
-it:
-```
-openshift:
-  acl:
-    users:
-      names: ["system.example.user"]
-      system.example.user:
-        execute: ["actionrequestfilter.readonly"]
-        actionrequestfilter.readonly:
-          indices: ["myIndex"]
-          comment: "This restricts me to only be able to read from myIndex"
-```
-
-Note: if you use a "\*" for any of your bypass or execute statements, you will need
-to structure its configuration as a full path, you cannot begin a line with "\*".
+|Property|Description|
+|-------|--------|
+|*_openshift.searchguard.keystore.path_*|The certificate that contains the cert and key for the admin_dn. Default: *_/usr/share/elasticsearch/config/admin.jks_*|
+|*_openshift.searchguard.truststore.path_*|The truststore that contains the certificate for Elasticsearch. Default: *_/usr/share/elasticsearch/config/logging-es.truststore.jks_*|
+|*_openshift.searchguard.keystore.password_*|The password to open the keystore. Default: *_kspass_*|
+|*_openshift.searchguard.truststore.password_*|The password to open the truststore. Default: *_tspass_*|
+|*_openshift.searchguard.keystore.type_*|The file type for the keystore. JKS or PKCS12 are accepted. Default: *_JKS_*|
+|*_openshift.searchguard.truststore.type_*|The file type for the truststore. JKS or PKCS12 are accepted. Default: *_JKS_*|
 
 ## Configure the projects for '.operations'
 You can now configure which projects are deemed part of the .operations index for ACL
@@ -73,8 +47,9 @@ The names must all be in lower-case to be properly matched.
 ## Development
 Following are the dependencies
 
-* [ElasticSearch 1.5.2] (https://www.elastic.co/downloads/past-releases/elasticsearch-1-5-2)
-* [Search-Guard 0.5] (https://github.com/floragunncom/search-guard/tree/v0.5)
+* [ElasticSearch 2.3.3] (https://github.com/elastic/elasticsearch/tree/2.3)
+* [Search-Guard 2.3.3.3] (https://github.com/floragunncom/search-guard/tree/2.3.3.3)
+* [Search-Guard-SSL 2.3.3.13] (https://github.com/floragunncom/search-guard-ssl/tree/2.3.3)
 
 ### Debugging and running from Eclipse
 
