@@ -21,6 +21,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -271,7 +272,7 @@ public class DynamicACLFilter
 		try {
 			OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build());
 
-			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*")
+			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*").withScopes(new ArrayList<String>())
 							.build();
 			SubjectAccessReviewResponse response = osClient.subjectAccessReviews().create(request);
 
