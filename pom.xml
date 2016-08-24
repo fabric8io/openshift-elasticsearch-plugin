@@ -26,7 +26,7 @@
 
   <groupId>io.fabric8.elasticsearch</groupId>
   <artifactId>openshift-elasticsearch-plugin</artifactId>
-  <version>0.14</version>
+  <version>0.15-SNAPSHOT</version>
   <name>OpenShift ElasticSearch Plugin</name>
 
   <url>http://fabric8.io/</url>
@@ -72,7 +72,7 @@
     <maven.compiler.target>1.7</maven.compiler.target>
 
     <elasticsearch.version>1.5.2</elasticsearch.version>
-    <kubernetes-client.version>1.3.68</kubernetes-client.version>
+    <kubernetes-client.version>1.4.6</kubernetes-client.version>
     <searchguard.version>0.5</searchguard.version>
   </properties>
 
