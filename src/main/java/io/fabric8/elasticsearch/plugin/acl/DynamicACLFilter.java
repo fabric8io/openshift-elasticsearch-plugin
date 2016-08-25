@@ -16,17 +16,9 @@
 package io.fabric8.elasticsearch.plugin.acl;
 
 import static io.fabric8.elasticsearch.plugin.kibana.KibanaSeed.setDashboards;
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
-import io.fabric8.kubernetes.client.ConfigBuilder;
-import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.api.model.SubjectAccessReview;
-import io.fabric8.openshift.api.model.SubjectAccessReview.ApiVersion;
-import io.fabric8.openshift.api.model.SubjectAccessReviewBuilder;
-import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
-import io.fabric8.openshift.client.DefaultOpenShiftClient;
-import io.fabric8.openshift.client.OpenShiftClient;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -56,6 +48,15 @@ import org.elasticsearch.rest.RestRequest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.openshift.api.model.Project;
+import io.fabric8.openshift.api.model.SubjectAccessReview;
+import io.fabric8.openshift.api.model.SubjectAccessReviewBuilder;
+import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
+import io.fabric8.openshift.client.DefaultOpenShiftClient;
+import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
  * REST filter to update the ACL when a user
@@ -198,6 +199,7 @@ public class DynamicACLFilter
 				.withOauthToken(token);
 		Set<String> names = new HashSet<>();
 		try(OpenShiftClient client = new DefaultOpenShiftClient(builder.build())){
+			
 			List<Project> projects = client.projects().list().getItems();
 			for (Project project : projects) {
 				if ( ! isBlacklistProject(project.getMetadata().getName()) )
@@ -220,8 +222,8 @@ public class DynamicACLFilter
 			
 			OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build());
 			
-			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*")
-							.withApiVersion(ApiVersion.V_1).build();
+			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*").withScopes(new ArrayList<String>())
+							.build();
 			SubjectAccessReviewResponse response = osClient.subjectAccessReviews().create(request);
 			
 			osClient.close();
