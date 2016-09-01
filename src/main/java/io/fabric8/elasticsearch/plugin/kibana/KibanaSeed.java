@@ -118,8 +118,14 @@ public class KibanaSeed {
 			
 			sortedProjects.removeAll(common);
 			indexPatterns.removeAll(common);
-			
-			// check if we're going to be adding or removing any projects
+
+			// if we aren't a cluster-admin, make sure we're deleting the ADMIN_ALIAS_NAME
+			if ( !isAdmin ) {
+				logger.debug("user is not a cluster admin, ensure they don't keep/have the admin alias pattern");
+				indexPatterns.add(ADMIN_ALIAS_NAME);
+			}
+
+			//check if we're going to be adding or removing any projects
 			if ( sortedProjects.size() > 0 ||
 					indexPatterns.size() > 0 ) {
 				changed.set(true);
