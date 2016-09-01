@@ -103,6 +103,12 @@ public class KibanaSeed {
 			sortedProjects.removeAll(common);
 			indexPatterns.removeAll(common);
 			
+			// if we aren't a cluster-admin, make sure we're deleting the ADMIN_ALIAS_NAME
+			if ( !isAdmin ) {
+				logger.debug("user is not a cluster admin, ensure they don't keep/have the admin alias pattern");
+				indexPatterns.add(ADMIN_ALIAS_NAME);
+			}
+			
 			// for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
 			create(user, sortedProjects, false, esClient, kibanaIndex, kibanaVersion);
 			
