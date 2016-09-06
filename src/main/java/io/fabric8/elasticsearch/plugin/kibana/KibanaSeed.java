@@ -254,7 +254,8 @@ public class KibanaSeed {
 			
 			Map<String, Object> source = response.getSource();
 			
-			if ( source.containsKey(DEFAULT_INDEX_FIELD) ) {
+			// if source == null then its a different version of kibana that was used -- we'll need to recreate
+			if ( source != null && source.containsKey(DEFAULT_INDEX_FIELD) ) {
 				logger.debug("Received response with 'defaultIndex' = {}", source.get(DEFAULT_INDEX_FIELD));
 				String index = (String) source.get(DEFAULT_INDEX_FIELD);
 				
