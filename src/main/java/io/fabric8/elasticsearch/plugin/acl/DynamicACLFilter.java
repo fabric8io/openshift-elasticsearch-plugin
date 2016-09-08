@@ -354,7 +354,7 @@ public class DynamicACLFilter
 
 	private void createConfig(Client esClient) throws IOException {
 
-		final ClusterHealthResponse chr = esClient.admin().cluster().health(new ClusterHealthRequest().waitForYellowStatus()).actionGet();
+		final ClusterHealthResponse chr = esClient.admin().cluster().health(new ClusterHealthRequest()).actionGet();
 
         if ( ! chr.isTimedOut() ) {
 
