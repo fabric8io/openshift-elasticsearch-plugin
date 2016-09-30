@@ -100,4 +100,13 @@ public interface ConfigurationSettings {
 
 	static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;
 	static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
+
+	static final String OPENSHIFT_CONFIG_USE_COMMON_DATA_MODEL = "openshift.config.use_common_data_model";
+	static final boolean OPENSHIFT_DEFAULT_USE_COMMON_DATA_MODEL = false;
+
+	static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";
+	static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "";
+
+	static final String OPENSHIFT_CONFIG_TIME_FIELD_NAME = "openshift.config.time_field_name";
+	static final String OPENSHIFT_DEFAULT_TIME_FIELD_NAME = "time";
 }

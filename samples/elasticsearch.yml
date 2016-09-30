@@ -392,6 +392,13 @@ index.number_of_replicas: 0
 #monitor.jvm.gc.old.info: 5s
 #monitor.jvm.gc.old.debug: 2s
 
+################################## Common Data Model########################
+# in order to use the common data model, use these settings:
+#openshift.config:
+#  use_common_data_model: true
+#  project_index_prefix: "project"
+#  time_field_name: "@timestamp"
+
 ################################## Security ################################
 
 # Uncomment if you want to enable JSONP as a valid return transport on the

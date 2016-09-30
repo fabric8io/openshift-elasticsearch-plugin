@@ -105,6 +105,9 @@ public class DynamicACLFilter
 	private Boolean enabled;
 	private Boolean seeded;
 
+	private final boolean use_cdm;
+	private final String cdm_project_prefix;
+
 	@Inject
 	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client){
 		this.cache = cache;
@@ -117,6 +120,8 @@ public class DynamicACLFilter
 		this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
 
 		this.operationsProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
+		this.use_cdm = settings.getAsBoolean(OPENSHIFT_CONFIG_USE_COMMON_DATA_MODEL, OPENSHIFT_DEFAULT_USE_COMMON_DATA_MODEL);
+		this.cdm_project_prefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX, OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 
 		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
 
@@ -239,7 +244,7 @@ public class DynamicACLFilter
 			if (isClusterAdmin)
 				roles.add("cluster-admin");
 
-			setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion);
+			setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, use_cdm, cdm_project_prefix, settings);
 		} catch (Exception e) {
 			logger.error("Error retrieving project list for '{}'",e, user);
 			return false;
@@ -296,7 +301,7 @@ public class DynamicACLFilter
 			SearchGuardRolesMapping rolesMapping = readRolesMappingACL(esClient);
 
 			logger.debug("Syncing from cache to ACL...");
-			roles.syncFrom(cache, userProfilePrefix);
+			roles.syncFrom(cache, userProfilePrefix, cdm_project_prefix);
 			rolesMapping.syncFrom(cache, userProfilePrefix);
 
 			writeACL(esClient, roles, rolesMapping);

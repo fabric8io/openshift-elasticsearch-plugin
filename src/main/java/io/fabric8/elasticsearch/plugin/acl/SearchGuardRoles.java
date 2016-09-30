@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 
@@ -156,7 +157,7 @@ public class SearchGuardRoles
 		roles.remove(role);
 	}
 	
-	public void syncFrom(UserProjectCache cache, final String userProfilePrefix){
+	public void syncFrom(UserProjectCache cache, final String userProfilePrefix, final String cdm_project_prefix){
 		removeSyncAcls();
 		
 		RolesBuilder builder = new RolesBuilder();
@@ -164,9 +165,15 @@ public class SearchGuardRoles
 		for (String project : cache.getAllProjects() ) {
 			String projectName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_')); 
 			String indexName = String.format("%s?*", project.replace('.', '?'));
-			
 			RoleBuilder role = new RoleBuilder(projectName)
 					.setActions(indexName, DEFAULT_ROLE_TYPE, DEFAULT_ROLE_ACTIONS);
+
+			// If using common data model, allow access to both the $projname.$uuid.* indices and
+			// the project.$projname.$uuid.* indices for backwards compatibility
+			if ( StringUtils.isNotEmpty(cdm_project_prefix) ) {	
+				indexName = String.format("%s?%s?*", cdm_project_prefix.replace('.',  '?'), project.replace('.', '?'));
+				role.setActions(indexName, DEFAULT_ROLE_TYPE, DEFAULT_ROLE_ACTIONS);
+			}
 			
 			builder.addRole(role.build());
 		}
