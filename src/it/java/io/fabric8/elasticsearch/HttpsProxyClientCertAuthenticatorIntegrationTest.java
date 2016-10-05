@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.fabric8.elasticsearch.plugin;
+package io.fabric8.elasticsearch;
 
 import static org.junit.Assert.fail;
 
