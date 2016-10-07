@@ -177,10 +177,7 @@ public class SearchGuardRoles
 			String indexName = String.format("%s?%s", userProfilePrefix.replace('.', '?'), usernameHash);
 			
 			RoleBuilder role = new RoleBuilder(projectName)
-					.setActions(indexName, DEFAULT_ROLE_TYPE, KIBANA_INDEX_ACTIONS)
-					.setActions(DEFAULT_ROLE_INDEX, DEFAULT_ROLE_TYPE, DEFAULT_ROLE_ACTIONS)
-					.setClusters(DEFAULT_CLUSTER_ACTIONS);
-			
+					.setActions(indexName, DEFAULT_ROLE_TYPE, KIBANA_INDEX_ACTIONS);
 			builder.addRole(role.build());
 		}
 		
