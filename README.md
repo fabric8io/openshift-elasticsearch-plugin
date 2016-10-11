@@ -43,6 +43,24 @@ openshift.operations.project.names: ["default", "openshift", "openshift-infra"]
 The current default is "default", "openshift", "openshift-infra", "kube-system".
 The names must all be in lower-case to be properly matched.
 
+## Common Data Model
+If your OpenShift EFK cluster supports the common data model, and you want to
+use the common data model, there are some configuration parameters that you can
+set in `elasticsearch.yml`, under `openshift.config`:
+
+* `use_common_data_model` - boolean - default `false` - if true, tell the
+  plugin that you want to use the common data model
+* `project_index_prefix` - string - default `""` - set this to the string value
+  that project/namespace indices use as their prefix - for example, with the
+  common data model, if the namespace is `test`, the index name will be
+  `project.test.$uuid.YYYY.MM.DD`.  In this case, use `"project"` as the
+  prefix - do not include the trailing `.`.
+* `time_field_name` - string - default `"time"` - the common data model uses
+  `"@timestamp"` as the name of the time field
+
+If the common data model is used, the common data model index-pattern values
+will be loaded to match the common data model index naming, model, and field
+naming conventions.
 
 ## Development
 Following are the dependencies

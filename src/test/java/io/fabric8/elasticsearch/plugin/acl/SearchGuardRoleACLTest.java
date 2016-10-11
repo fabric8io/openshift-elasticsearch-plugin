@@ -73,7 +73,7 @@ public class SearchGuardRoleACLTest {
 		when(cache.getUserProjects()).thenReturn(map);
 		when(cache.getAllProjects()).thenReturn(projects);
 		
-		roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX);
+		roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 		
 		//assert acl added
 		assertAclsHas(roles, createRoles("projectzz"));
