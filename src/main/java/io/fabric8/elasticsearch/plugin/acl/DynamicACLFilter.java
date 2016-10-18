@@ -21,7 +21,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -68,10 +67,8 @@ import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.openshift.api.model.ClusterRoleBinding;
 import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.api.model.SubjectAccessReview;
-import io.fabric8.openshift.api.model.SubjectAccessReviewBuilder;
-import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
@@ -201,11 +198,11 @@ public class DynamicACLFilter
 					logger.debug("Cache has user: {}", cache.hasUser(user));
 				}
 				if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
-					final boolean isClusterAdmin = isClusterAdmin(token);
-					if(isClusterAdmin){
+					final boolean isOperationsUser = isOperationsUser(user);
+					if(isOperationsUser){
 						request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
 					}
-					if(updateCache(user, token, isClusterAdmin, kbnVersion)){
+					if(updateCache(user, token, isOperationsUser, kbnVersion)){
 						syncAcl();
 					}
 
@@ -234,15 +231,15 @@ public class DynamicACLFilter
 		return (String) ObjectUtils.defaultIfNull(request.header(kbnVersionHeader), "");
 	}
 
-	private boolean updateCache(final String user, final String token, final boolean isClusterAdmin, final String kbnVersion) {
+	private boolean updateCache(final String user, final String token, final boolean isOperationsUser, final String kbnVersion) {
 		logger.debug("Updating the cache for user '{}'", user);
 		try{
 			Set<String> projects = listProjectsFor(token);
-			cache.update(user, projects, isClusterAdmin);
+			cache.update(user, projects, isOperationsUser);
 
 			Set<String> roles = new HashSet<String>();
-			if (isClusterAdmin)
-				roles.add("cluster-admin");
+			if (isOperationsUser)
+				roles.add("operations-user");
 
 			setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, use_cdm, cdm_project_prefix, settings);
 		} catch (Exception e) {
@@ -270,25 +267,31 @@ public class DynamicACLFilter
 		return ArrayUtils.contains(operationsProjects, project.toLowerCase());
 	}
 
-	private boolean isClusterAdmin(final String token){
-		ConfigBuilder builder = new ConfigBuilder()
-				.withOauthToken(token);
+	private boolean isOperationsUser(final String username){
+		ConfigBuilder builder = new ConfigBuilder();
+		
+		boolean clusterReaderAllowed = settings.getAsBoolean(OPENSHIFT_ALLOW_CLUSTER_READER, DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER);
 
-		try {
-			OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build());
+		try (OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
+			ClusterRoleBinding bResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-admins").get();
+			
+			logger.debug("Does '{}' exist in cluster-admins? '{}'", username, bResponse.getUserNames().contains(username));
 
-			SubjectAccessReview request = new SubjectAccessReviewBuilder().withVerb("*").withResource("*").withScopes(new ArrayList<String>())
-							.build();
-			SubjectAccessReviewResponse response = osClient.subjectAccessReviews().create(request);
+			if ( clusterReaderAllowed ) {
+				ClusterRoleBinding readerResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-readers").get();
 
-			osClient.close();
-
-			logger.debug("isAdminResponse {}", response);
-
-			return response.getAllowed();
-		}catch(Exception e){
+				logger.debug("Does '{}' exist in cluster-readers? '{}'", username, readerResponse.getUserNames().contains(username));
+				
+				if ( readerResponse.getUserNames().contains(username) )
+					return true;
+			}
+			
+			return bResponse.getUserNames().contains(username);
+		}
+		catch(Exception e){
 			logger.error("Exception determining user's role.", e);
 		}
+		
 		return false;
 	}
 

@@ -66,7 +66,7 @@ public class KibanaSeed implements ConfigurationSettings {
 	private static final String ADMIN_ALIAS_NAME = ".all";
 	
 	//TODO: should these be able to be read from property values?
-	private static final String[] OPERATIONS_ROLES = {"cluster-admin"};
+	private static final String[] OPERATIONS_ROLES = {"operations-user"};
 	
 	public static final String DEFAULT_INDEX_FIELD = "defaultIndex";
 	
@@ -93,7 +93,7 @@ public class KibanaSeed implements ConfigurationSettings {
 		logger.debug("Checking for '{}' in users roles '{}'", OPERATIONS_ROLES, roles);
 		for ( String role : OPERATIONS_ROLES )
 			if ( roles.contains(role) ) {
-				logger.debug("{} is an admin user", user);
+				logger.debug("{} is an operations user", user);
 				projects.add(OPERATIONS_PROJECT);
 				isAdmin = true;
 				projects.add(ADMIN_ALIAS_NAME);
