@@ -96,7 +96,7 @@ public class SearchGuardRolesMapping
 				builder.addUser(projectRoleName, username);
 			}
 			
-			if ( cache.isClusterAdmin(username) ) {
+			if ( cache.isOperationsUser(username) ) {
 				builder.addUser(ADMIN_ROLE, username);
 			}
 		}

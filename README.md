@@ -43,6 +43,14 @@ openshift.operations.project.names: ["default", "openshift", "openshift-infra"]
 The current default is "default", "openshift", "openshift-infra", "kube-system".
 The names must all be in lower-case to be properly matched.
 
+## Configure a 'cluster-reader' user to access operation logs
+To allow users that are cluster-reader or cluster-admin to be able to see the
+operations logs within Kibana, add the following line to your Elasticsearch config
+file:
+```
+openshift.operations.allow_cluster_reader: true
+```
+
 ## Common Data Model
 If your OpenShift EFK cluster supports the common data model, and you want to
 use the common data model, there are some configuration parameters that you can
