@@ -54,7 +54,7 @@ public class ActionForbiddenActionFilter implements ActionFilter{
 
 			@Override
 			public void onFailure(Throwable e) {
-				if(e.getMessage().contains("is forbidden due to")){
+				if(e != null && e.getMessage() != null && e.getMessage().contains("is forbidden due to")){
 					logger.debug("SearchGuard 403", e);
 					listener.onFailure(new ForbiddenException(e));
 				}else{
