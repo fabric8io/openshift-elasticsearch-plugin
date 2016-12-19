@@ -30,6 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -411,7 +412,7 @@ public class DynamicACLFilter
 				}
 			}
 		}
-		catch (NoNodeAvailableException e) {
+		catch (NoNodeAvailableException | NoShardAvailableActionException e) {
 			logger.warn("Trying to seed ACL when ES has not not yet started: '{}'", e.getMessage());
 			return;
 		}
