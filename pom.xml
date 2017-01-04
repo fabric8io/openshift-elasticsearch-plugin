@@ -26,7 +26,7 @@
 
   <groupId>io.fabric8.elasticsearch</groupId>
   <artifactId>openshift-elasticsearch-plugin</artifactId>
-  <version>2.4.1.2-SNAPSHOT</version>
+  <version>2.4.1.2</version>
   <name>OpenShift ElasticSearch Plugin</name>
 
   <url>http://fabric8.io/</url>
@@ -77,7 +77,7 @@
     <searchguard.version>2.4.1.8</searchguard.version>
     <searchguard-ssl.version>2.4.1.16</searchguard-ssl.version>
     <!-- used by vendor builds to use vendor version of searchguard plugins -->
-    <version.suffix></version.suffix>
+    <version.suffix />
   </properties>
 
   <dependencies>
