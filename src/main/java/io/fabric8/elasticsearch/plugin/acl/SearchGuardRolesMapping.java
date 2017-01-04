@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.AbstractMap.SimpleImmutableEntry;
 
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
@@ -83,8 +84,9 @@ public class SearchGuardRolesMapping
 		
 		RolesMappingBuilder builder = new RolesMappingBuilder();
 		
-		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
-			String username = userProjects.getKey();
+		for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
+			String username = userProjects.getKey().getKey();
+			String token = userProjects.getKey().getValue();
 			String usernameHash = getUsernameHash(username);
 			String kibanaRoleName = String.format("%s_%s_%s", ROLE_PREFIX, "kibana", usernameHash);
 			
@@ -96,7 +98,7 @@ public class SearchGuardRolesMapping
 				builder.addUser(projectRoleName, username);
 			}
 			
-			if ( cache.isOperationsUser(username) ) {
+			if ( cache.isOperationsUser(username, token) ) {
 				builder.addUser(ADMIN_ROLE, username);
 			}
 		}

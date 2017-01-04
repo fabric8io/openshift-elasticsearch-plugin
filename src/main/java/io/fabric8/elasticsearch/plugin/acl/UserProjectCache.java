@@ -15,6 +15,7 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map;
 import java.util.Set;
 
@@ -27,25 +28,26 @@ public interface UserProjectCache {
 	/**
 	 * Add users for a project 
 	 * @param user  the user
+	 * @param token the token that the user used to authenticate
 	 * @param projects  the projects to add the user to
 	 * @param operationsUser  boolean whether or not the user is an operationsUser
 	 */
-	void update(final String user, Set<String> projects, boolean operationsUser);
+	void update(final String user, final String token, Set<String> projects, boolean operationsUser);
 	
 	/**
 	 * Retrieve an unmodifiable mapping of users to their projects
 	 * @return
 	 */
-	Map<String, Set<String>> getUserProjects();
+	Map<SimpleImmutableEntry<String, String>, Set<String>> getUserProjects();
 	
 	/**
 	 * 
 	 * @param user
 	 * @return true if the cache has an entry for a user
 	 */
-	boolean hasUser(String user);
+	boolean hasUser(String user, String token);
 	
-	boolean isOperationsUser(String user);
+	boolean isOperationsUser(String user, String token);
 	
 	void expire();
 	

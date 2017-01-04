@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.AbstractMap.SimpleImmutableEntry;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
@@ -178,8 +179,8 @@ public class SearchGuardRoles
 			builder.addRole(role.build());
 		}
 		
-		for (Map.Entry<String, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
-			String usernameHash = getUsernameHash(userProjects.getKey());
+		for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects().entrySet()) {
+			String usernameHash = getUsernameHash(userProjects.getKey().getKey());
 			String projectName = String.format("%s_%s_%s", ROLE_PREFIX, "kibana", usernameHash); 
 			String indexName = String.format("%s?%s", userProfilePrefix.replace('.', '?'), usernameHash);
 			
