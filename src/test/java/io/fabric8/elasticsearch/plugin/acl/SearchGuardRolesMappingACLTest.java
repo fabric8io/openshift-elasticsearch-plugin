@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.AbstractMap.SimpleImmutableEntry;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -64,9 +65,11 @@ public class SearchGuardRolesMappingACLTest {
 		SearchGuardRolesMapping mappings = new SearchGuardRolesMapping().load(buildMap(new StringReader(Samples.ROLESMAPPING_ACL.getContent())));
 
 		//cache
-		Map<String, Set<String>> map = new HashMap<>();
-		map.put("mytestuser", new HashSet<>(Arrays.asList("projectA", "projectB", "projectC")));
-		map.put("mythirduser", new HashSet<>(Arrays.asList("projectzz")));
+		Map<SimpleImmutableEntry<String, String>, Set<String>> map = new HashMap<>();
+		SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>("mytestuser", "tokenA");
+		map.put(sie, new HashSet<>(Arrays.asList("projectA", "projectB", "projectC")));
+		sie = new SimpleImmutableEntry<>("mythirduser", "tokenB");
+		map.put(sie, new HashSet<>(Arrays.asList("projectzz")));
 		Set<String> projects = new HashSet<>(Arrays.asList("projectA", "projectB", "projectC", "projectzz"));
 		UserProjectCache cache = mock(UserProjectCache.class);
 		when(cache.getUserProjects()).thenReturn(map);

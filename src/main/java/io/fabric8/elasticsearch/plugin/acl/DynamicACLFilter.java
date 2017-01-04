@@ -31,6 +31,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.action.NoShardAvailableActionException;
+import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -54,10 +55,12 @@ import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.engine.DocumentMissingException;
+import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.RestStatus;
 
 import com.floragunn.searchguard.SearchGuardPlugin;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateAction;
@@ -68,6 +71,7 @@ import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.ClusterRoleBinding;
 import io.fabric8.openshift.api.model.Project;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
@@ -167,6 +171,7 @@ public class DynamicACLFilter
 
 	@Override
 	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
+		boolean continue_processing = true;
 
 		try {
 			if (!seeded) {
@@ -196,9 +201,9 @@ public class DynamicACLFilter
 					logger.debug("Handling Request...");
 					logger.debug("Evaluating request for user '{}' with a {} token", user,
 							(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-					logger.debug("Cache has user: {}", cache.hasUser(user));
+					logger.debug("Cache has user: {}", cache.hasUser(user, token));
 				}
-				if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user)) {
+				if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
 					final boolean isOperationsUser = isOperationsUser(user);
 					if(isOperationsUser){
 						request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
@@ -209,10 +214,16 @@ public class DynamicACLFilter
 
 				}
 			}
+		} catch (ElasticsearchSecurityException ese) {
+			logger.info("Could not authenticate user");
+			channel.sendResponse(new BytesRestResponse(RestStatus.UNAUTHORIZED));
+			continue_processing = false;
 		} catch (Exception e) {
 			logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
 		} finally {
-			chain.continueProcessing(request, channel);
+			if (continue_processing) {
+				chain.continueProcessing(request, channel);
+			}
 		}
 	}
 
@@ -235,14 +246,22 @@ public class DynamicACLFilter
 	private boolean updateCache(final String user, final String token, final boolean isOperationsUser, final String kbnVersion) {
 		logger.debug("Updating the cache for user '{}'", user);
 		try{
+			// This is the key to authentication.  Before listProjectsFor, we haven't actually authenticated
+			// anything in this plugin, using the given token.  If the token is valid, we will get back a
+			// list of projects for the token.  If not, listProjectsFor will throw an exception and we will
+			// not update the cache with the user and token.  In this way we will keep bogus entries out of
+			// the cache.
 			Set<String> projects = listProjectsFor(token);
-			cache.update(user, projects, isOperationsUser);
+			cache.update(user, token, projects, isOperationsUser);
 
 			Set<String> roles = new HashSet<String>();
 			if (isOperationsUser)
 				roles.add("operations-user");
 
 			setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, use_cdm, cdm_project_prefix, settings);
+		} catch (KubernetesClientException e) {
+			logger.error("Error retrieving project list for '{}'",e, user);
+			throw new ElasticsearchSecurityException(e.getMessage());
 		} catch (Exception e) {
 			logger.error("Error retrieving project list for '{}'",e, user);
 			return false;
@@ -250,6 +269,9 @@ public class DynamicACLFilter
 		return true;
 	}
 
+	// WARNING: This function must perform authentication with the given token.  This
+	// is the only authentication performed in this plugin.  This function must throw
+	// an exception if the token is invalid.
 	private Set<String> listProjectsFor(final String token) throws Exception{
 		ConfigBuilder builder = new ConfigBuilder()
 				.withOauthToken(token);
