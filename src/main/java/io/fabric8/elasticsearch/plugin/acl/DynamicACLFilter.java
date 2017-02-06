@@ -388,10 +388,12 @@ public class DynamicACLFilter
 		final ClusterHealthResponse chr = esClient.admin().cluster().health(new ClusterHealthRequest()).actionGet();
 
         if ( ! chr.isTimedOut() ) {
-
-			esClient.admin().indices().create( new CreateIndexRequest().index(searchGuardIndex)
-					.settings("index.number_of_shards", 1, "index.number_of_replicas", chr.getNumberOfDataNodes()-1)
-	                ).actionGet().isAcknowledged();
+            
+            if(!doesSearchGuardIndexExist()) {
+                esClient.admin().indices().create( new CreateIndexRequest().index(searchGuardIndex)
+                        .settings("index.number_of_shards", 1, "index.number_of_replicas", chr.getNumberOfDataNodes()-1)
+                        ).actionGet().isAcknowledged();
+            }
 
 			// Wait for health status of YELLOW
 			ClusterHealthRequest healthRequest = new ClusterHealthRequest()
@@ -420,7 +422,7 @@ public class DynamicACLFilter
 		SearchGuardRoles roles = new SearchGuardRoles();
 		SearchGuardRolesMapping rolesMapping = new SearchGuardRolesMapping();
 		try {
-			if ( esClient.admin().indices().exists(new IndicesExistsRequest().indices(new String[]{searchGuardIndex})).actionGet().isExists() ) {
+			if ( doesSearchGuardIndexExist()) {
 
 				//This should return nothing initially - if it does, we're done
 				roles = readRolesACL(esClient);
@@ -456,6 +458,10 @@ public class DynamicACLFilter
 		}
 
 		seeded = true;
+	}
+	
+	private boolean doesSearchGuardIndexExist() {
+	    return esClient.admin().indices().exists(new IndicesExistsRequest().indices(new String[]{searchGuardIndex})).actionGet().isExists();
 	}
 
 	@Override
