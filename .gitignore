@@ -14,6 +14,7 @@ buildNumber.properties
 .project
 .classpath
 .settings/
+.metadata/
 
 ### JetBrains template
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion

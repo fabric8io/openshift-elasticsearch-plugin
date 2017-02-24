@@ -47,6 +47,7 @@ import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
@@ -69,13 +70,18 @@ public class KibanaSeed implements ConfigurationSettings {
 	private static final String[] OPERATIONS_ROLES = {"operations-user"};
 	
 	public static final String DEFAULT_INDEX_FIELD = "defaultIndex";
+
+    private final IndexMappingLoader mappingLoader;
 	
-	public static void setDashboards(String user, Set<String> projects, Set<String> roles, Client esClient, String kibanaIndex, String kibanaVersion, boolean use_cdm, final String project_prefix, final Settings settings) {
+	@Inject
+	public KibanaSeed(IndexMappingLoader loader) {
+	    this.mappingLoader = loader;
+	}
+	
+	public void setDashboards(String user, Set<String> projects, Set<String> roles, Client esClient, String kibanaIndex, String kibanaVersion, final String project_prefix, final Settings settings) {
 
-		String time_field_name = settings.get(OPENSHIFT_CONFIG_TIME_FIELD_NAME, OPENSHIFT_DEFAULT_TIME_FIELD_NAME);
-
-		logger.debug("Begin setDashboards use_cdm '{}' project_prefix '{}' for user '{}' projects '{}' kibanaIndex '{}'",
-					 use_cdm, project_prefix, user, projects, kibanaIndex);
+		logger.debug("Begin setDashboards:  project_prefix '{}' for user '{}' projects '{}' kibanaIndex '{}'",
+					project_prefix, user, projects, kibanaIndex);
 
 		//We want to seed the Kibana user index initially
 		// since the logic from Kibana has changed to create before this plugin
@@ -115,7 +121,7 @@ public class KibanaSeed implements ConfigurationSettings {
 		
 		// If none have been set yet
 		if ( indexPatterns.isEmpty() ) {
-			create(user, sortedProjects, true, esClient, kibanaIndex, kibanaVersion, use_cdm, project_prefix, time_field_name);
+			create(user, sortedProjects, true, esClient, kibanaIndex, kibanaVersion, project_prefix);
 			changed.set(true);
 		}
 		else {
@@ -139,7 +145,7 @@ public class KibanaSeed implements ConfigurationSettings {
 			}
 			
 			// for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
-			create(user, sortedProjects, false, esClient, kibanaIndex, kibanaVersion, use_cdm, project_prefix, time_field_name);
+			create(user, sortedProjects, false, esClient, kibanaIndex, kibanaVersion, project_prefix);
 			
 			// cull any that are in ES but not in OS (remaining in indexPatterns)
 			remove(user, indexPatterns, esClient, kibanaIndex, project_prefix);
@@ -292,11 +298,11 @@ public class KibanaSeed implements ConfigurationSettings {
 		return "";
 	}
 	
-	private static void create(String user, List<String> projects, boolean setDefault, Client esClient, String kibanaIndex, String kibanaVersion, boolean use_cdm, String project_prefix, String time_field_name) {
+	private void create(String user, List<String> projects, boolean setDefault, Client esClient, String kibanaIndex, String kibanaVersion, String project_prefix) {
 		boolean defaultSet = !setDefault;
 		
 		for ( String project: projects ) {
-			createIndex(user, project, esClient, kibanaIndex, use_cdm, project_prefix, time_field_name);
+			createIndex(user, project, esClient, kibanaIndex, project_prefix);
 			
 			//set default
 			if ( !defaultSet ) {
@@ -350,22 +356,23 @@ public class KibanaSeed implements ConfigurationSettings {
 		return patterns;
 	}
 	
-	private static void createIndex(String username, String project, Client esClient, String kibanaIndex, boolean use_cdm, String project_prefix, String time_field_name) {
+	private void createIndex(String username, String project, Client esClient, String kibanaIndex, String project_prefix) {
 		
-		DocumentBuilder sourceBuilder = new DocumentBuilder()
-				.title(getIndexPattern(project, project_prefix))
-				.timeFieldName(time_field_name);
-		
+		final String indexPattern = getIndexPattern(project, project_prefix);
+		String source;
 		if ( project.equalsIgnoreCase(OPERATIONS_PROJECT) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME) )
-			sourceBuilder.operationsFields(use_cdm);
+			source = mappingLoader.getOperationsMappingsTemplate();
 		else if ( project.equalsIgnoreCase(BLANK_PROJECT) )
-			sourceBuilder.blankFields();
+			source = mappingLoader.getEmptyProjectMappingsTemplate();
 		else
-			sourceBuilder.applicationFields(use_cdm);
+		    source = mappingLoader.getApplicationMappingsTemplate();
 		
-		String source = sourceBuilder.build();
-		
-		executeCreate(getKibanaIndex(username, kibanaIndex), INDICIES_TYPE, getIndexPattern(project, project_prefix), source, esClient);
+		if(source != null) {
+		    source = source.replaceAll("$TITLE$", indexPattern);
+		    executeCreate(getKibanaIndex(username, kibanaIndex), INDICIES_TYPE, indexPattern, source, esClient);
+		} else {
+		    logger.debug("The source for the index mapping is null.  Skipping trying to createIndex {}", indexPattern);  
+		}
 	}
 	
 	private static void deleteIndex(String username, String project, Client esClient, String kibanaIndex, String project_prefix) {

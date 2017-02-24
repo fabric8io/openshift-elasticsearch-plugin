@@ -79,7 +79,7 @@
     <!-- used by vendor builds to use vendor version of searchguard plugins -->
     <version.suffix />
   </properties>
-
+  
   <dependencies>
     <dependency>
       <groupId>org.elasticsearch</groupId>
@@ -148,7 +148,6 @@
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>2.1</version>
-      <scope>test</scope>
 	</dependency>
     <dependency>
 		<groupId>org.apache.httpcomponents</groupId>
