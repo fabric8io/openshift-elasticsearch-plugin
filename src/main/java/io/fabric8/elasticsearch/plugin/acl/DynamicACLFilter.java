@@ -18,6 +18,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.List;
@@ -59,6 +60,7 @@ import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.transport.ConnectTransportException;
 
 import com.floragunn.searchguard.SearchGuardPlugin;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateAction;
@@ -89,7 +91,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private final ESLogger logger;
     private final UserProjectCache cache;
     private final String proxyUserHeader;
-    private final Client esClient;
+    private final TransportClient esClient;
     private final String searchGuardIndex;
     private final String kibanaIndex;
     private final String kibanaVersion;
@@ -164,9 +166,14 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         this.esClient = TransportClient.builder().settings(clientSettings).addPlugin(SearchGuardSSLPlugin.class)
                 .addPlugin(SearchGuardPlugin.class) // needed for config update
                                                     // action only
-                .build().addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
+                .build();
+        try {
+            this.esClient.addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
+        }catch(ConnectTransportException e) {
+            this.logger.warn("Cluster may still be initializing. Please be patient: {}", e.getMessage());
+        }
     }
-
+    
     @Override
     public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
         boolean continue_processing = true;
