@@ -32,7 +32,7 @@ for the esClient with the following properties.
 |*_openshift.searchguard.truststore.type_*|The file type for the truststore. JKS or PKCS12 are accepted. Default: *_JKS_*|
 
 ## Configure the projects for '.operations'
-You can now configure which projects are deemed part of the .operations index for ACL
+You can configure which projects are deemed part of the .operations index for ACL
 configuration.
 
 In your config file:
@@ -40,7 +40,7 @@ In your config file:
 openshift.operations.project.names: ["default", "openshift", "openshift-infra"]
 ```
 
-The current default is "default", "openshift", "openshift-infra", "kube-system".
+The defaults are "default", "openshift", "openshift-infra", "kube-system".
 The names must all be in lower-case to be properly matched.
 
 ## Configure a 'cluster-reader' user to access operation logs
@@ -51,31 +51,27 @@ file:
 openshift.operations.allow_cluster_reader: true
 ```
 
-## Common Data Model
-If your OpenShift EFK cluster supports the common data model, and you want to
-use the common data model, there are some configuration parameters that you can
-set in `elasticsearch.yml`, under `openshift.config`:
+## Additional Configuration Parameters
+The following additional parameters can be set in set in `elasticsearch.yml`:
 
-* `use_common_data_model` - boolean - default `false` - if true, tell the
-  plugin that you want to use the common data model
-* `project_index_prefix` - string - default `""` - set this to the string value
-  that project/namespace indices use as their prefix - for example, with the
+|Property|Description|
+|-------|--------|
+|*io.fabric8.elasticsearch.acl.sync_delay_millis*|The delay in milliseconds before the SG AGL document is resynced with OpenShift|
+|*io.fabric8.elasticsearch.acl.user_profile_prefix*| The prefix to use to store Kibana user visualizations (default: `.kibana.USERUUID`)|
+|*io.fabric8.elasticsearch.kibana.mapping.app*| Absolute file path to a JSON document that defines the index mapping for applications| 
+|*io.fabric8.elasticsearch.kibana.mapping.ops*| Absolute file path to a JSON document that defines the index mapping for operations|
+|*io.fabric8.elasticsearch.kibana.mapping.empty| Absolute file path to a JSON document that defines the index mapping for blank indexes|
+|*openshift.config.project_index_prefix*| The string value that project/namespace indices use as their prefix (default: ``) for example, with the
   common data model, if the namespace is `test`, the index name will be
   `project.test.$uuid.YYYY.MM.DD`.  In this case, use `"project"` as the
-  prefix - do not include the trailing `.`.
-* `time_field_name` - string - default `"time"` - the common data model uses
-  `"@timestamp"` as the name of the time field
-
-If the common data model is used, the common data model index-pattern values
-will be loaded to match the common data model index naming, model, and field
-naming conventions.
+  prefix - do not include the trailing `.`.|
 
 ## Development
 Following are the dependencies
 
-* [ElasticSearch 2.3.3] (https://github.com/elastic/elasticsearch/tree/2.3)
-* [Search-Guard 2.3.3.3] (https://github.com/floragunncom/search-guard/tree/2.3.3.3)
-* [Search-Guard-SSL 2.3.3.13] (https://github.com/floragunncom/search-guard-ssl/tree/2.3.3)
+* [ElasticSearch 2.4.4] (https://github.com/elastic/elasticsearch/tree/2.4)
+* [Search-Guard 2.4.4.10] (https://github.com/floragunncom/search-guard/tree/2.4.4.10)
+* [Search-Guard-SSL 2.4.4.19] (https://github.com/floragunncom/search-guard-ssl/tree/2.4.4.19)
 
 ### Debugging and running from Eclipse
 
