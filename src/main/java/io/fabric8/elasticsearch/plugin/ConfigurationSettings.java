@@ -24,7 +24,7 @@ public interface ConfigurationSettings {
 	static final String SEARCHGUARD_MAPPING_TYPE = "rolesmapping";
 	static final String SEARCHGUARD_CONFIG_ID = "0";
 	static final String[] SEARCHGUARD_INITIAL_CONFIGS = new String[] { "config", "roles", "rolesmapping",
-			"actiongroups" };
+			"actiongroups","internalusers" };
 	static final String SEARCHGUARD_ADMIN_DN = "searchguard.authcz.admin_dn";
 
 	static final String SG_ACTION_ALL = "indices:*";
