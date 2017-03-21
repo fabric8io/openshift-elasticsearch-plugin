@@ -17,44 +17,29 @@ package io.fabric8.elasticsearch.plugin.acl;
 
 import static io.fabric8.elasticsearch.plugin.kibana.KibanaSeed.setDashboards;
 
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
-import org.elasticsearch.action.NoShardAvailableActionException;
 import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.action.WriteConsistencyLevel;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.client.transport.NoNodeAvailableException;
 import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
-import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.common.xcontent.XContentType;
-import org.elasticsearch.index.IndexNotFoundException;
-import org.elasticsearch.index.engine.DocumentMissingException;
+import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestFilter;
@@ -87,7 +72,7 @@ public class DynamicACLFilter
 	extends RestFilter
 	implements ConfigurationSettings {
 
-	private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String AUTHORIZATION_HEADER = "Authorization";
 
 	private final ESLogger logger;
 	private final UserProjectCache cache;
@@ -98,14 +83,12 @@ public class DynamicACLFilter
 	private final String kibanaVersion;
 	private final String userProfilePrefix;
 	private final Settings settings;
-	private final ReentrantLock lock = new ReentrantLock();
-	private final Condition syncing = lock.newCondition();
 
 	private final String kbnVersionHeader;
 	private final String[] operationsProjects;
 
 	private Boolean enabled;
-	private Boolean seeded;
+	private final ReentrantLock lock = new ReentrantLock();
 
 	private final boolean use_cdm;
 	private final String cdm_project_prefix;
@@ -129,7 +112,6 @@ public class DynamicACLFilter
 
 		this.settings = settings;
 
-		this.seeded = false;
 		this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
 		// This is to not have SG print an error with us loading the SG_SSL plugin for our transport client
 		System.setProperty("sg.nowarn.client", "true");
@@ -169,25 +151,12 @@ public class DynamicACLFilter
                 .addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
 	}
 
+
 	@Override
 	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
 		boolean continue_processing = true;
 
 		try {
-			if (!seeded) {
-				try {
-					lock.lock();
-					seedInitialACL(esClient);
-					syncing.signalAll();
-				}
-				catch (Exception e) {
-					logger.error("Exception encountered when seeding initial ACL", e);
-				}
-				finally{
-					lock.unlock();
-				}
-			}
-
 			if ( enabled ) {
 				// grab the kibana version here out of "kbn-version" if we can
 				// -- otherwise use the config one
@@ -198,7 +167,7 @@ public class DynamicACLFilter
 				final String user = getUser(request);
 				final String token = getBearerToken(request);
 				if(logger.isDebugEnabled()){
-					logger.debug("Handling Request...");
+					logger.debug("Handling Request... {}", request.uri());
 					logger.debug("Evaluating request for user '{}' with a {} token", user,
 							(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
 					logger.debug("Cache has user: {}", cache.hasUser(user, token));
@@ -318,9 +287,9 @@ public class DynamicACLFilter
 		return false;
 	}
 
-	private synchronized void syncAcl() {
-		logger.debug("Syncing the ACL to ElasticSearch");
+	private void syncAcl() {
 		try {
+		    lock.lock();
 			logger.debug("Loading SearchGuard ACL...");
 
 			SearchGuardRoles roles = readRolesACL(esClient);
@@ -333,135 +302,60 @@ public class DynamicACLFilter
 			writeACL(esClient, roles, rolesMapping);
 		} catch (Exception e) {
 			logger.error("Exception while syncing ACL with cache", e);
-		}
+        }finally {
+            lock.unlock();
+        }
 	}
 
 	private SearchGuardRoles readRolesACL(Client esClient) throws IOException {
 		GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID)
 				.setRefresh(true).request();
 		GetResponse response = esClient.get(getRequest).actionGet(); // need to worry about timeout?
+		if(logger.isDebugEnabled()) {
+		    logger.debug("Read in roles {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+		}
 
-		SearchGuardRoles roles = new SearchGuardRoles().load(response.getSource());
-		logger.debug("Read in roles '{}'", roles);
-		return roles;
+		return new SearchGuardRoles().load(response.getSource());
 	}
 
 	private SearchGuardRolesMapping readRolesMappingACL(Client esClient) throws IOException {
 		GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID)
 				.setRefresh(true).request();
 		GetResponse response = esClient.get(getRequest).actionGet(); // need to worry about timeout?
+        if(logger.isDebugEnabled()) {
+                logger.debug("Read in rolesMapping {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+        }
 
-		SearchGuardRolesMapping rolesMapping = new SearchGuardRolesMapping().load(response.getSource());
-		logger.debug("Read in rolesMapping '{}'", rolesMapping);
-		return rolesMapping;
+		return new SearchGuardRolesMapping().load(response.getSource());
 	}
 
 	private void writeACL(Client esClient, SearchGuardRoles roles, SearchGuardRolesMapping rolesMapping) throws IOException {
-		IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
-        .consistencyLevel(WriteConsistencyLevel.DEFAULT)
-        .source(roles.toMap());
-
-		String rID = esClient.index(rolesIR).actionGet().getId();
-		logger.debug("Built roles request: '{}'", rolesIR);
-		logger.debug("Roles ID: '{}'", rID);
-
-		IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
-                .consistencyLevel(WriteConsistencyLevel.DEFAULT)
-                .source(rolesMapping.toMap());
-
-		String rmID = esClient.index(mappingIR).actionGet().getId();
-		logger.debug("Built rolesMapping request: '{}'", mappingIR);
-		logger.debug("rolesMapping ID: '{}'", rmID);
-
-		// force a config reload
-		String[] updateString = {SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_MAPPING_TYPE};
-		ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(updateString)).actionGet();
-
-		if ( cur.getNodes().length > 0 )
-			logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
-		else
-			logger.warn("Failed to reloaded configs", cur.getNodes().length);
-	}
-
-	private void createConfig(Client esClient) throws IOException {
-
-		final ClusterHealthResponse chr = esClient.admin().cluster().health(new ClusterHealthRequest()).actionGet();
-
-        if ( ! chr.isTimedOut() ) {
-            
-            if(!doesSearchGuardIndexExist()) {
-                esClient.admin().indices().create( new CreateIndexRequest().index(searchGuardIndex)
-                        .settings("index.number_of_shards", 1, "index.number_of_replicas", chr.getNumberOfDataNodes()-1)
-                        ).actionGet().isAcknowledged();
-            }
-
-			// Wait for health status of YELLOW
-			ClusterHealthRequest healthRequest = new ClusterHealthRequest()
-					.indices(new String[]{searchGuardIndex}).waitForYellowStatus();
-
-			esClient.admin().cluster().health(healthRequest).actionGet().getStatus();
-
-			String cd = settings.get(SG_CONFIG_SETTING_PATH, DEFAULT_SG_CONFIG_SETTING_PATH);
-			// create initial sg config
-			for ( String type : SEARCHGUARD_INITIAL_CONFIGS ) {
-				String file = String.format("%ssg_%s.yml", cd, type);
-				logger.debug("Using '{}' file to populate '{}' type", file, type);
-				if ( ! uploadFile(esClient, file, type) ) {
-					String failedSeed = String.format("'%s/%s/%s' with '%s'", searchGuardIndex, type, SEARCHGUARD_CONFIG_ID, file);
-					logger.error("Was not able to seed {}", failedSeed);
-				}
-			}
-
-            ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS)).actionGet();
-            logger.debug("Succeed seeding SG, all node's config updated? '{}'", cur.getNodes().length == chr.getNumberOfNodes());
-        }
-	}
-
-	private void seedInitialACL(Client esClient) throws Exception {
-
-		SearchGuardRoles roles = new SearchGuardRoles();
-		SearchGuardRolesMapping rolesMapping = new SearchGuardRolesMapping();
-		try {
-			if ( doesSearchGuardIndexExist()) {
-
-				//This should return nothing initially - if it does, we're done
-				roles = readRolesACL(esClient);
-				rolesMapping = readRolesMappingACL(esClient);
-
-				if ( roles.iterator().hasNext() || rolesMapping.iterator().hasNext() ) {
-					if ( logger.isDebugEnabled() )
-						logger.debug("Have already seeded");
-					seeded = true;
-					return;
-				}
-			}
-		}
-		catch (NoNodeAvailableException | NoShardAvailableActionException e) {
-			logger.warn("Trying to seed ACL when ES has not not yet started: '{}'", e.getMessage());
-			return;
-		}
-		catch (IndexNotFoundException | DocumentMissingException | NullPointerException e) {
-			logger.debug("Caught Exception, ACL has not been seeded yet", e);
-		}
-		catch (Exception e) {
-			logger.error("Error checking ACL when seeding", e);
-			throw e;
-		}
-
-		try {
-			// seed here from the files
-			createConfig(esClient);
-		}
-		catch (Exception e) {
-			logger.error("Error seeding initial ACL", e);
-			throw e;
-		}
-
-		seeded = true;
-	}
-	
-	private boolean doesSearchGuardIndexExist() {
-	    return esClient.admin().indices().exists(new IndicesExistsRequest().indices(new String[]{searchGuardIndex})).actionGet().isExists();
+	    IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
+	            .consistencyLevel(WriteConsistencyLevel.DEFAULT)
+	            .source(roles.toMap());
+	    if(logger.isDebugEnabled()) {
+	        logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(),true, true));
+	    }
+	    
+	    String rID = esClient.index(rolesIR).actionGet().getId();
+	    logger.debug("Roles ID: '{}'", rID);
+	    
+	    IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
+	            .consistencyLevel(WriteConsistencyLevel.DEFAULT)
+	            .source(rolesMapping.toMap());
+	    if(logger.isDebugEnabled()) {
+	        logger.debug("Built rolesMapping request: {}", XContentHelper.convertToJson(mappingIR.source(), true, true));
+	    }
+	    String rmID = esClient.index(mappingIR).actionGet().getId();
+	    logger.debug("rolesMapping ID: '{}'", rmID);
+	    
+	    // force a config reload of all SG docs
+	    ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS)).actionGet();
+	    if ( cur.getNodes().length > 0 ) {
+	        logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
+	    }else {
+	        logger.warn("Failed to reloaded configs", cur.getNodes().length);
+	    }
 	}
 
 	@Override
@@ -470,39 +364,4 @@ public class DynamicACLFilter
 		return Integer.MIN_VALUE;
 	}
 
-	private boolean uploadFile(Client tc, String filepath, String type) {
-        try (Reader reader = new FileReader(filepath)) {
-
-            final String id = tc
-                    .index(new IndexRequest(searchGuardIndex).type(type).id(SEARCHGUARD_CONFIG_ID).refresh(true)
-                            .consistencyLevel(WriteConsistencyLevel.DEFAULT).source(readXContent(reader, XContentType.YAML)))
-                            .actionGet().getId();
-
-            // Verify that the ID we tried to update is the update that was updated
-            if (SEARCHGUARD_CONFIG_ID.equals(id)) {
-                return true;
-            } else {
-                logger.warn("Configuration for '{}' failed for unknown reasons", type);
-            }
-        } catch (IOException e) {
-            logger.error("Configuration for '{}' failed due to '{}'", type, e);
-        }
-
-        return false;
-    }
-
-    private BytesReference readXContent(final Reader reader, final XContentType xContentType) throws IOException {
-        XContentParser parser = null;
-        try {
-            parser = XContentFactory.xContent(xContentType).createParser(reader);
-            parser.nextToken();
-            final XContentBuilder builder = XContentFactory.jsonBuilder();
-            builder.copyCurrentStructure(parser);
-            return builder.bytes();
-        } finally {
-            if (parser != null) {
-                parser.close();
-            }
-        }
-    }
 }
