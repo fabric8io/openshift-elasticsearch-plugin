@@ -24,7 +24,7 @@ public interface ConfigurationSettings {
 	static final String SEARCHGUARD_MAPPING_TYPE = "rolesmapping";
 	static final String SEARCHGUARD_CONFIG_ID = "0";
 	static final String[] SEARCHGUARD_INITIAL_CONFIGS = new String[] { "config", "roles", "rolesmapping",
-			"actiongroups","internalusers" };
+			"actiongroups", "internalusers" };
 	static final String SEARCHGUARD_ADMIN_DN = "searchguard.authcz.admin_dn";
 
 	static final String SG_ACTION_ALL = "indices:*";
@@ -66,8 +66,10 @@ public interface ConfigurationSettings {
 	 */
 	/** OpenShift settings here **/
 	static final String OPENSHIFT_ES_ACL_DELAY_IN_MILLIS = "io.fabric8.elasticsearch.acl.sync_delay_millis";
+	static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP = "io.fabric8.elasticsearch.kibana.mapping.app";
+	static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS = "io.fabric8.elasticsearch.kibana.mapping.ops";
+	static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY = "io.fabric8.elasticsearch.kibana.mapping.empty";
 	static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
-	static final String OPENSHIFT_WHITELISTED_USERS = "io.fabric8.elasticsearch.authentication.users";
 	static final String OPENSHIFT_ROLES = "X-OpenShift-Roles";
 	static final String OPENSHIFT_ALLOW_CLUSTER_READER = "openshift.operations.allow_cluster_reader";
 
@@ -84,13 +86,6 @@ public interface ConfigurationSettings {
 	static final boolean DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER = false;
 
 	/**
-	 * The configurations for the initial ACL as well as what the .operations
-	 * index consists of
-	 */
-	static final String OPENSHIFT_CONFIG_ACL_BASE = "openshift.acl.users.";
-	static final String OPENSHIFT_CONFIG_ACL_NAMES = OPENSHIFT_CONFIG_ACL_BASE + "names";
-
-	/**
 	 * The configurations for enabling/disabling portions of this plugin
 	 * defaults to 'true' => enabled.
 	 *
@@ -104,12 +99,7 @@ public interface ConfigurationSettings {
 	static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;
 	static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
 
-	static final String OPENSHIFT_CONFIG_USE_COMMON_DATA_MODEL = "openshift.config.use_common_data_model";
-	static final boolean OPENSHIFT_DEFAULT_USE_COMMON_DATA_MODEL = false;
-
 	static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";
 	static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "";
 
-	static final String OPENSHIFT_CONFIG_TIME_FIELD_NAME = "openshift.config.time_field_name";
-	static final String OPENSHIFT_DEFAULT_TIME_FIELD_NAME = "time";
 }

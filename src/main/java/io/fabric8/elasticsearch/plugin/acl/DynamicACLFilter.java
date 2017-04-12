@@ -15,8 +15,6 @@
  */
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.kibana.KibanaSeed.setDashboards;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
@@ -46,6 +44,7 @@ import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.transport.ConnectTransportException;
 
 import com.floragunn.searchguard.SearchGuardPlugin;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateAction;
@@ -55,6 +54,7 @@ import com.floragunn.searchguard.ssl.SearchGuardSSLPlugin;
 import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.ClusterRoleBinding;
@@ -63,305 +63,325 @@ import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
- * REST filter to update the ACL when a user
- * first makes a request
+ * REST filter to update the ACL when a user first makes a request
+ * 
  * @author jeff.cantrill
  *
  */
-public class DynamicACLFilter
-	extends RestFilter
-	implements ConfigurationSettings {
+public class DynamicACLFilter extends RestFilter implements ConfigurationSettings {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
 
-	private final ESLogger logger;
-	private final UserProjectCache cache;
-	private final String proxyUserHeader;
-	private final Client esClient;
-	private final String searchGuardIndex;
-	private final String kibanaIndex;
-	private final String kibanaVersion;
-	private final String userProfilePrefix;
-	private final Settings settings;
+    private final ESLogger logger;
+    private final UserProjectCache cache;
+    private final String proxyUserHeader;
+    private final TransportClient esClient;
+    private final String searchGuardIndex;
+    private final String kibanaIndex;
+    private final String kibanaVersion;
+    private final String userProfilePrefix;
+    private final Settings settings;
+    private final ReentrantLock lock = new ReentrantLock();
 
-	private final String kbnVersionHeader;
-	private final String[] operationsProjects;
+    private final String kbnVersionHeader;
+    private final String[] operationsProjects;
 
-	private Boolean enabled;
-	private final ReentrantLock lock = new ReentrantLock();
+    private Boolean enabled;
 
-	private final boolean use_cdm;
-	private final String cdm_project_prefix;
+    private final String cdm_project_prefix;
 
-	@Inject
-	public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client){
-		this.cache = cache;
-		this.logger = Loggers.getLogger(getClass(), settings);
-		this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
-		this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
-		this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
-		this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
-		this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
-		this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
+    private KibanaSeed kibanaSeed;
 
-		this.operationsProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
-		this.use_cdm = settings.getAsBoolean(OPENSHIFT_CONFIG_USE_COMMON_DATA_MODEL, OPENSHIFT_DEFAULT_USE_COMMON_DATA_MODEL);
-		this.cdm_project_prefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX, OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
+    @Inject
+    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client,
+            final KibanaSeed seed) {
+        this.cache = cache;
+        this.kibanaSeed = seed;
+        this.logger = Loggers.getLogger(getClass(), settings);
+        this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
+        this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
+        this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
+        this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
+        this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
+        this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
 
-		logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
+        this.operationsProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
+        this.cdm_project_prefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
+                OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 
-		this.settings = settings;
+        logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
 
-		this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-		// This is to not have SG print an error with us loading the SG_SSL plugin for our transport client
-		System.setProperty("sg.nowarn.client", "true");
+        this.settings = settings;
 
-		/** Build the esClient as a transport client **/
-		String clusterName = settings.get("cluster.name");
-		String keystore = settings.get(SG_CLIENT_KS_PATH, DEFAULT_SG_CLIENT_KS_PATH);
-		String truststore = settings.get(SG_CLIENT_TS_PATH, DEFAULT_SG_CLIENT_TS_PATH);
-		String kspass = settings.get(SG_CLIENT_KS_PASS, DEFAULT_SG_CLIENT_KS_PASS);
-		String tspass = settings.get(SG_CLIENT_TS_PASS, DEFAULT_SG_CLIENT_TS_PASS);
-		String kstype = settings.get(SG_CLIENT_KS_TYPE, DEFAULT_SG_CLIENT_KS_TYPE);
-		String tstype = settings.get(SG_CLIENT_TS_TYPE, DEFAULT_SG_CLIENT_TS_TYPE);
+        this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+        // This is to not have SG print an error with us loading the SG_SSL
+        // plugin for our transport client
+        System.setProperty("sg.nowarn.client", "true");
 
-		Settings.Builder settingsBuilder = Settings
-                .builder()
-                .put("path.home", ".")
-                .put("path.conf", ".")
+        /** Build the esClient as a transport client **/
+        String clusterName = settings.get("cluster.name");
+        String keystore = settings.get(SG_CLIENT_KS_PATH, DEFAULT_SG_CLIENT_KS_PATH);
+        String truststore = settings.get(SG_CLIENT_TS_PATH, DEFAULT_SG_CLIENT_TS_PATH);
+        String kspass = settings.get(SG_CLIENT_KS_PASS, DEFAULT_SG_CLIENT_KS_PASS);
+        String tspass = settings.get(SG_CLIENT_TS_PASS, DEFAULT_SG_CLIENT_TS_PASS);
+        String kstype = settings.get(SG_CLIENT_KS_TYPE, DEFAULT_SG_CLIENT_KS_TYPE);
+        String tstype = settings.get(SG_CLIENT_TS_TYPE, DEFAULT_SG_CLIENT_TS_TYPE);
+
+        Settings.Builder settingsBuilder = Settings.builder().put("path.home", ".").put("path.conf", ".")
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_FILEPATH, keystore)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_FILEPATH, truststore)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_PASSWORD, kspass)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_PASSWORD, tspass)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION, false)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION_RESOLVE_HOST_NAME, false)
+                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION_RESOLVE_HOST_NAME,
+                        false)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENABLED, true)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_TYPE, kstype)
                 .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_TYPE, tstype)
 
-                .put("cluster.name", clusterName)
-                .put("client.transport.ignore_cluster_name", false)
+                .put("cluster.name", clusterName).put("client.transport.ignore_cluster_name", false)
                 .put("client.transport.sniff", false);
 
         Settings clientSettings = settingsBuilder.build();
 
-		this.esClient = TransportClient.builder().settings(clientSettings).addPlugin(SearchGuardSSLPlugin.class)
-                .addPlugin(SearchGuardPlugin.class) //needed for config update action only
-                .build()
-                .addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
-	}
+        this.esClient = TransportClient.builder().settings(clientSettings).addPlugin(SearchGuardSSLPlugin.class)
+                .addPlugin(SearchGuardPlugin.class) // needed for config update
+                                                    // action only
+                .build();
+        try {
+            this.esClient.addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
+        }catch(ConnectTransportException e) {
+            this.logger.warn("Cluster may still be initializing. Please be patient: {}", e.getMessage());
+        }
+    }
+    
+    @Override
+    public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
+        boolean continue_processing = true;
 
+        try {
+            if (enabled) {
+                // grab the kibana version here out of "kbn-version" if we can
+                // -- otherwise use the config one
+                String kbnVersion = getKibanaVersion(request);
+                if (StringUtils.isEmpty(kbnVersion))
+                    kbnVersion = kibanaVersion;
 
-	@Override
-	public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
-		boolean continue_processing = true;
+                final String user = getUser(request);
+                final String token = getBearerToken(request);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Handling Request... {}", request.uri());
+                    logger.debug("Evaluating request for user '{}' with a {} token", user,
+                            (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
+                    logger.debug("Cache has user: {}", cache.hasUser(user, token));
+                }
+                if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
+                    final boolean isOperationsUser = isOperationsUser(user);
+                    if (isOperationsUser) {
+                        request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+                    }
+                    if (updateCache(user, token, isOperationsUser, kbnVersion)) {
+                        syncAcl();
+                    }
 
-		try {
-			if ( enabled ) {
-				// grab the kibana version here out of "kbn-version" if we can
-				// -- otherwise use the config one
-				String kbnVersion = getKibanaVersion(request);
-				if ( StringUtils.isEmpty(kbnVersion) )
-					kbnVersion = kibanaVersion;
+                }
+            }
+        } catch (ElasticsearchSecurityException ese) {
+            logger.info("Could not authenticate user");
+            channel.sendResponse(new BytesRestResponse(RestStatus.UNAUTHORIZED));
+            continue_processing = false;
+        } catch (Exception e) {
+            logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
+        } finally {
+            if (continue_processing) {
+                chain.continueProcessing(request, channel);
+            }
+        }
+    }
 
-				final String user = getUser(request);
-				final String token = getBearerToken(request);
-				if(logger.isDebugEnabled()){
-					logger.debug("Handling Request... {}", request.uri());
-					logger.debug("Evaluating request for user '{}' with a {} token", user,
-							(StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-					logger.debug("Cache has user: {}", cache.hasUser(user, token));
-				}
-				if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
-					final boolean isOperationsUser = isOperationsUser(user);
-					if(isOperationsUser){
-						request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
-					}
-					if(updateCache(user, token, isOperationsUser, kbnVersion)){
-						syncAcl();
-					}
+    private String getUser(RestRequest request) {
+        return (String) ObjectUtils.defaultIfNull(request.header(proxyUserHeader), "");
+    }
 
-				}
-			}
-		} catch (ElasticsearchSecurityException ese) {
-			logger.info("Could not authenticate user");
-			channel.sendResponse(new BytesRestResponse(RestStatus.UNAUTHORIZED));
-			continue_processing = false;
-		} catch (Exception e) {
-			logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
-		} finally {
-			if (continue_processing) {
-				chain.continueProcessing(request, channel);
-			}
-		}
-	}
+    private String getBearerToken(RestRequest request) {
+        final String[] auth = ((String) ObjectUtils.defaultIfNull(request.header(AUTHORIZATION_HEADER), "")).split(" ");
+        if (auth.length >= 2 && "Bearer".equals(auth[0])) {
+            return auth[1];
+        }
+        return "";
+    }
 
-	private String getUser(RestRequest request) {
-		return (String) ObjectUtils.defaultIfNull(request.header(proxyUserHeader), "");
-	}
+    private String getKibanaVersion(RestRequest request) {
+        return (String) ObjectUtils.defaultIfNull(request.header(kbnVersionHeader), "");
+    }
 
-	private String getBearerToken(RestRequest request) {
-		final String[] auth = ((String) ObjectUtils.defaultIfNull(request.header(AUTHORIZATION_HEADER), "")).split(" ");
-		if (auth.length >= 2 && "Bearer".equals(auth[0])) {
-			return auth[1];
-		}
-		return "";
-	}
+    private boolean updateCache(final String user, final String token, final boolean isOperationsUser,
+            final String kbnVersion) {
+        logger.debug("Updating the cache for user '{}'", user);
+        try {
+            // This is the key to authentication. Before listProjectsFor, we
+            // haven't actually authenticated
+            // anything in this plugin, using the given token. If the token is
+            // valid, we will get back a
+            // list of projects for the token. If not, listProjectsFor will
+            // throw an exception and we will
+            // not update the cache with the user and token. In this way we will
+            // keep bogus entries out of
+            // the cache.
+            Set<String> projects = listProjectsFor(token);
+            cache.update(user, token, projects, isOperationsUser);
 
-	private String getKibanaVersion(RestRequest request) {
-		return (String) ObjectUtils.defaultIfNull(request.header(kbnVersionHeader), "");
-	}
+            Set<String> roles = new HashSet<String>();
+            if (isOperationsUser)
+                roles.add("operations-user");
 
-	private boolean updateCache(final String user, final String token, final boolean isOperationsUser, final String kbnVersion) {
-		logger.debug("Updating the cache for user '{}'", user);
-		try{
-			// This is the key to authentication.  Before listProjectsFor, we haven't actually authenticated
-			// anything in this plugin, using the given token.  If the token is valid, we will get back a
-			// list of projects for the token.  If not, listProjectsFor will throw an exception and we will
-			// not update the cache with the user and token.  In this way we will keep bogus entries out of
-			// the cache.
-			Set<String> projects = listProjectsFor(token);
-			cache.update(user, token, projects, isOperationsUser);
+            kibanaSeed.setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, cdm_project_prefix,
+                    settings);
+        } catch (KubernetesClientException e) {
+            logger.error("Error retrieving project list for '{}'", e, user);
+            throw new ElasticsearchSecurityException(e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error retrieving project list for '{}'", e, user);
+            return false;
+        }
+        return true;
+    }
 
-			Set<String> roles = new HashSet<String>();
-			if (isOperationsUser)
-				roles.add("operations-user");
+    // WARNING: This function must perform authentication with the given token.
+    // This
+    // is the only authentication performed in this plugin. This function must
+    // throw
+    // an exception if the token is invalid.
+    private Set<String> listProjectsFor(final String token) throws Exception {
+        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
+        Set<String> names = new HashSet<>();
+        try (OpenShiftClient client = new DefaultOpenShiftClient(builder.build())) {
+            List<Project> projects = client.projects().list().getItems();
+            for (Project project : projects) {
+                if (!isBlacklistProject(project.getMetadata().getName()))
+                    names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
+            }
+        }
+        return names;
+    }
 
-			setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, use_cdm, cdm_project_prefix, settings);
-		} catch (KubernetesClientException e) {
-			logger.error("Error retrieving project list for '{}'",e, user);
-			throw new ElasticsearchSecurityException(e.getMessage());
-		} catch (Exception e) {
-			logger.error("Error retrieving project list for '{}'",e, user);
-			return false;
-		}
-		return true;
-	}
+    private boolean isBlacklistProject(String project) {
+        return ArrayUtils.contains(operationsProjects, project.toLowerCase());
+    }
 
-	// WARNING: This function must perform authentication with the given token.  This
-	// is the only authentication performed in this plugin.  This function must throw
-	// an exception if the token is invalid.
-	private Set<String> listProjectsFor(final String token) throws Exception{
-		ConfigBuilder builder = new ConfigBuilder()
-				.withOauthToken(token);
-		Set<String> names = new HashSet<>();
-		try(OpenShiftClient client = new DefaultOpenShiftClient(builder.build())){
-			List<Project> projects = client.projects().list().getItems();
-			for (Project project : projects) {
-				if ( ! isBlacklistProject(project.getMetadata().getName()) )
-					names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
-			}
-		}
-		return names;
-	}
+    private boolean isOperationsUser(final String username) {
+        ConfigBuilder builder = new ConfigBuilder();
 
-	private boolean isBlacklistProject(String project) {
-		return ArrayUtils.contains(operationsProjects, project.toLowerCase());
-	}
+        boolean clusterReaderAllowed = settings.getAsBoolean(OPENSHIFT_ALLOW_CLUSTER_READER,
+                DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER);
 
-	private boolean isOperationsUser(final String username){
-		ConfigBuilder builder = new ConfigBuilder();
-		
-		boolean clusterReaderAllowed = settings.getAsBoolean(OPENSHIFT_ALLOW_CLUSTER_READER, DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER);
+        try (OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
+            ClusterRoleBinding bResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-admins")
+                    .get();
 
-		try (OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
-			ClusterRoleBinding bResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-admins").get();
-			
-			logger.debug("Does '{}' exist in cluster-admins? '{}'", username, bResponse.getUserNames().contains(username));
+            logger.debug("Does '{}' exist in cluster-admins? '{}'", username,
+                    bResponse.getUserNames().contains(username));
 
-			if ( clusterReaderAllowed ) {
-				ClusterRoleBinding readerResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-readers").get();
+            if (clusterReaderAllowed) {
+                ClusterRoleBinding readerResponse = osClient.clusterRoleBindings().inNamespace("")
+                        .withName("cluster-readers").get();
 
-				logger.debug("Does '{}' exist in cluster-readers? '{}'", username, readerResponse.getUserNames().contains(username));
-				
-				if ( readerResponse.getUserNames().contains(username) )
-					return true;
-			}
-			
-			return bResponse.getUserNames().contains(username);
-		}
-		catch(Exception e){
-			logger.error("Exception determining user's role.", e);
-		}
-		
-		return false;
-	}
+                logger.debug("Does '{}' exist in cluster-readers? '{}'", username,
+                        readerResponse.getUserNames().contains(username));
 
-	private void syncAcl() {
-		try {
-		    lock.lock();
-			logger.debug("Loading SearchGuard ACL...");
+                if (readerResponse.getUserNames().contains(username))
+                    return true;
+            }
 
-			SearchGuardRoles roles = readRolesACL(esClient);
-			SearchGuardRolesMapping rolesMapping = readRolesMappingACL(esClient);
+            return bResponse.getUserNames().contains(username);
+        } catch (Exception e) {
+            logger.error("Exception determining user's role.", e);
+        }
 
-			logger.debug("Syncing from cache to ACL...");
-			roles.syncFrom(cache, userProfilePrefix, cdm_project_prefix);
-			rolesMapping.syncFrom(cache, userProfilePrefix);
+        return false;
+    }
 
-			writeACL(esClient, roles, rolesMapping);
-		} catch (Exception e) {
-			logger.error("Exception while syncing ACL with cache", e);
+    private void syncAcl() {
+        logger.debug("Syncing the ACL to ElasticSearch");
+        try {
+            lock.lock();
+            logger.debug("Loading SearchGuard ACL...");
+
+            SearchGuardRoles roles = readRolesACL(esClient);
+            SearchGuardRolesMapping rolesMapping = readRolesMappingACL(esClient);
+
+            logger.debug("Syncing from cache to ACL...");
+            roles.syncFrom(cache, userProfilePrefix, cdm_project_prefix);
+            rolesMapping.syncFrom(cache, userProfilePrefix);
+
+            writeACL(esClient, roles, rolesMapping);
+        } catch (Exception e) {
+            logger.error("Exception while syncing ACL with cache", e);
         }finally {
             lock.unlock();
         }
-	}
+    }
 
-	private SearchGuardRoles readRolesACL(Client esClient) throws IOException {
-		GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID)
-				.setRefresh(true).request();
-		GetResponse response = esClient.get(getRequest).actionGet(); // need to worry about timeout?
-		if(logger.isDebugEnabled()) {
-		    logger.debug("Read in roles {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
-		}
-
-		return new SearchGuardRoles().load(response.getSource());
-	}
-
-	private SearchGuardRolesMapping readRolesMappingACL(Client esClient) throws IOException {
-		GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID)
-				.setRefresh(true).request();
-		GetResponse response = esClient.get(getRequest).actionGet(); // need to worry about timeout?
+    private SearchGuardRoles readRolesACL(Client esClient) throws IOException {
+        GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID)
+                .setRefresh(true).request();
+        GetResponse response = esClient.get(getRequest).actionGet(); // need to
+                                                                     // worry
+                                                                     // about
+                                                                     // timeout?
         if(logger.isDebugEnabled()) {
-                logger.debug("Read in rolesMapping {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+            logger.debug("Read in roles {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
         }
+        return new SearchGuardRoles().load(response.getSource());
+    }
 
-		return new SearchGuardRolesMapping().load(response.getSource());
-	}
+    private SearchGuardRolesMapping readRolesMappingACL(Client esClient) throws IOException {
+        GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID)
+                .setRefresh(true).request();
+        GetResponse response = esClient.get(getRequest).actionGet(); // need to
+                                                                     // worry
+                                                                     // about
+                                                                     // timeout?
 
-	private void writeACL(Client esClient, SearchGuardRoles roles, SearchGuardRolesMapping rolesMapping) throws IOException {
-	    IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
-	            .consistencyLevel(WriteConsistencyLevel.DEFAULT)
-	            .source(roles.toMap());
-	    if(logger.isDebugEnabled()) {
-	        logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(),true, true));
-	    }
-	    
-	    String rID = esClient.index(rolesIR).actionGet().getId();
-	    logger.debug("Roles ID: '{}'", rID);
-	    
-	    IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE).id(SEARCHGUARD_CONFIG_ID).refresh(true)
-	            .consistencyLevel(WriteConsistencyLevel.DEFAULT)
-	            .source(rolesMapping.toMap());
-	    if(logger.isDebugEnabled()) {
-	        logger.debug("Built rolesMapping request: {}", XContentHelper.convertToJson(mappingIR.source(), true, true));
-	    }
-	    String rmID = esClient.index(mappingIR).actionGet().getId();
-	    logger.debug("rolesMapping ID: '{}'", rmID);
-	    
-	    // force a config reload of all SG docs
-	    ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS)).actionGet();
-	    if ( cur.getNodes().length > 0 ) {
-	        logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
-	    }else {
-	        logger.warn("Failed to reloaded configs", cur.getNodes().length);
-	    }
-	}
+        if(logger.isDebugEnabled()) {
+            logger.debug("Read in rolesMapping {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+        }
+        return new SearchGuardRolesMapping().load(response.getSource());
+    }
 
-	@Override
-	public int order() {
-		// need to run before search guard
-		return Integer.MIN_VALUE;
-	}
+    private void writeACL(Client esClient, SearchGuardRoles roles, SearchGuardRolesMapping rolesMapping)
+            throws IOException {
+        IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID)
+                .refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT).source(roles.toMap());
+        if(logger.isDebugEnabled()) {
+            logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(),true, true));
+        }
+        String rID = esClient.index(rolesIR).actionGet().getId();
+        logger.debug("Roles ID: '{}'", rID);
 
+        IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE)
+                .id(SEARCHGUARD_CONFIG_ID).refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT)
+                .source(rolesMapping.toMap());
+        if(logger.isDebugEnabled()) {
+            logger.debug("Built rolesMapping request: {}", XContentHelper.convertToJson(mappingIR.source(), true, true));
+        }
+        String rmID = esClient.index(mappingIR).actionGet().getId();
+        logger.debug("rolesMapping ID: '{}'", rmID);
+
+        // force a config reload
+        ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS))
+                .actionGet();
+
+        if (cur.getNodes().length > 0) {
+            logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
+        }else {
+            logger.warn("Failed to reloaded configs", cur.getNodes().length);
+        }
+    }
+
+    @Override
+    public int order() {
+        // need to run before search guard
+        return Integer.MIN_VALUE;
+    }
 }
