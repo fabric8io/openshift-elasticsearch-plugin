@@ -71,6 +71,7 @@ public interface ConfigurationSettings {
 	static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY = "io.fabric8.elasticsearch.kibana.mapping.empty";
 	static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
 	static final String OPENSHIFT_ROLES = "X-OpenShift-Roles";
+	@Deprecated
 	static final String OPENSHIFT_ALLOW_CLUSTER_READER = "openshift.operations.allow_cluster_reader";
 
 	static final String OPENSHIFT_CONFIG_OPS_PROJECTS = "openshift.operations.project.names";
@@ -83,6 +84,7 @@ public interface ConfigurationSettings {
 	static final String[] DEFAULT_WHITELISTED_USERS = new String[] { "$logging.$infra.$fluentd",
 			"$logging.$infra.$kibana", "$logging.$infra.$curator" };
 	
+	@Deprecated
 	static final boolean DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER = false;
 
 	/**
