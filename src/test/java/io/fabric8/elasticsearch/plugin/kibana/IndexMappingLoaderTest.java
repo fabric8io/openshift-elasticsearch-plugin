@@ -27,23 +27,13 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class IndexMappingLoaderTest {
 
-    @Test
-    public void testInitializationWithDefaults() {
-        Settings settings = Settings.EMPTY;
-        IndexMappingLoader loader = new IndexMappingLoader(settings);
-        assertNotNull(loader.getApplicationMappingsTemplate());
-        assertNotNull(loader.getOperationsMappingsTemplate());
-    }
-
-    @Test
+    @Test(expected = RuntimeException.class)
     public void testInitializationWithDefaultsWhenFilesNotFound() {
         Settings settings = Settings.builder()
                 .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP,"/tmp/foo")
                 .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS,"/tmp/foo")
                 .build();
         IndexMappingLoader loader = new IndexMappingLoader(settings);
-        assertNotNull(loader.getApplicationMappingsTemplate());
-        assertNotNull(loader.getOperationsMappingsTemplate());
     }
 
     @Test
@@ -51,14 +41,17 @@ public class IndexMappingLoaderTest {
         Path tmp = Files.createTempDirectory(null);
         Path appFile = Files.createTempFile(tmp, "app",".json");
         Path oppFile = Files.createTempFile(tmp, "opp",".json");
+        Path empty = Files.createTempFile(tmp, "empty",".json");
         
         Settings settings = Settings.builder()
                 .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP,appFile.toString())
                 .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS,oppFile.toString())
+                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY,empty.toString())
                 .build();
         IndexMappingLoader loader = new IndexMappingLoader(settings);
         assertNotNull(loader.getApplicationMappingsTemplate());
         assertNotNull(loader.getOperationsMappingsTemplate());
+        assertNotNull(loader.getEmptyProjectMappingsTemplate());
     }
 
 }
