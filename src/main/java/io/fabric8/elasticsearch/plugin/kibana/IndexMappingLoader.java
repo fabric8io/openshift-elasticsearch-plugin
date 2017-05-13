@@ -29,9 +29,6 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class IndexMappingLoader implements ConfigurationSettings {
     
-    public static final String DEFAULT_OPERATIONS_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/operations_mapping.json";
-    public static final String DEFAULT_APPLICATIONS_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/applications_mapping.json";
-    public static final String DEFAULT_EMPTY_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/empty_project_mappings.json";
     private static ESLogger logger = Loggers.getLogger(IndexMappingLoader.class);
     private final String appMappingsTemplate;
     private final String opsMappingsTemplate;
@@ -39,12 +36,12 @@ public class IndexMappingLoader implements ConfigurationSettings {
     
     @Inject
     public IndexMappingLoader(final Settings settings) {
-        appMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP,DEFAULT_APPLICATIONS_MAPPING);
-        opsMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS,DEFAULT_OPERATIONS_MAPPING);
-        emptyProjectMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY,DEFAULT_EMPTY_MAPPING);
+        appMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP);
+        opsMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS);
+        emptyProjectMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY);
     }
     
-    private String loadMapping(final Settings settings, final String key, final String keyDefault) {
+    private String loadMapping(final Settings settings, final String key) {
         String mapping = settings.get(key);
         if(mapping != null && new File(mapping).exists()) {
             logger.info("Trying to load Kibana mapping for {} from plugin: {}", key, mapping);
@@ -55,14 +52,7 @@ public class IndexMappingLoader implements ConfigurationSettings {
                 logger.error("Unable to load the Kibana mapping specified by {}: {}", key, e, mapping);
             }
         }
-        logger.info("Loading default Kibana mapping for {} from plugin: {}", key, keyDefault);
-        try {
-            final ClassLoader classLoader = getClass().getClassLoader();
-            return IOUtils.toString(classLoader.getResourceAsStream(keyDefault));
-        }catch(Exception e) {
-            logger.error("Unable to load the Kibana mapping specified by {}: {}", key, e, keyDefault);
-        }
-        return null;
+        throw new RuntimeException("Unable to load index mapping for " + key + ".  The key was not in the settings or it specified a file that does not exists.");
     }
     
     public String getApplicationMappingsTemplate() {
