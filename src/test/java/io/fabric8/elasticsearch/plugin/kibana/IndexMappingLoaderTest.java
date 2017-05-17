@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.kibana;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,14 +31,14 @@ public class IndexMappingLoaderTest {
     @Test(expected = RuntimeException.class)
     public void testInitializationWithDefaultsWhenFilesNotFound() {
         Settings settings = Settings.builder()
-                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP,"/tmp/foo")
-                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS,"/tmp/foo")
-                .build();
-        IndexMappingLoader loader = new IndexMappingLoader(settings);
+                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP, "/tmp/foo")
+                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY, "/tmp/foo")
+                .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS, "/tmp/foo").build();
+        new IndexMappingLoader(settings);
     }
 
     @Test
-    public void testInitializationFromFiles() throws Exception{
+    public void testInitializationFromFiles() throws Exception {
         Path tmp = Files.createTempDirectory(null);
         Path appFile = Files.createTempFile(tmp, "app",".json");
         Path oppFile = Files.createTempFile(tmp, "opp",".json");

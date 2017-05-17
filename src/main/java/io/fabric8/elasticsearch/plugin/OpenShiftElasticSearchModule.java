@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.fabric8.elasticsearch.plugin;
 
+package io.fabric8.elasticsearch.plugin;
 
 import org.elasticsearch.common.inject.AbstractModule;
 
@@ -23,20 +23,17 @@ import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
 
 /**
- * The module controls loading and specific implementations
- * we want to use
+ * The module controls loading and specific implementations we want to use
  *
  */
 public class OpenShiftElasticSearchModule extends AbstractModule {
 
-	@Override
-	protected void configure() {
+    @Override
+    protected void configure() {
 
-		bind(UserProjectCache.class)
-			.to(UserProjectCacheMapAdapter.class)
-			.asEagerSingleton();
-		
-		bind(DynamicACLFilter.class).asEagerSingleton();
-	}
+        bind(UserProjectCache.class).to(UserProjectCacheMapAdapter.class).asEagerSingleton();
+
+        bind(DynamicACLFilter.class).asEagerSingleton();
+    }
 
 }

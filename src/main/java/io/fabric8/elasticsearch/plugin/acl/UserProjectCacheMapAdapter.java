@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
@@ -29,70 +30,67 @@ import org.elasticsearch.common.settings.Settings;
 
 import io.netty.util.internal.ConcurrentSet;
 
-
 /**
  * A simple cache implementation for users->projects
- *  
+ * 
  * @author jeff.cantrill
  *
  */
 public class UserProjectCacheMapAdapter implements UserProjectCache {
-	
-	private final ESLogger logger;
-	private final Map<SimpleImmutableEntry<String, String>, Set<String>> cache = new ConcurrentHashMap<>();
-	private final Map<SimpleImmutableEntry<String, String>, Long> createTimes = new ConcurrentHashMap<>();
-	private final Map<SimpleImmutableEntry<String, String>, Boolean> operationsUsers = new ConcurrentHashMap<>();
-	private final Set<String> projects = new ConcurrentSet<>();
-	private static final long EXPIRE = 1000 * 60; //1 MIN 
 
-	@Inject
-	public UserProjectCacheMapAdapter(final Settings settings){
-		this.logger = Loggers.getLogger(getClass(), settings);
-	}
-	
-	@Override
-	public Map<SimpleImmutableEntry<String, String>, Set<String>> getUserProjects() {
-		return Collections.unmodifiableMap(cache);
-	}
+    private final ESLogger logger;
+    private final Map<SimpleImmutableEntry<String, String>, Set<String>> cache = new ConcurrentHashMap<>();
+    private final Map<SimpleImmutableEntry<String, String>, Long> createTimes = new ConcurrentHashMap<>();
+    private final Map<SimpleImmutableEntry<String, String>, Boolean> operationsUsers = new ConcurrentHashMap<>();
+    private final Set<String> projects = new ConcurrentSet<>();
+    private static final long EXPIRE = 1000 * 60; // 1 MIN
 
+    @Inject
+    public UserProjectCacheMapAdapter(final Settings settings) {
+        this.logger = Loggers.getLogger(getClass(), settings);
+    }
 
-	@Override
-	public boolean hasUser(String user, String token) {
-		SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
-		return cache.containsKey(sie);
-	}
-	
+    @Override
+    public Map<SimpleImmutableEntry<String, String>, Set<String>> getUserProjects() {
+        return Collections.unmodifiableMap(cache);
+    }
 
-	@Override
-	public boolean isOperationsUser(String user, String token) {
-		SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
-		return operationsUsers.containsKey(sie) && operationsUsers.get(sie);
-	}
+    @Override
+    public boolean hasUser(String user, String token) {
+        SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
+        return cache.containsKey(sie);
+    }
 
-	@Override
-	public void update(final String user, String token, final Set<String> projects, boolean operationsUser) {
-		SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
-		cache.put(sie, new HashSet<>(projects));
-		createTimes.put(sie, System.currentTimeMillis() + EXPIRE);
-		operationsUsers.put(sie, operationsUser);
-		this.projects.addAll(projects);
-	}
-	
-	@Override
-	public void expire(){
-		final long now = System.currentTimeMillis();
-		for (Map.Entry<SimpleImmutableEntry<String, String>, Long> entry : new HashSet<>(createTimes.entrySet())) {
-			if(now > entry.getValue()){
-				logger.debug("Expiring cache entry for {}", entry.getKey());
-				cache.remove(entry.getKey());
-				createTimes.remove(entry.getKey());
-				operationsUsers.remove(entry.getKey());
-			}
-		}
-	}
+    @Override
+    public boolean isOperationsUser(String user, String token) {
+        SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
+        return operationsUsers.containsKey(sie) && operationsUsers.get(sie);
+    }
 
-	@Override
-	public Set<String> getAllProjects() {
-		return Collections.unmodifiableSet(projects);
-	}	
+    @Override
+    public void update(final String user, String token, final Set<String> projects, boolean operationsUser) {
+        SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>(user, token);
+        cache.put(sie, new HashSet<>(projects));
+        createTimes.put(sie, System.currentTimeMillis() + EXPIRE);
+        operationsUsers.put(sie, operationsUser);
+        this.projects.addAll(projects);
+    }
+
+    @Override
+    public void expire() {
+        final long now = System.currentTimeMillis();
+        for (Map.Entry<SimpleImmutableEntry<String, String>, Long> entry : new HashSet<>(createTimes.entrySet())) {
+            if (now > entry.getValue()) {
+                logger.debug("Expiring cache entry for {}", entry.getKey());
+                cache.remove(entry.getKey());
+                createTimes.remove(entry.getKey());
+                operationsUsers.remove(entry.getKey());
+            }
+        }
+    }
+
+    @Override
+    public Set<String> getAllProjects() {
+        return Collections.unmodifiableSet(projects);
+    }
 }
