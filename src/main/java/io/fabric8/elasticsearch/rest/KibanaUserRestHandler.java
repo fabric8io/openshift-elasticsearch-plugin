@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.rest;
 
 import org.elasticsearch.client.Client;
@@ -29,22 +30,25 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter;
 
 public class KibanaUserRestHandler extends BaseRestHandler implements ConfigurationSettings {
-	
-	private final ESLogger logger;
-	
-	@Inject
-	public KibanaUserRestHandler(Settings settings, RestController controller, Client client) {
-		super(settings, controller, client);
-		this.logger = Loggers.getLogger(KibanaUserRestHandler.class);
 
-		boolean reindexEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG, OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
-		logger.debug("Starting with Kibana reindexing feature enabled: {}", reindexEnabled);
-		
-		if ( reindexEnabled ) {
-			controller.registerFilter(new KibanaUserReindexFilter(settings, logger));
-		}
-	}
+    private final ESLogger logger;
 
-	@Override
-	public void handleRequest(RestRequest request, RestChannel channel, Client client) throws Exception { return; }
+    @Inject
+    public KibanaUserRestHandler(Settings settings, RestController controller, Client client) {
+        super(settings, controller, client);
+        this.logger = Loggers.getLogger(KibanaUserRestHandler.class);
+
+        boolean reindexEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG,
+                OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
+        logger.debug("Starting with Kibana reindexing feature enabled: {}", reindexEnabled);
+
+        if (reindexEnabled) {
+            controller.registerFilter(new KibanaUserReindexFilter(settings, logger));
+        }
+    }
+
+    @Override
+    public void handleRequest(RestRequest request, RestChannel channel, Client client) throws Exception {
+        return;
+    }
 }

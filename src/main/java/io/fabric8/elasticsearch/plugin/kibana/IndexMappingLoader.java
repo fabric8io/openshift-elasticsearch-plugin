@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.kibana;
 
 import java.io.File;
@@ -32,11 +33,12 @@ public class IndexMappingLoader implements ConfigurationSettings {
     public static final String DEFAULT_OPERATIONS_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/operations_mapping.json";
     public static final String DEFAULT_APPLICATIONS_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/applications_mapping.json";
     public static final String DEFAULT_EMPTY_MAPPING = "io/fabric8/elasticsearch/plugin/kibana/empty_project_mappings.json";
+
     private static ESLogger logger = Loggers.getLogger(IndexMappingLoader.class);
     private final String appMappingsTemplate;
     private final String opsMappingsTemplate;
     private final String emptyProjectMappingsTemplate;
-    
+
     @Inject
     public IndexMappingLoader(final Settings settings) {
         appMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP,DEFAULT_APPLICATIONS_MAPPING);
@@ -46,12 +48,12 @@ public class IndexMappingLoader implements ConfigurationSettings {
     
     private String loadMapping(final Settings settings, final String key, final String keyDefault) {
         String mapping = settings.get(key);
-        if(mapping != null && new File(mapping).exists()) {
+        if (mapping != null && new File(mapping).exists()) {
             logger.info("Trying to load Kibana mapping for {} from plugin: {}", key, mapping);
             try {
                 InputStream stream = new FileInputStream(mapping.toString());
                 return IOUtils.toString(stream);
-            }catch(Exception e) {
+            } catch (Exception e) {
                 logger.error("Unable to load the Kibana mapping specified by {}: {}", key, e, mapping);
             }
         }
@@ -64,7 +66,7 @@ public class IndexMappingLoader implements ConfigurationSettings {
         }
         return null;
     }
-    
+
     public String getApplicationMappingsTemplate() {
         return appMappingsTemplate;
     }
@@ -72,7 +74,7 @@ public class IndexMappingLoader implements ConfigurationSettings {
     public String getOperationsMappingsTemplate() {
         return opsMappingsTemplate;
     }
-    
+
     public String getEmptyProjectMappingsTemplate() {
         return emptyProjectMappingsTemplate;
     }

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.io.IOException;
@@ -65,7 +66,7 @@ import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
  * REST filter to update the ACL when a user first makes a request
- * 
+ *
  * @author jeff.cantrill
  *
  */
@@ -89,7 +90,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
     private Boolean enabled;
 
-    private final String cdm_project_prefix;
+    private final String cdmProjectPrefix;
 
     private KibanaSeed kibanaSeed;
 
@@ -107,7 +108,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
 
         this.operationsProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
-        this.cdm_project_prefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
+        this.cdmProjectPrefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
                 OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 
         logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
@@ -146,27 +147,27 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         Settings clientSettings = settingsBuilder.build();
 
         this.esClient = TransportClient.builder().settings(clientSettings).addPlugin(SearchGuardSSLPlugin.class)
-                .addPlugin(SearchGuardPlugin.class) // needed for config update
-                                                    // action only
+                .addPlugin(SearchGuardPlugin.class) // needed for config update action only
                 .build();
         try {
             this.esClient.addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
-        }catch(ConnectTransportException e) {
+        } catch (ConnectTransportException e) {
             this.logger.warn("Cluster may still be initializing. Please be patient: {}", e.getMessage());
         }
     }
-    
+
     @Override
     public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
-        boolean continue_processing = true;
+        boolean continueProcessing = true;
 
         try {
             if (enabled) {
                 // grab the kibana version here out of "kbn-version" if we can
                 // -- otherwise use the config one
                 String kbnVersion = getKibanaVersion(request);
-                if (StringUtils.isEmpty(kbnVersion))
+                if (StringUtils.isEmpty(kbnVersion)) {
                     kbnVersion = kibanaVersion;
+                }
 
                 final String user = getUser(request);
                 final String token = getBearerToken(request);
@@ -190,11 +191,11 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         } catch (ElasticsearchSecurityException ese) {
             logger.info("Could not authenticate user");
             channel.sendResponse(new BytesRestResponse(RestStatus.UNAUTHORIZED));
-            continue_processing = false;
+            continueProcessing = false;
         } catch (Exception e) {
             logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
         } finally {
-            if (continue_processing) {
+            if (continueProcessing) {
                 chain.continueProcessing(request, channel);
             }
         }
@@ -233,10 +234,11 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             cache.update(user, token, projects, isOperationsUser);
 
             Set<String> roles = new HashSet<String>();
-            if (isOperationsUser)
+            if (isOperationsUser) {
                 roles.add("operations-user");
+            }
 
-            kibanaSeed.setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, cdm_project_prefix,
+            kibanaSeed.setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, cdmProjectPrefix,
                     settings);
         } catch (KubernetesClientException e) {
             logger.error("Error retrieving project list for '{}'", e, user);
@@ -259,8 +261,9 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         try (OpenShiftClient client = new DefaultOpenShiftClient(builder.build())) {
             List<Project> projects = client.projects().list().getItems();
             for (Project project : projects) {
-                if (!isBlacklistProject(project.getMetadata().getName()))
+                if (!isBlacklistProject(project.getMetadata().getName())) {
                     names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
+                }
             }
         }
         return names;
@@ -275,16 +278,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         boolean allowed = false;
         try (NamespacedOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
             logger.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
-            SubjectAccessReviewResponse response = osClient.inAnyNamespace()
-                    .subjectAccessReviews()
-                    .createNew()
-                    .withVerb("get")
-                    .withResource("pods/log")
-                    .done();
+            SubjectAccessReviewResponse response = osClient.inAnyNamespace().subjectAccessReviews().createNew()
+                    .withVerb("get").withResource("pods/log").done();
             allowed = response.getAllowed();
         } catch (Exception e) {
             logger.error("Exception determining user's '{}' role.", e, user);
-        }finally {
+        } finally {
             logger.debug("User '{}' isOperationsUser: {}", user, allowed);
         }
         return allowed;
@@ -300,13 +299,13 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             SearchGuardRolesMapping rolesMapping = readRolesMappingACL(esClient);
 
             logger.debug("Syncing from cache to ACL...");
-            roles.syncFrom(cache, userProfilePrefix, cdm_project_prefix);
+            roles.syncFrom(cache, userProfilePrefix, cdmProjectPrefix);
             rolesMapping.syncFrom(cache, userProfilePrefix);
 
             writeACL(esClient, roles, rolesMapping);
         } catch (Exception e) {
             logger.error("Exception while syncing ACL with cache", e);
-        }finally {
+        } finally {
             lock.unlock();
         }
     }
@@ -314,11 +313,8 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private SearchGuardRoles readRolesACL(Client esClient) throws IOException {
         GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID)
                 .setRefresh(true).request();
-        GetResponse response = esClient.get(getRequest).actionGet(); // need to
-                                                                     // worry
-                                                                     // about
-                                                                     // timeout?
-        if(logger.isDebugEnabled()) {
+        GetResponse response = esClient.get(getRequest).actionGet();
+        if (logger.isDebugEnabled()) {
             logger.debug("Read in roles {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
         }
         return new SearchGuardRoles().load(response.getSource());
@@ -327,13 +323,11 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private SearchGuardRolesMapping readRolesMappingACL(Client esClient) throws IOException {
         GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID)
                 .setRefresh(true).request();
-        GetResponse response = esClient.get(getRequest).actionGet(); // need to
-                                                                     // worry
-                                                                     // about
-                                                                     // timeout?
+        GetResponse response = esClient.get(getRequest).actionGet();
 
-        if(logger.isDebugEnabled()) {
-            logger.debug("Read in rolesMapping {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+        if (logger.isDebugEnabled()) {
+            logger.debug("Read in rolesMapping {}",
+                    XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
         }
         return new SearchGuardRolesMapping().load(response.getSource());
     }
@@ -342,28 +336,29 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             throws IOException {
         IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID)
                 .refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT).source(roles.toMap());
-        if(logger.isDebugEnabled()) {
-            logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(),true, true));
+        if (logger.isDebugEnabled()) {
+            logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(), true, true));
         }
-        String rID = esClient.index(rolesIR).actionGet().getId();
-        logger.debug("Roles ID: '{}'", rID);
+        String rolesID = esClient.index(rolesIR).actionGet().getId();
+        logger.debug("Roles ID: '{}'", rolesID);
 
         IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE)
                 .id(SEARCHGUARD_CONFIG_ID).refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT)
                 .source(rolesMapping.toMap());
-        if(logger.isDebugEnabled()) {
-            logger.debug("Built rolesMapping request: {}", XContentHelper.convertToJson(mappingIR.source(), true, true));
+        if (logger.isDebugEnabled()) {
+            logger.debug("Built rolesMapping request: {}",
+                    XContentHelper.convertToJson(mappingIR.source(), true, true));
         }
         String rmID = esClient.index(mappingIR).actionGet().getId();
         logger.debug("rolesMapping ID: '{}'", rmID);
 
         // force a config reload
-        ConfigUpdateResponse cur = esClient.execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS))
-                .actionGet();
+        ConfigUpdateResponse cur = esClient
+                .execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS)).actionGet();
 
         if (cur.getNodes().length > 0) {
             logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
-        }else {
+        } else {
             logger.warn("Failed to reloaded configs", cur.getNodes().length);
         }
     }

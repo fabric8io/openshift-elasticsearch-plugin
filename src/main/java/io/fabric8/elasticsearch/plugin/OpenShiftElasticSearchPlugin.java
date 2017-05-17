@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin;
 
 import java.util.Collection;
@@ -29,36 +30,36 @@ import io.fabric8.elasticsearch.rest.KibanaUserRestHandler;
 
 public class OpenShiftElasticSearchPlugin extends Plugin {
 
-	@Override
-	public String name() {
-		return "openshift-elasticsearch-plugin";
-	}
-
-	@Override
-	public String description() {
-		return "OpenShift ElasticSearch Plugin";
-	}
-
-	public void onModule(ActionModule actionModule) {
-		actionModule.registerFilter(KibanaUserReindexAction.class);
+    @Override
+    public String name() {
+        return "openshift-elasticsearch-plugin";
     }
-	
-	public void onModule(RestModule restModule) {
-		restModule.addRestAction(KibanaUserRestHandler.class);
-	}	
-	
-	@SuppressWarnings("rawtypes")
-	@Override
-	public Collection<Class<? extends LifecycleComponent>> nodeServices() {
-		Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
-		services.add(OpenShiftElasticSearchService.class);
-		return services;
-	}
-	
-	@Override
-	public Collection<Module> nodeModules() {
-		Collection<Module> modules = Lists.newArrayList();
-		modules.add(new OpenShiftElasticSearchModule());
-		return modules;
-	}
+
+    @Override
+    public String description() {
+        return "OpenShift ElasticSearch Plugin";
+    }
+
+    public void onModule(ActionModule actionModule) {
+        actionModule.registerFilter(KibanaUserReindexAction.class);
+    }
+
+    public void onModule(RestModule restModule) {
+        restModule.addRestAction(KibanaUserRestHandler.class);
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Override
+    public Collection<Class<? extends LifecycleComponent>> nodeServices() {
+        Collection<Class<? extends LifecycleComponent>> services = Lists.newArrayList();
+        services.add(OpenShiftElasticSearchService.class);
+        return services;
+    }
+
+    @Override
+    public Collection<Module> nodeModules() {
+        Collection<Module> modules = Lists.newArrayList();
+        modules.add(new OpenShiftElasticSearchModule());
+        return modules;
+    }
 }
