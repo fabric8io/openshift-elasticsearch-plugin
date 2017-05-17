@@ -18,6 +18,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 
 import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
 
+import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,12 +30,15 @@ import java.util.Set;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentType;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
-public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, ConfigurationSettings {
+public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, ConfigurationSettings, SearchGuardACLDocument {
 
     public static final String ROLE_PREFIX = "gen";
     public static final String PROJECT_PREFIX = ROLE_PREFIX + "_project";
@@ -259,5 +263,20 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
         }
 
         return output;
+    }
+    
+    @Override
+    public String getType() {
+        return ConfigurationSettings.SEARCHGUARD_ROLE_TYPE;
+    }
+
+    public XContentBuilder toXContentBuilder() {
+        try {
+            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+            builder.map(toMap());
+            return builder;
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to convert the SearchGuardRoles to JSON", e);
+        }
     }
 }

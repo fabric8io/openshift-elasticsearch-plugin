@@ -3,17 +3,10 @@ This is an OpenShift plugin to ElasticSearch to:
 
 * Dynamically update the SearchGuard ACL based on a user's name
 * Transform kibana index requests to support multitenant deployments
-* Seed the Searchguard index `config`, `roles`, `rolesmapping`, and `actiongroups` types
 
 ## Configuring your initial ACLs
-With the update to use Searchguard-2 and Searchguard-SSL for ES 2.3.x, the
-OpenShift-Elasticsearch-Plugin now populates the initial ACL and configuration in
-a manner similar to how the sgadmin tool from [Searchguard](https://github.com/floragunncom/search-guard#dynamic-configuration)
-describes.  Configurations are read in from `searchguard.config.path` (Default: `/opt/app-root/src/sgconfig/`).
-The files should match the name patterns ["sg_config.yml", "sg_roles.yml",
-"sg_rolesmapping.yml", "sg_actiongroups.yml"].  The plugin does not use internal_users
-as Searchguard does. Roles are used to define actions that are allowed for
-particular indices and types. RolesMapping map user names to specific roles.
+With the update to use Searchguard-2 and Searchguard-SSL for ES 2.4.x, the
+OpenShift-Elasticsearch-Plugin assumes the initial ACLs are seeded when the cluster is started.
 
 You can view sample configurations [here] (./samples/).
 
@@ -40,16 +33,7 @@ In your config file:
 openshift.operations.project.names: ["default", "openshift", "openshift-infra"]
 ```
 
-The defaults are "default", "openshift", "openshift-infra", "kube-system".
-The names must all be in lower-case to be properly matched.
-
-## Configure a 'cluster-reader' user to access operation logs
-To allow users that are cluster-reader or cluster-admin to be able to see the
-operations logs within Kibana, add the following line to your Elasticsearch config
-file:
-```
-openshift.operations.allow_cluster_reader: true
-```
+The [defaults](https://github.com/fabric8io/openshift-elasticsearch-plugin/blob/master/src/main/java/io/fabric8/elasticsearch/plugin/ConfigurationSettings.java#L78) must all be in lower-case to be properly matched.
 
 ## Additional Configuration Parameters
 The following additional parameters can be set in set in `elasticsearch.yml`:
@@ -66,6 +50,9 @@ The following additional parameters can be set in set in `elasticsearch.yml`:
   `project.test.$uuid.YYYY.MM.DD`.  In this case, use `"project"` as the
   prefix - do not include the trailing `.`.|
 
+*Note*: The `io.fabric8.elasticsearch.kibana.mapping.*` properties are required and must be defined for the plugin to function. A sample file
+may be found in the `samples` folder.
+
 ## Development
 Following are the dependencies
 
@@ -73,8 +60,33 @@ Following are the dependencies
 * [Search-Guard 2.4.4.10] (https://github.com/floragunncom/search-guard/tree/2.4.4.10)
 * [Search-Guard-SSL 2.4.4.19] (https://github.com/floragunncom/search-guard-ssl/tree/2.4.4.19)
 
-### Debugging and running from Eclipse
+### Remote Debugging deployed to Openshift
 
+* Edit the Elasticsearch deployment config:
+```
+$oc edit dc/$ES_DCNAME
+
+```
+* Add environment variable:
+
+```
+...
+    spec:
+      containers:
+      - env:
+        - name: ES_JAVA_OPTS
+          value: -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=4021
+...
+``` 
+* Forward the debug port 
+```
+oc port-forward $ES_PODNAME 4000:4021
+```
+* Attach Eclipse debugger to forwarded port
+![Debug args](images/eclipse_port_fwd.png)
+
+### Debugging and running from Eclipse
+*Note:* Mileage may vary here as this has not been verified since the plugin was compatible with ES1.7x 
 * Install ES
 
 * Create a run configuration
