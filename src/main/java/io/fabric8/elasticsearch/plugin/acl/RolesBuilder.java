@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.ArrayList;
@@ -22,14 +23,14 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
 
 public class RolesBuilder {
 
-	private List<Roles> roles = new ArrayList<Roles>();
-	
-	public List<Roles> build() {
-		return roles;
-	}
+    private List<Roles> roles = new ArrayList<Roles>();
 
-	public RolesBuilder addRole(Roles role) {
-		roles.add(role);
-		return this;
-	}
+    public List<Roles> build() {
+        return roles;
+    }
+
+    public RolesBuilder addRole(Roles role) {
+        roles.add(role);
+        return this;
+    }
 }

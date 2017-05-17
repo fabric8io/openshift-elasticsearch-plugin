@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.kibana;
 
 import java.io.File;
@@ -28,12 +29,12 @@ import org.elasticsearch.common.settings.Settings;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class IndexMappingLoader implements ConfigurationSettings {
-    
+
     private static ESLogger logger = Loggers.getLogger(IndexMappingLoader.class);
     private final String appMappingsTemplate;
     private final String opsMappingsTemplate;
     private final String emptyProjectMappingsTemplate;
-    
+
     @Inject
     public IndexMappingLoader(final Settings settings) {
         appMappingsTemplate = loadMapping(settings, OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP);
@@ -43,18 +44,18 @@ public class IndexMappingLoader implements ConfigurationSettings {
     
     private String loadMapping(final Settings settings, final String key) {
         String mapping = settings.get(key);
-        if(mapping != null && new File(mapping).exists()) {
+        if (mapping != null && new File(mapping).exists()) {
             logger.info("Trying to load Kibana mapping for {} from plugin: {}", key, mapping);
             try {
                 InputStream stream = new FileInputStream(mapping.toString());
                 return IOUtils.toString(stream);
-            }catch(Exception e) {
+            } catch (Exception e) {
                 logger.error("Unable to load the Kibana mapping specified by {}: {}", key, e, mapping);
             }
         }
         throw new RuntimeException("Unable to load index mapping for " + key + ".  The key was not in the settings or it specified a file that does not exists.");
     }
-    
+
     public String getApplicationMappingsTemplate() {
         return appMappingsTemplate;
     }
@@ -62,7 +63,7 @@ public class IndexMappingLoader implements ConfigurationSettings {
     public String getOperationsMappingsTemplate() {
         return opsMappingsTemplate;
     }
-    
+
     public String getEmptyProjectMappingsTemplate() {
         return emptyProjectMappingsTemplate;
     }

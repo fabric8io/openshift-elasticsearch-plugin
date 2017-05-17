@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin;
 
 import java.util.concurrent.Executors;
@@ -35,78 +36,77 @@ import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 
 /**
- * Service to handle spawning threads, lifecycles,
- * and REST filter registrations
+ * Service to handle spawning threads, lifecycles, and REST filter registrations
+ * 
  * @author jeff.cantrill
  *
  */
-public class OpenShiftElasticSearchService 
-	extends AbstractLifecycleComponent<OpenShiftElasticSearchService>
-	implements ConfigurationSettings {
+public class OpenShiftElasticSearchService extends AbstractLifecycleComponent<OpenShiftElasticSearchService>
+        implements ConfigurationSettings {
 
+    private final ESLogger logger;
+    private final UserProjectCache cache;
+    private final Settings settings;
+    private ScheduledThreadPoolExecutor scheduler;
 
-	private final ESLogger logger;
-	private final UserProjectCache cache;
-	private final Settings settings;
-	private ScheduledThreadPoolExecutor scheduler;
-	
-	@SuppressWarnings("rawtypes")
-	private ScheduledFuture scheduledFuture;
+    @SuppressWarnings("rawtypes")
+    private ScheduledFuture scheduledFuture;
 
-	@Inject
-	public OpenShiftElasticSearchService(final Settings settings, final Client esClient, final RestController restController, 
-			final UserProjectCache cache, final DynamicACLFilter aclFilter) {
-		super(settings);
-		this.settings = settings;
-		this.logger = Loggers.getLogger(getClass(), settings);
-		this.cache = cache;
-		restController.registerFilter(aclFilter);
-	}
+    @Inject
+    public OpenShiftElasticSearchService(final Settings settings, final Client esClient,
+            final RestController restController, final UserProjectCache cache, final DynamicACLFilter aclFilter) {
+        super(settings);
+        this.settings = settings;
+        this.logger = Loggers.getLogger(getClass(), settings);
+        this.cache = cache;
+        restController.registerFilter(aclFilter);
+    }
 
-	@Override
-	protected void doStart() throws ElasticsearchException {
-		
-		boolean dynamicEnabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-		logger.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
-	
-		if ( dynamicEnabled ) {
-			//expiration thread
-			logger.debug("Starting the expiration thread...");
-	        this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
-	                EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
-	        this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-	        this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-	        
-	        Runnable expire = new Runnable() {
-				@Override
-				public void run() {
-					cache.expire();
-				}
-			};
-	        this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
-		}
-		
-		logger.debug("Started");
-  
-	}
+    @Override
+    protected void doStart() throws ElasticsearchException {
 
-	@Override
-	protected void doStop() throws ElasticsearchException {
-		//cleanup expire thread
-        FutureUtils.cancel(this.scheduledFuture);
-        if(scheduler != null){
-        	this.scheduler.shutdown();
+        boolean dynamicEnabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG,
+                OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+        logger.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
+
+        if (dynamicEnabled) {
+            // expiration thread
+            logger.debug("Starting the expiration thread...");
+            this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
+                    EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
+            this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+            this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+
+            Runnable expire = new Runnable() {
+                @Override
+                public void run() {
+                    cache.expire();
+                }
+            };
+            this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
         }
-		logger.debug("Stopped");
-	}
 
-	@Override
-	protected void doClose() throws ElasticsearchException {
+        logger.debug("Started");
+
+    }
+
+    @Override
+    protected void doStop() throws ElasticsearchException {
+        // cleanup expire thread
         FutureUtils.cancel(this.scheduledFuture);
-        if(this.scheduler != null){
-        	this.scheduler.shutdown();
+        if (scheduler != null) {
+            this.scheduler.shutdown();
         }
-		logger.debug("Closed");
-	}
+        logger.debug("Stopped");
+    }
+
+    @Override
+    protected void doClose() throws ElasticsearchException {
+        FutureUtils.cancel(this.scheduledFuture);
+        if (this.scheduler != null) {
+            this.scheduler.shutdown();
+        }
+        logger.debug("Closed");
+    }
 
 }
