@@ -55,6 +55,8 @@ import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.transport.RemoteTransportException;
 
+import com.floragunn.searchguard.support.ConfigConstants;
+
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class KibanaSeed implements ConfigurationSettings {
@@ -80,7 +82,7 @@ public class KibanaSeed implements ConfigurationSettings {
         this.mappingLoader = loader;
     }
 
-    public void setDashboards(String user, Set<String> projects, Set<String> roles, Client esClient, String kibanaIndex,
+    public void setDashboards(String user, Set<String> projects, Set<String> roles, Client client, String kibanaIndex, 
             String kibanaVersion, final String projectPrefix, final Settings settings) {
 
         logger.debug("Begin setDashboards:  projectPrefix '{}' for user '{}' projects '{}' kibanaIndex '{}'",
@@ -89,13 +91,13 @@ public class KibanaSeed implements ConfigurationSettings {
         // We want to seed the Kibana user index initially
         // since the logic from Kibana has changed to create before this plugin
         // starts...
-        AtomicBoolean changed = new AtomicBoolean(initialSeedKibanaIndex(user, kibanaIndex, esClient));
+        AtomicBoolean changed = new AtomicBoolean(initialSeedKibanaIndex(user, kibanaIndex, client));
 
         boolean isAdmin = false;
         // GET .../.kibana/index-pattern/_search?pretty=true&fields=
         // compare results to projects; handle any deltas (create, delete?)
 
-        Set<String> indexPatterns = getIndexPatterns(user, esClient, kibanaIndex, projectPrefix);
+        Set<String> indexPatterns = getIndexPatterns(user, client, kibanaIndex, projectPrefix);
         logger.debug("Found '{}' Index patterns for user", indexPatterns.size());
 
         // Check roles here, if user is a cluster-admin we should add
@@ -122,12 +124,12 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if (isAdmin) {
             logger.debug("Adding to alias for {}", user);
-            buildAdminAlias(user, sortedProjects, esClient, kibanaIndex, kibanaVersion, projectPrefix);
+            buildAdminAlias(user, sortedProjects, client, kibanaIndex, kibanaVersion, projectPrefix);
         }
 
         // If none have been set yet
         if (indexPatterns.isEmpty()) {
-            create(user, sortedProjects, true, esClient, kibanaIndex, kibanaVersion, projectPrefix);
+            create(user, sortedProjects, true, client, kibanaIndex, kibanaVersion, projectPrefix);
             changed.set(true);
         } else {
             List<String> common = new ArrayList<String>(indexPatterns);
@@ -149,33 +151,29 @@ public class KibanaSeed implements ConfigurationSettings {
                 changed.set(true);
             }
 
-            // for any to create (remaining in projects) call createIndices,
-            // createSearchmapping?, create dashboard
-            create(user, sortedProjects, false, esClient, kibanaIndex, kibanaVersion, projectPrefix);
+            // for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
+            create(user, sortedProjects, false, client, kibanaIndex, kibanaVersion, projectPrefix);
 
-            // cull any that are in ES but not in OS (remaining in
-            // indexPatterns)
-            remove(user, indexPatterns, esClient, kibanaIndex, projectPrefix);
+            // cull any that are in ES but not in OS (remaining in indexPatterns)
+            remove(user, indexPatterns, client, kibanaIndex, projectPrefix);
 
             common.addAll(sortedProjects);
             Collections.sort(common);
-            // Set default index to first index in common if we removed the
-            // default
-            String defaultIndex = getDefaultIndex(user, esClient, kibanaIndex, kibanaVersion, projectPrefix);
+            // Set default index to first index in common if we removed the default
+            String defaultIndex = getDefaultIndex(user, client, kibanaIndex, kibanaVersion, projectPrefix);
 
             logger.debug("Checking if '{}' contains '{}'", indexPatterns, defaultIndex);
 
-            if (indexPatterns.contains(defaultIndex) || StringUtils.isEmpty(defaultIndex)) {
-                logger.debug("'{}' does contain '{}' and common size is {}", indexPatterns, defaultIndex,
-                        common.size());
-                if (common.size() > 0) {
-                    setDefaultIndex(user, common.get(0), esClient, kibanaIndex, kibanaVersion, projectPrefix);
+            if ( indexPatterns.contains(defaultIndex) || StringUtils.isEmpty(defaultIndex) ) {
+                logger.debug("'{}' does contain '{}' and common size is {}", indexPatterns, defaultIndex, common.size());
+                if ( common.size() > 0 ) {
+                    setDefaultIndex(user, common.get(0), client, kibanaIndex, kibanaVersion, projectPrefix);
                 }
             }
         }
 
-        if (changed.get()) {
-            refreshKibanaUser(user, kibanaIndex, esClient);
+        if ( changed.get() ) {
+            refreshKibanaUser(user, kibanaIndex, client);
         }
     }
 
@@ -183,6 +181,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
         String userIndex = getKibanaIndex(username, kibanaIndex);
         RefreshRequest request = new RefreshRequest().indices(userIndex);
+        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
         RefreshResponse response = esClient.admin().indices().refresh(request).actionGet();
 
         logger.debug("Refreshed '{}' successfully on {} of {} shards", userIndex, response.getSuccessfulShards(),
@@ -193,7 +192,8 @@ public class KibanaSeed implements ConfigurationSettings {
 
         try {
             String userIndex = getKibanaIndex(username, kibanaIndex);
-            IndicesExistsResponse existsResponse = esClient.admin().indices().prepareExists(userIndex).get();
+            IndicesExistsResponse existsResponse = esClient.admin().indices().prepareExists(userIndex)
+                    .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true").get();
 
             logger.debug("Checking if index {} exists? {}", userIndex, existsResponse.isExists());
 
@@ -201,9 +201,11 @@ public class KibanaSeed implements ConfigurationSettings {
                 logger.debug("Copying '{}' to '{}'", kibanaIndex, userIndex);
 
                 GetIndexRequest getRequest = new GetIndexRequest().indices(kibanaIndex);
+                getRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
                 GetIndexResponse getResponse = esClient.admin().indices().getIndex(getRequest).get();
 
                 CreateIndexRequest createRequest = new CreateIndexRequest().index(userIndex);
+                createRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
 
                 createRequest.settings(getResponse.settings().get(kibanaIndex));
 
@@ -280,7 +282,9 @@ public class KibanaSeed implements ConfigurationSettings {
     private static String getDefaultIndex(String username, Client esClient, String kibanaIndex, String kibanaVersion,
             String projectPrefix) {
         GetRequest request = esClient
-                .prepareGet(getKibanaIndex(username, kibanaIndex), DEFAULT_INDEX_TYPE, kibanaVersion).request();
+                .prepareGet(getKibanaIndex(username, kibanaIndex), DEFAULT_INDEX_TYPE, kibanaVersion)
+                .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
+                .request();
 
         try {
             GetResponse response = esClient.get(request).get();
@@ -342,6 +346,7 @@ public class KibanaSeed implements ConfigurationSettings {
         Set<String> patterns = new HashSet<String>();
 
         SearchRequest request = esClient.prepareSearch(getKibanaIndex(username, kibanaIndex)).setTypes(INDICIES_TYPE)
+                .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
                 .request();
 
         try {
@@ -406,6 +411,8 @@ public class KibanaSeed implements ConfigurationSettings {
         logger.debug("CREATE: '{}/{}/{}' source: '{}'", index, type, id, source);
 
         IndexRequest request = esClient.prepareIndex(index, type, id).setSource(source).request();
+        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+
         try {
             esClient.index(request).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -419,6 +426,8 @@ public class KibanaSeed implements ConfigurationSettings {
         logger.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
 
         UpdateRequest request = esClient.prepareUpdate(index, type, id).setDoc(source).setDocAsUpsert(true).request();
+        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+
 
         logger.debug("Created with update? '{}'", esClient.update(request).actionGet().isCreated());
     }
@@ -428,6 +437,7 @@ public class KibanaSeed implements ConfigurationSettings {
         logger.debug("DELETE: '{}/{}/{}'", index, type, id);
 
         DeleteRequest request = esClient.prepareDelete(index, type, id).request();
+        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
         try {
             esClient.delete(request).get();
         } catch (InterruptedException | ExecutionException e) {

@@ -16,8 +16,6 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,16 +26,18 @@ import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.action.WriteConsistencyLevel;
-import org.elasticsearch.action.get.GetRequest;
-import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.get.MultiGetItemResponse;
+import org.elasticsearch.action.get.MultiGetRequest;
+import org.elasticsearch.action.get.MultiGetResponse;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
@@ -45,14 +45,11 @@ import org.elasticsearch.rest.RestFilter;
 import org.elasticsearch.rest.RestFilterChain;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
-import org.elasticsearch.transport.ConnectTransportException;
 
-import com.floragunn.searchguard.SearchGuardPlugin;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateAction;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateRequest;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateResponse;
-import com.floragunn.searchguard.ssl.SearchGuardSSLPlugin;
-import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
+import com.floragunn.searchguard.support.ConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
@@ -77,7 +74,6 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private final ESLogger logger;
     private final UserProjectCache cache;
     private final String proxyUserHeader;
-    private final TransportClient esClient;
     private final String searchGuardIndex;
     private final String kibanaIndex;
     private final String kibanaVersion;
@@ -94,9 +90,11 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
     private KibanaSeed kibanaSeed;
 
+    private final Client client;
+
     @Inject
-    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final Client client,
-            final KibanaSeed seed) {
+    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, final Client client) {
+        this.client = client;
         this.cache = cache;
         this.kibanaSeed = seed;
         this.logger = Loggers.getLogger(getClass(), settings);
@@ -116,44 +114,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         this.settings = settings;
 
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-        // This is to not have SG print an error with us loading the SG_SSL
-        // plugin for our transport client
-        System.setProperty("sg.nowarn.client", "true");
 
-        /** Build the esClient as a transport client **/
-        String clusterName = settings.get("cluster.name");
-        String keystore = settings.get(SG_CLIENT_KS_PATH, DEFAULT_SG_CLIENT_KS_PATH);
-        String truststore = settings.get(SG_CLIENT_TS_PATH, DEFAULT_SG_CLIENT_TS_PATH);
-        String kspass = settings.get(SG_CLIENT_KS_PASS, DEFAULT_SG_CLIENT_KS_PASS);
-        String tspass = settings.get(SG_CLIENT_TS_PASS, DEFAULT_SG_CLIENT_TS_PASS);
-        String kstype = settings.get(SG_CLIENT_KS_TYPE, DEFAULT_SG_CLIENT_KS_TYPE);
-        String tstype = settings.get(SG_CLIENT_TS_TYPE, DEFAULT_SG_CLIENT_TS_TYPE);
-
-        Settings.Builder settingsBuilder = Settings.builder().put("path.home", ".").put("path.conf", ".")
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_FILEPATH, keystore)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_FILEPATH, truststore)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_PASSWORD, kspass)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_PASSWORD, tspass)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION, false)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION_RESOLVE_HOST_NAME,
-                        false)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_ENABLED, true)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_KEYSTORE_TYPE, kstype)
-                .put(SSLConfigConstants.SEARCHGUARD_SSL_TRANSPORT_TRUSTSTORE_TYPE, tstype)
-
-                .put("cluster.name", clusterName).put("client.transport.ignore_cluster_name", false)
-                .put("client.transport.sniff", false);
-
-        Settings clientSettings = settingsBuilder.build();
-
-        this.esClient = TransportClient.builder().settings(clientSettings).addPlugin(SearchGuardSSLPlugin.class)
-                .addPlugin(SearchGuardPlugin.class) // needed for config update action only
-                .build();
-        try {
-            this.esClient.addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9300)));
-        } catch (ConnectTransportException e) {
-            this.logger.warn("Cluster may still be initializing. Please be patient: {}", e.getMessage());
-        }
     }
 
     @Override
@@ -173,6 +134,10 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 final String token = getBearerToken(request);
                 if (logger.isDebugEnabled()) {
                     logger.debug("Handling Request... {}", request.uri());
+                    if(logger.isTraceEnabled()) {
+                        logger.trace("Request headers: {}", request.headers());
+                        logger.trace("Request context: {}", request.getContext());
+                    }
                     logger.debug("Evaluating request for user '{}' with a {} token", user,
                             (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
                     logger.debug("Cache has user: {}", cache.hasUser(user, token));
@@ -238,7 +203,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 roles.add("operations-user");
             }
 
-            kibanaSeed.setDashboards(user, projects, roles, esClient, kibanaIndex, kbnVersion, cdmProjectPrefix,
+            kibanaSeed.setDashboards(user, projects, roles, client, kibanaIndex, kbnVersion, cdmProjectPrefix,
                     settings);
         } catch (KubernetesClientException e) {
             logger.error("Error retrieving project list for '{}'", e, user);
@@ -295,14 +260,43 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             lock.lock();
             logger.debug("Loading SearchGuard ACL...");
 
-            SearchGuardRoles roles = readRolesACL(esClient);
-            SearchGuardRolesMapping rolesMapping = readRolesMappingACL(esClient);
+            final MultiGetRequest mget = new MultiGetRequest();
+            mget.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true"); //header needed here
+            mget.refresh(true);
+            mget.realtime(true);
+            mget.add(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID);
+            mget.add(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID);
+
+            SearchGuardRoles roles = null;
+            SearchGuardRolesMapping rolesMapping = null;
+            MultiGetResponse response = client.multiGet(mget).actionGet();
+            for (MultiGetItemResponse item : response.getResponses()) {
+                if(!item.isFailed()) {
+                    if(logger.isDebugEnabled()){
+                        logger.debug("Read in {}: {}", item.getType(), XContentHelper.convertToJson(item.getResponse().getSourceAsBytesRef(), true, true));
+                    }
+                    switch (item.getType()) {
+                    case SEARCHGUARD_ROLE_TYPE:
+                        roles = new SearchGuardRoles().load(item.getResponse().getSource());
+                        break;
+                    case SEARCHGUARD_MAPPING_TYPE:
+                        rolesMapping = new SearchGuardRolesMapping().load(item.getResponse().getSource());
+                        break;
+                    }
+                }else {
+                    logger.error("There was a failure loading document type {}", item.getFailure(), item.getType());
+                }
+            }
+
+            if(roles == null || rolesMapping == null) {
+                return;
+            }
 
             logger.debug("Syncing from cache to ACL...");
             roles.syncFrom(cache, userProfilePrefix, cdmProjectPrefix);
             rolesMapping.syncFrom(cache, userProfilePrefix);
 
-            writeACL(esClient, roles, rolesMapping);
+            writeAcl(roles, rolesMapping);
         } catch (Exception e) {
             logger.error("Exception while syncing ACL with cache", e);
         } finally {
@@ -310,56 +304,37 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         }
     }
 
-    private SearchGuardRoles readRolesACL(Client esClient) throws IOException {
-        GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_ROLE_TYPE, SEARCHGUARD_CONFIG_ID)
-                .setRefresh(true).request();
-        GetResponse response = esClient.get(getRequest).actionGet();
-        if (logger.isDebugEnabled()) {
-            logger.debug("Read in roles {}", XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
+    private void writeAcl(SearchGuardACLDocument... documents) throws Exception {
+
+        BulkRequestBuilder builder = this.client.prepareBulk().setRefresh(true);
+
+        for (SearchGuardACLDocument doc : documents) {
+            UpdateRequest update = this.client
+                    .prepareUpdate(searchGuardIndex, doc.getType(), SEARCHGUARD_CONFIG_ID)
+                    .setConsistencyLevel(WriteConsistencyLevel.DEFAULT)
+                    .setDoc(doc.toXContentBuilder())
+                    .request();
+            builder.add(update);
+            if(logger.isDebugEnabled()) {
+                logger.debug("Built {} update request: {}", doc.getType(), XContentHelper.convertToJson(doc.toXContentBuilder().bytes(),true, true));
+            }
         }
-        return new SearchGuardRoles().load(response.getSource());
-    }
+        BulkRequest request = builder.request();
+        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+        BulkResponse response = this.client.bulk(request).actionGet();
 
-    private SearchGuardRolesMapping readRolesMappingACL(Client esClient) throws IOException {
-        GetRequest getRequest = esClient.prepareGet(searchGuardIndex, SEARCHGUARD_MAPPING_TYPE, SEARCHGUARD_CONFIG_ID)
-                .setRefresh(true).request();
-        GetResponse response = esClient.get(getRequest).actionGet();
-
-        if (logger.isDebugEnabled()) {
-            logger.debug("Read in rolesMapping {}",
-                    XContentHelper.convertToJson(response.getSourceAsBytesRef(), true, true));
-        }
-        return new SearchGuardRolesMapping().load(response.getSource());
-    }
-
-    private void writeACL(Client esClient, SearchGuardRoles roles, SearchGuardRolesMapping rolesMapping)
-            throws IOException {
-        IndexRequest rolesIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_ROLE_TYPE).id(SEARCHGUARD_CONFIG_ID)
-                .refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT).source(roles.toMap());
-        if (logger.isDebugEnabled()) {
-            logger.debug("Built roles request: {}", XContentHelper.convertToJson(rolesIR.source(), true, true));
-        }
-        String rolesID = esClient.index(rolesIR).actionGet().getId();
-        logger.debug("Roles ID: '{}'", rolesID);
-
-        IndexRequest mappingIR = new IndexRequest(searchGuardIndex).type(SEARCHGUARD_MAPPING_TYPE)
-                .id(SEARCHGUARD_CONFIG_ID).refresh(true).consistencyLevel(WriteConsistencyLevel.DEFAULT)
-                .source(rolesMapping.toMap());
-        if (logger.isDebugEnabled()) {
-            logger.debug("Built rolesMapping request: {}",
-                    XContentHelper.convertToJson(mappingIR.source(), true, true));
-        }
-        String rmID = esClient.index(mappingIR).actionGet().getId();
-        logger.debug("rolesMapping ID: '{}'", rmID);
-
-        // force a config reload
-        ConfigUpdateResponse cur = esClient
-                .execute(ConfigUpdateAction.INSTANCE, new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS)).actionGet();
-
-        if (cur.getNodes().length > 0) {
-            logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
-        } else {
-            logger.warn("Failed to reloaded configs", cur.getNodes().length);
+        if(!response.hasFailures()) {
+            ConfigUpdateRequest confRequest = new ConfigUpdateRequest(SEARCHGUARD_INITIAL_CONFIGS);
+            confRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+            ConfigUpdateResponse cur = this.client
+                    .execute(ConfigUpdateAction.INSTANCE, confRequest).actionGet();
+            if (cur.getNodes().length > 0) {
+                logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
+            }else {
+                logger.warn("Failed to reloaded configs", cur.getNodes().length);
+            }
+        }else {
+            logger.error("Unable to write ACL {}", response.buildFailureMessage());
         }
     }
 

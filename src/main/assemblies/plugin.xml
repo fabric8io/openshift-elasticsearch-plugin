@@ -33,6 +33,11 @@
       <outputDirectory></outputDirectory>
       <filtered>true</filtered>
     </file>
+    <file>
+      <source>${basedir}/tools/sgadmin.sh</source>
+      <outputDirectory></outputDirectory>
+      <filtered>true</filtered>
+    </file>
   </files>
   <dependencySets>
     <dependencySet>
