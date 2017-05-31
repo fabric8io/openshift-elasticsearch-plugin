@@ -57,9 +57,10 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.openshift.api.model.ClusterRoleBinding;
 import io.fabric8.openshift.api.model.Project;
+import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
+import io.fabric8.openshift.client.NamespacedOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
@@ -176,7 +177,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                     logger.debug("Cache has user: {}", cache.hasUser(user, token));
                 }
                 if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
-                    final boolean isOperationsUser = isOperationsUser(user);
+                    final boolean isOperationsUser = isOperationsUser(user, token);
                     if (isOperationsUser) {
                         request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
                     }
@@ -269,36 +270,24 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         return ArrayUtils.contains(operationsProjects, project.toLowerCase());
     }
 
-    private boolean isOperationsUser(final String username) {
-        ConfigBuilder builder = new ConfigBuilder();
-
-        boolean clusterReaderAllowed = settings.getAsBoolean(OPENSHIFT_ALLOW_CLUSTER_READER,
-                DEFAULT_OPENSHIFT_ALLOW_CLUSTER_READER);
-
-        try (OpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
-            ClusterRoleBinding bResponse = osClient.clusterRoleBindings().inNamespace("").withName("cluster-admins")
-                    .get();
-
-            logger.debug("Does '{}' exist in cluster-admins? '{}'", username,
-                    bResponse.getUserNames().contains(username));
-
-            if (clusterReaderAllowed) {
-                ClusterRoleBinding readerResponse = osClient.clusterRoleBindings().inNamespace("")
-                        .withName("cluster-readers").get();
-
-                logger.debug("Does '{}' exist in cluster-readers? '{}'", username,
-                        readerResponse.getUserNames().contains(username));
-
-                if (readerResponse.getUserNames().contains(username))
-                    return true;
-            }
-
-            return bResponse.getUserNames().contains(username);
+    private boolean isOperationsUser(final String user, final String token) {
+        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
+        boolean allowed = false;
+        try (NamespacedOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
+            logger.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
+            SubjectAccessReviewResponse response = osClient.inAnyNamespace()
+                    .subjectAccessReviews()
+                    .createNew()
+                    .withVerb("get")
+                    .withResource("pods/log")
+                    .done();
+            allowed = response.getAllowed();
         } catch (Exception e) {
-            logger.error("Exception determining user's role.", e);
+            logger.error("Exception determining user's '{}' role.", e, user);
+        }finally {
+            logger.debug("User '{}' isOperationsUser: {}", user, allowed);
         }
-
-        return false;
+        return allowed;
     }
 
     private void syncAcl() {
