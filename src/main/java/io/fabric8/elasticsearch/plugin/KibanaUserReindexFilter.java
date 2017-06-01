@@ -31,15 +31,17 @@ import org.elasticsearch.rest.RestRequest;
 import org.jboss.netty.buffer.BigEndianHeapChannelBuffer;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 
+import io.fabric8.elasticsearch.util.RequestUtils;
+
 public class KibanaUserReindexFilter extends RestFilter implements ConfigurationSettings {
 
     private final ESLogger logger;
-    private final String proxyUserHeader;
     private final String kibanaIndex;
+    private final RequestUtils utils;
 
-    public KibanaUserReindexFilter(final Settings settings, final ESLogger logger) {
+    public KibanaUserReindexFilter(final Settings settings, final ESLogger logger, RequestUtils utils) {
         this.logger = Loggers.getLogger(KibanaUserReindexFilter.class);
-        this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
+        this.utils = utils;
         this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
     }
 
@@ -47,7 +49,7 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
     public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
         try {
             logger.debug("Handling Request in Kibana User Reindex filter...");
-            final String user = getUser(request);
+            final String user = utils.getUser(request);
             final String requestedIndex = getRequestedIndex(request);
 
             logger.debug("Received user '{}' and index '{}', checking for kibana index '{}'", user, requestedIndex,
@@ -80,10 +82,6 @@ public class KibanaUserReindexFilter extends RestFilter implements Configuration
         } finally {
             chain.continueProcessing(request, channel);
         }
-    }
-
-    private String getUser(RestRequest request) {
-        return StringUtils.defaultIfBlank(request.header(proxyUserHeader), "");
     }
 
     private RestRequest updateMGetRequest(RestRequest request, String oldIndex, String newIndex) {

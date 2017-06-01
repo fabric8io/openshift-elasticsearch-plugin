@@ -28,13 +28,14 @@ import org.elasticsearch.rest.RestRequest;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter;
+import io.fabric8.elasticsearch.util.RequestUtils;
 
 public class KibanaUserRestHandler extends BaseRestHandler implements ConfigurationSettings {
 
     private final ESLogger logger;
 
     @Inject
-    public KibanaUserRestHandler(Settings settings, RestController controller, Client client) {
+    public KibanaUserRestHandler(Settings settings, RestController controller, Client client, RequestUtils utils) {
         super(settings, controller, client);
         this.logger = Loggers.getLogger(KibanaUserRestHandler.class);
 
@@ -43,7 +44,7 @@ public class KibanaUserRestHandler extends BaseRestHandler implements Configurat
         logger.debug("Starting with Kibana reindexing feature enabled: {}", reindexEnabled);
 
         if (reindexEnabled) {
-            controller.registerFilter(new KibanaUserReindexFilter(settings, logger));
+            controller.registerFilter(new KibanaUserReindexFilter(settings, logger, utils));
         }
     }
 
