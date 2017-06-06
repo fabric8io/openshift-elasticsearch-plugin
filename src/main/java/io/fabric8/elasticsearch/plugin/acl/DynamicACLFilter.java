@@ -53,6 +53,7 @@ import com.floragunn.searchguard.support.ConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
+import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Project;
@@ -63,22 +64,17 @@ import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
  * REST filter to update the ACL when a user first makes a request
- *
- * @author jeff.cantrill
- *
  */
 public class DynamicACLFilter extends RestFilter implements ConfigurationSettings {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final ESLogger LOGGER = Loggers.getLogger(DynamicACLFilter.class);
 
-    private final ESLogger logger;
     private final UserProjectCache cache;
-    private final String proxyUserHeader;
     private final String searchGuardIndex;
     private final String kibanaIndex;
     private final String kibanaVersion;
     private final String userProfilePrefix;
-    private final Settings settings;
     private final ReentrantLock lock = new ReentrantLock();
 
     private final String kbnVersionHeader;
@@ -91,14 +87,14 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private KibanaSeed kibanaSeed;
 
     private final Client client;
+    private final RequestUtils util;
 
     @Inject
-    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, final Client client) {
+    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, final Client client, final RequestUtils util) {
         this.client = client;
         this.cache = cache;
         this.kibanaSeed = seed;
-        this.logger = Loggers.getLogger(getClass(), settings);
-        this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
+        this.util = util;
         this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
         this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
         this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
@@ -109,9 +105,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         this.cdmProjectPrefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
                 OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 
-        logger.debug("searchGuardIndex: {}", this.searchGuardIndex);
-
-        this.settings = settings;
+        LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
 
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
 
@@ -130,17 +124,17 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                     kbnVersion = kibanaVersion;
                 }
 
-                final String user = getUser(request);
+                final String user = util.getUser(request);
                 final String token = getBearerToken(request);
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Handling Request... {}", request.uri());
-                    if(logger.isTraceEnabled()) {
-                        logger.trace("Request headers: {}", request.headers());
-                        logger.trace("Request context: {}", request.getContext());
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Handling Request... {}", request.uri());
+                    if(LOGGER.isTraceEnabled()) {
+                        LOGGER.trace("Request headers: {}", request.headers());
+                        LOGGER.trace("Request context: {}", request.getContext());
                     }
-                    logger.debug("Evaluating request for user '{}' with a {} token", user,
+                    LOGGER.debug("Evaluating request for user '{}' with a {} token", user,
                             (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-                    logger.debug("Cache has user: {}", cache.hasUser(user, token));
+                    LOGGER.debug("Cache has user: {}", cache.hasUser(user, token));
                 }
                 if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
                     final boolean isOperationsUser = isOperationsUser(user, token);
@@ -154,20 +148,16 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 }
             }
         } catch (ElasticsearchSecurityException ese) {
-            logger.info("Could not authenticate user");
+            LOGGER.info("Could not authenticate user");
             channel.sendResponse(new BytesRestResponse(RestStatus.UNAUTHORIZED));
             continueProcessing = false;
         } catch (Exception e) {
-            logger.error("Error handling request in {}", e, this.getClass().getSimpleName());
+            LOGGER.error("Error handling request in {}", e, this.getClass().getSimpleName());
         } finally {
             if (continueProcessing) {
                 chain.continueProcessing(request, channel);
             }
         }
-    }
-
-    private String getUser(RestRequest request) {
-        return (String) ObjectUtils.defaultIfNull(request.header(proxyUserHeader), "");
     }
 
     private String getBearerToken(RestRequest request) {
@@ -184,7 +174,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
     private boolean updateCache(final String user, final String token, final boolean isOperationsUser,
             final String kbnVersion) {
-        logger.debug("Updating the cache for user '{}'", user);
+        LOGGER.debug("Updating the cache for user '{}'", user);
         try {
             // This is the key to authentication. Before listProjectsFor, we
             // haven't actually authenticated
@@ -203,13 +193,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 roles.add("operations-user");
             }
 
-            kibanaSeed.setDashboards(user, projects, roles, client, kibanaIndex, kbnVersion, cdmProjectPrefix,
-                    settings);
+            kibanaSeed.setDashboards(user, projects, roles, client, kibanaIndex, kbnVersion, cdmProjectPrefix);
         } catch (KubernetesClientException e) {
-            logger.error("Error retrieving project list for '{}'", e, user);
+            LOGGER.error("Error retrieving project list for '{}'", e, user);
             throw new ElasticsearchSecurityException(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error retrieving project list for '{}'", e, user);
+            LOGGER.error("Error retrieving project list for '{}'", e, user);
             return false;
         }
         return true;
@@ -242,23 +231,23 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
         boolean allowed = false;
         try (NamespacedOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
-            logger.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
+            LOGGER.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
             SubjectAccessReviewResponse response = osClient.inAnyNamespace().subjectAccessReviews().createNew()
                     .withVerb("get").withResource("pods/log").done();
             allowed = response.getAllowed();
         } catch (Exception e) {
-            logger.error("Exception determining user's '{}' role.", e, user);
+            LOGGER.error("Exception determining user's '{}' role.", e, user);
         } finally {
-            logger.debug("User '{}' isOperationsUser: {}", user, allowed);
+            LOGGER.debug("User '{}' isOperationsUser: {}", user, allowed);
         }
         return allowed;
     }
 
     private void syncAcl() {
-        logger.debug("Syncing the ACL to ElasticSearch");
+        LOGGER.debug("Syncing the ACL to ElasticSearch");
         try {
             lock.lock();
-            logger.debug("Loading SearchGuard ACL...");
+            LOGGER.debug("Loading SearchGuard ACL...");
 
             final MultiGetRequest mget = new MultiGetRequest();
             mget.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true"); //header needed here
@@ -272,8 +261,8 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             MultiGetResponse response = client.multiGet(mget).actionGet();
             for (MultiGetItemResponse item : response.getResponses()) {
                 if(!item.isFailed()) {
-                    if(logger.isDebugEnabled()){
-                        logger.debug("Read in {}: {}", item.getType(), XContentHelper.convertToJson(item.getResponse().getSourceAsBytesRef(), true, true));
+                    if(LOGGER.isDebugEnabled()){
+                        LOGGER.debug("Read in {}: {}", item.getType(), XContentHelper.convertToJson(item.getResponse().getSourceAsBytesRef(), true, true));
                     }
                     switch (item.getType()) {
                     case SEARCHGUARD_ROLE_TYPE:
@@ -284,7 +273,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                         break;
                     }
                 }else {
-                    logger.error("There was a failure loading document type {}", item.getFailure(), item.getType());
+                    LOGGER.error("There was a failure loading document type {}", item.getFailure(), item.getType());
                 }
             }
 
@@ -292,13 +281,13 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 return;
             }
 
-            logger.debug("Syncing from cache to ACL...");
+            LOGGER.debug("Syncing from cache to ACL...");
             roles.syncFrom(cache, userProfilePrefix, cdmProjectPrefix);
             rolesMapping.syncFrom(cache, userProfilePrefix);
 
             writeAcl(roles, rolesMapping);
         } catch (Exception e) {
-            logger.error("Exception while syncing ACL with cache", e);
+            LOGGER.error("Exception while syncing ACL with cache", e);
         } finally {
             lock.unlock();
         }
@@ -315,8 +304,8 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                     .setDoc(doc.toXContentBuilder())
                     .request();
             builder.add(update);
-            if(logger.isDebugEnabled()) {
-                logger.debug("Built {} update request: {}", doc.getType(), XContentHelper.convertToJson(doc.toXContentBuilder().bytes(),true, true));
+            if(LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Built {} update request: {}", doc.getType(), XContentHelper.convertToJson(doc.toXContentBuilder().bytes(),true, true));
             }
         }
         BulkRequest request = builder.request();
@@ -329,12 +318,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             ConfigUpdateResponse cur = this.client
                     .execute(ConfigUpdateAction.INSTANCE, confRequest).actionGet();
             if (cur.getNodes().length > 0) {
-                logger.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
+                LOGGER.debug("Successfully reloaded config with '{}' nodes", cur.getNodes().length);
             }else {
-                logger.warn("Failed to reloaded configs", cur.getNodes().length);
+                LOGGER.warn("Failed to reloaded configs", cur.getNodes().length);
             }
         }else {
-            logger.error("Unable to write ACL {}", response.buildFailureMessage());
+            LOGGER.error("Unable to write ACL {}", response.buildFailureMessage());
         }
     }
 

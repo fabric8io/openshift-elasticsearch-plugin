@@ -33,6 +33,7 @@ import com.floragunn.searchguard.SearchGuardPlugin;
 import com.floragunn.searchguard.ssl.SearchGuardSSLPlugin;
 import com.google.common.collect.Lists;
 
+import io.fabric8.elasticsearch.plugin.filter.FieldStatsResponseFilter;
 import io.fabric8.elasticsearch.rest.KibanaUserRestHandler;
 
 public class OpenShiftElasticSearchPlugin extends Plugin implements ConfigurationSettings {
@@ -62,6 +63,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
     }
 
     public void onModule(ActionModule actionModule) {
+        actionModule.registerFilter(FieldStatsResponseFilter.class);
         actionModule.registerFilter(KibanaUserReindexAction.class);
         searchguard.onModule(actionModule);
     }
