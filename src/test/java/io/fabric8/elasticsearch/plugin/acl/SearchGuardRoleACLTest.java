@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.acl;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -22,13 +23,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.io.StringReader;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.AbstractMap.SimpleImmutableEntry;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -42,111 +43,115 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
 public class SearchGuardRoleACLTest {
 
+    @Before
+    public void setup() {
 
-	@Before
-	public void setup(){
-		
-	}
+    }
 
-	@Test
-	public void testDeserialization() throws Exception {
-		new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
-	}
+    @Test
+    public void testDeserialization() throws Exception {
+        new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
+    }
 
-	@Test
-	public void testRemove() throws Exception {
-		SearchGuardRoles roles = new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
-		for (Roles role : roles) {
-			roles.removeRole(role);
-		}
-	}
-	
-	@Test
-	public void testSyncFromCache() throws Exception {
-		SearchGuardRoles roles = new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
+    @Test
+    public void testRemove() throws Exception {
+        SearchGuardRoles roles = new SearchGuardRoles()
+                .load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
+        for (Roles role : roles) {
+            roles.removeRole(role);
+        }
+    }
 
-		//cache
-		Map<SimpleImmutableEntry<String, String>, Set<String>> map = new HashMap<>();
-		SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>("mytestuser", "tokenA");
-		map.put(sie, new HashSet<>(Arrays.asList("projectA", "projectB", "projectC")));
-		sie = new SimpleImmutableEntry<>("mythirduser", "tokenB");
-		map.put(sie, new HashSet<>(Arrays.asList("projectzz")));
-		Set<String> projects = new HashSet<>(Arrays.asList("projectA", "projectB", "projectC", "projectzz"));
-		UserProjectCache cache = mock(UserProjectCache.class);
-		when(cache.getUserProjects()).thenReturn(map);
-		when(cache.getAllProjects()).thenReturn(projects);
-		
-		roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
-		
-		//assert acl added
-		assertAclsHas(roles, createRoles("projectzz"));
-	
-		//assert acl updated
-		assertAclsHas(roles, createRoles("projectA", "projectB", "projectC"));
-		
-		//assert acl removed
-		assertNoAclForProject(roles, "myotherproject");
-	}
-	
-	private void assertNoAclForProject(final SearchGuardRoles roles, final String project) {
-		for (Roles role : roles) {
-			Indices index = new Indices();
-			index.setIndex(project);
-			index.setTypes(buildDefaultTypes());
-			
-			assertFalse("Exp. to not find any roles for projects not in the cache", role.getIndices().toString().contains(index.getIndex()));
-		}
-	}
-	
-	private List<Roles> createRoles(String... projects){
-		RolesBuilder builder = new RolesBuilder();
-		
-		for (String project : projects ) {
-			String projectName = String.format("%s_%s", "gen_project", project.replace('.', '_')); 
-			String indexName = String.format("%s?*", project.replace('.', '?'));
-			
-			RoleBuilder role = new RoleBuilder(projectName)
-					.setActions(indexName, "*", new String[]{"indices:data/read*", "indices:admin/mappings/fields/get*", "indices:admin/validate/query*", "indices:admin/get*"});
-			
-			builder.addRole(role.build());
-		}
-		
-		return builder.build();
-	}
-	
-	private void assertAclsHas(SearchGuardRoles roles, List<Roles> exp) {
-		
-		int expectedCount = exp.size(),
-		    found = 0;
-		
-		for ( Roles act : exp ) {
-			for ( Roles role : roles ) {
-				
-				if ( role.getName().equals(act.getName()) ) {
-					found++;
-					// check name
-					assertEquals(role.getName(), act.getName());
-					
-					// check clusters
-					assertArrayEquals("roles.clusters", role.getCluster().toArray(), act.getCluster().toArray());
-					
-					// check indices
-					assertEquals("roles.indices", role.getIndices().toString(), act.getIndices().toString());
-				}
-			}
-		}
-		assertEquals("Was able to match " + found + " of " + expectedCount + " ACLs", expectedCount, found);
-	}
-	
-	private List<Type> buildDefaultTypes() {
-		Type[] types = {new Type()};
-		types[0].setType("*");
-		types[0].setActions(Arrays.asList(new String[]{"ALL"}));
-		
-		return Arrays.asList(types);
-	}
-	
-	private Map<String, Object> buildMap(StringReader reader) {
-		return (Map<String, Object>) new Yaml().load(reader);
-	}
+    @Test
+    public void testSyncFromCache() throws Exception {
+
+        // cache
+        Map<SimpleImmutableEntry<String, String>, Set<String>> map = new HashMap<>();
+        SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>("mytestuser", "tokenA");
+        map.put(sie, new HashSet<>(Arrays.asList("projectA", "projectB", "projectC")));
+        sie = new SimpleImmutableEntry<>("mythirduser", "tokenB");
+        map.put(sie, new HashSet<>(Arrays.asList("projectzz")));
+        Set<String> projects = new HashSet<>(Arrays.asList("projectA", "projectB", "projectC", "projectzz"));
+        UserProjectCache cache = mock(UserProjectCache.class);
+        when(cache.getUserProjects()).thenReturn(map);
+        when(cache.getAllProjects()).thenReturn(projects);
+
+        SearchGuardRoles roles = new SearchGuardRoles()
+                .load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
+        roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
+                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
+
+        // assert acl added
+        assertAclsHas(roles, createRoles("projectzz"));
+
+        // assert acl updated
+        assertAclsHas(roles, createRoles("projectA", "projectB", "projectC"));
+
+        // assert acl removed
+        assertNoAclForProject(roles, "myotherproject");
+    }
+
+    private void assertNoAclForProject(final SearchGuardRoles roles, final String project) {
+        for (Roles role : roles) {
+            Indices index = new Indices();
+            index.setIndex(project);
+            index.setTypes(buildDefaultTypes());
+
+            assertFalse("Exp. to not find any roles for projects not in the cache",
+                    role.getIndices().toString().contains(index.getIndex()));
+        }
+    }
+
+    private List<Roles> createRoles(String... projects) {
+        RolesBuilder builder = new RolesBuilder();
+
+        for (String project : projects) {
+            String projectName = String.format("%s_%s", "gen_project", project.replace('.', '_'));
+            String indexName = String.format("%s?*", project.replace('.', '?'));
+
+            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, "*",
+                new String[] { "indices:data/read*", "indices:admin/mappings/fields/get*",
+                    "indices:admin/validate/query*", "indices:admin/get*" });
+
+            builder.addRole(role.build());
+        }
+
+        return builder.build();
+    }
+
+    private void assertAclsHas(SearchGuardRoles roles, List<Roles> exp) {
+
+        int expectedCount = exp.size();
+        int found = 0;
+
+        for (Roles act : exp) {
+            for (Roles role : roles) {
+
+                if (role.getName().equals(act.getName())) {
+                    found++;
+                    // check name
+                    assertEquals(role.getName(), act.getName());
+
+                    // check clusters
+                    assertArrayEquals("roles.clusters", role.getCluster().toArray(), act.getCluster().toArray());
+
+                    // check indices
+                    assertEquals("roles.indices", role.getIndices().toString(), act.getIndices().toString());
+                }
+            }
+        }
+        assertEquals("Was able to match " + found + " of " + expectedCount + " ACLs", expectedCount, found);
+    }
+
+    private List<Type> buildDefaultTypes() {
+        Type[] types = { new Type() };
+        types[0].setType("*");
+        types[0].setActions(Arrays.asList(new String[] { "ALL" }));
+
+        return Arrays.asList(types);
+    }
+
+    private Map<String, Object> buildMap(StringReader reader) {
+        return (Map<String, Object>) new Yaml().load(reader);
+    }
 }

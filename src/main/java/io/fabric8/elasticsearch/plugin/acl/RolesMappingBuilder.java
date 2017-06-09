@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.ArrayList;
@@ -24,39 +25,40 @@ import java.util.Map;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
 
 public class RolesMappingBuilder {
-	
-	private Map<String, HashSet<String>> roles = new HashMap<>();
-	private List<RolesMapping> rolesMappings = new ArrayList<RolesMapping>();
-	
-	public List<RolesMapping> build() {
-	
-		for ( String role : roles.keySet() ) {
-			RolesMapping mapping = new RolesMapping();
-			
-			mapping.setName(role);
-			mapping.setUsers(new ArrayList<String>(roles.get(role)));
-			
-			rolesMappings.add(mapping);
-		}
-		
-		return rolesMappings;
-	}
-	
-	public RolesMappingBuilder addRole(String role) {
-		roles.put(role, new HashSet<String>());
-		return this;
-	}
-	
-	public RolesMappingBuilder setUsers(String role, List<String> users) {
-		roles.put(role, new HashSet<String>(users));
-		return this;
-	}
-	
-	public RolesMappingBuilder addUser(String role, String user) {
-		if ( !roles.containsKey(role) )
-			addRole(role);
-		
-		roles.get(role).add(user);
-		return this;
-	}
+
+    private Map<String, HashSet<String>> roles = new HashMap<>();
+    private List<RolesMapping> rolesMappings = new ArrayList<RolesMapping>();
+
+    public List<RolesMapping> build() {
+
+        for (String role : roles.keySet()) {
+            RolesMapping mapping = new RolesMapping();
+
+            mapping.setName(role);
+            mapping.setUsers(new ArrayList<String>(roles.get(role)));
+
+            rolesMappings.add(mapping);
+        }
+
+        return rolesMappings;
+    }
+
+    public RolesMappingBuilder addRole(String role) {
+        roles.put(role, new HashSet<String>());
+        return this;
+    }
+
+    public RolesMappingBuilder setUsers(String role, List<String> users) {
+        roles.put(role, new HashSet<String>(users));
+        return this;
+    }
+
+    public RolesMappingBuilder addUser(String role, String user) {
+        if (!roles.containsKey(role)) {
+            addRole(role);
+        }
+
+        roles.get(role).add(user);
+        return this;
+    }
 }
