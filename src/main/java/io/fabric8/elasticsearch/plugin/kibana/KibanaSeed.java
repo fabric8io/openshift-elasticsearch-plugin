@@ -479,7 +479,9 @@ public class KibanaSeed implements ConfigurationSettings {
                 if (index.startsWith(projectPrefixTest)) {
                     start = projectPrefixTest.length();
                 }
-                return index.substring(start, wildcard);
+                if (wildcard > start) {
+                    return index.substring(start, wildcard);
+                }
             }
         }
 
