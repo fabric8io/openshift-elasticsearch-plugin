@@ -36,8 +36,6 @@ import org.elasticsearch.action.support.ActionFilter;
 import org.elasticsearch.action.support.ActionFilterChain;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.ClusterService;
-import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
@@ -48,11 +46,12 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
-import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.index.get.GetResult;
 import org.elasticsearch.tasks.Task;
 
 import com.google.common.collect.ImmutableMap;
+
+import io.fabric8.elasticsearch.plugin.kibana.GetResultBuilder;
 
 public class KibanaUserReindexAction implements ActionFilter, ConfigurationSettings {
 
@@ -168,38 +167,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
     private GetResult buildNewResult(GetResponse response) {
         String index = getIndex(response);
         String replacedIndex = response.getIndex();
-
-        // Check for .kibana.* in the source
-        BytesReference replacedContent = null;
-        if (!response.isSourceEmpty()) {
-            String source = response.getSourceAsBytesRef().toUtf8();
-            String replaced = source.replaceAll(replacedIndex, index);
-            replacedContent = new BytesArray(replaced);
-        }
-
-        // Check for .kibana.* in the fields
-        Map<String, GetField> responseFields = response.getFields();
-        for (String key : responseFields.keySet()) {
-
-            GetField replacedField = responseFields.get(key);
-
-            for (Object o : replacedField.getValues()) {
-                if (o instanceof String) {
-                    String value = (String) o;
-
-                    if (value.contains(replacedIndex)) {
-                        replacedField.getValues().remove(o);
-                        replacedField.getValues().add(value.replaceAll(replacedIndex, index));
-                    }
-                }
-            }
-
-        }
-
-        GetResult getResult = new GetResult(index, response.getType(), response.getId(), response.getVersion(),
-                response.isExists(), replacedContent, response.getFields());
-
-        return getResult;
+        return new GetResultBuilder().index(index).replacedIndex(replacedIndex).response(response).build();
     }
 
     private Failure buildNewFailure(Failure failure) {
