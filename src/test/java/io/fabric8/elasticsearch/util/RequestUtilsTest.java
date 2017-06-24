@@ -17,12 +17,12 @@
 package io.fabric8.elasticsearch.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
-
-import org.elasticsearch.action.ActionRequest;
-import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.rest.RestRequest;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,25 +40,12 @@ public class RequestUtilsTest {
         util = new RequestUtils(settings);
     }
 
-    @SuppressWarnings("rawtypes")
     @Test
     public void testGetUserFromHeader() {
-        ActionRequest request = new MockActionRequest();
+        RestRequest request = mock(RestRequest.class);
+        when(request.header(eq(PROXY_HEADER))).thenReturn(USER);
         
         assertEquals(USER, util.getUser(request));
     }
-    
-    private class MockActionRequest extends ActionRequest<MockActionRequest> {
-        MockActionRequest(){
-            headers = new HashMap<>();
-            headers.put(PROXY_HEADER,USER);
-        }
-
-        @Override
-        public ActionRequestValidationException validate() {
-            return null;
-        }
-    }
-    
     
 }
