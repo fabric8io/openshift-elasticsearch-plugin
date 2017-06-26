@@ -17,9 +17,9 @@
 package io.fabric8.elasticsearch.util;
 
 import org.apache.commons.lang.ObjectUtils;
-import org.elasticsearch.common.ContextAndHeaderHolder;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.rest.RestRequest;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
@@ -32,7 +32,7 @@ public class RequestUtils implements ConfigurationSettings  {
         this.proxyUserHeader = settings.get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
     }
     
-    public String getUser(ContextAndHeaderHolder request) {
-        return (String) ObjectUtils.defaultIfNull(request.getHeader(proxyUserHeader), "");
+    public String getUser(RestRequest request) {
+        return (String) ObjectUtils.defaultIfNull(request.header(proxyUserHeader), "");
     }
 }
