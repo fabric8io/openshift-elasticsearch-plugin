@@ -70,9 +70,16 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.7</maven.compiler.source>
     <maven.compiler.target>1.7</maven.compiler.target>
+    <maven-surefire-plugin.version>2.18.1</maven-surefire-plugin.version>
 
     <elasticsearch.plugin.name>openshift-elasticsearch</elasticsearch.plugin.name>
     <elasticsearch.version>2.4.4</elasticsearch.version>
+    <!--
+      Whenever you change Elasticsearch version verify and update Lucene version as well.
+      Why? Because ES integration test support is based on Lucene randomized testing framework.
+      https://www.elastic.co/guide/en/elasticsearch/reference/2.4/why-randomized-testing.html
+    -->
+    <lucene.version>5.5.2</lucene.version>
     <kubernetes-client.version>1.3.99</kubernetes-client.version>
     <searchguard.version>2.4.4.10</searchguard.version>
     <searchguard-ssl.version>2.4.4.19</searchguard-ssl.version>
@@ -87,14 +94,14 @@
       <version>${elasticsearch.version}</version>
       <scope>provided</scope>
       <exclusions>
-      	<exclusion>
-      		<artifactId>jackson-core</artifactId>
-      		<groupId>com.fasterxml.jackson.core</groupId>
-      	</exclusion>
-      	<exclusion>
-      		<artifactId>jackson-dataformat-yaml</artifactId>
-      		<groupId>com.fasterxml.jackson.dataformat</groupId>
-      	</exclusion>
+        <exclusion>
+          <artifactId>jackson-core</artifactId>
+          <groupId>com.fasterxml.jackson.core</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>jackson-dataformat-yaml</artifactId>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -102,14 +109,14 @@
       <artifactId>openshift-client</artifactId>
       <version>${kubernetes-client.version}</version>
       <exclusions>
-      	<exclusion>
-      		<artifactId>jackson-core</artifactId>
-      		<groupId>com.fasterxml.jackson.core</groupId>
-      	</exclusion>
-      	<exclusion>
-      		<artifactId>jackson-dataformat-yaml</artifactId>
-      		<groupId>com.fasterxml.jackson.dataformat</groupId>
-      	</exclusion>
+        <exclusion>
+          <artifactId>jackson-core</artifactId>
+          <groupId>com.fasterxml.jackson.core</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>jackson-dataformat-yaml</artifactId>
+          <groupId>com.fasterxml.jackson.dataformat</groupId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -130,7 +137,26 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.8.2</version>
+      <!--
+        Notice: Sticking with specific jUnit version can be important!
+        https://github.com/elastic/elasticsearch/issues/22689#issuecomment-293269790
+      -->
+      <version>4.11</version>
+      <scope>test</scope>
+      <!--
+        JAR HELL: junit:junit:jar:4.11 uses org.hamcrest:hamcrest-core:jar:1.3
+      -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.hamcrest</groupId>
+          <artifactId>hamcrest-core</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.hamcrest</groupId>
+      <artifactId>hamcrest-all</artifactId>
+      <version>1.3</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -138,22 +164,33 @@
       <artifactId>mockito-core</artifactId>
       <version>1.9.0-rc1</version>
       <scope>test</scope>
+      <!--
+        JAR HELL: org.mockito:mockito-core:jar:1.9.0-rc1 uses org.hamcrest:hamcrest-core:jar:1.1
+        WARNING: we are supplying higher version org.hamcrest:hamcrest-core:jar:1.3 !
+          If we run into issues try upgrading mockito-core to version that uses hamcrest-core 1.3
+      -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.hamcrest</groupId>
+          <artifactId>hamcrest-core</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
      <dependency>
       <groupId>commons-lang</groupId>
       <artifactId>commons-lang</artifactId>
       <version>2.6</version>
     </dependency>
-	<dependency>
+    <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>2.1</version>
-	</dependency>
+    </dependency>
     <dependency>
-		<groupId>org.apache.httpcomponents</groupId>
-		<artifactId>fluent-hc</artifactId>
-		<version>4.5.1</version>
-      	<scope>test</scope>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>fluent-hc</artifactId>
+      <version>4.5.1</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>commons-codec</groupId>
@@ -161,11 +198,28 @@
       <version>1.9</version>
     </dependency>
     <dependency>
-    <groupId>org.yaml</groupId>
-    <artifactId>snakeyaml</artifactId>
-    <version>1.16</version>
-    <scope>test</scope>
-  </dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>1.16</version>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      Why we need lucene-test-framework? See the following doc:
+      https://www.elastic.co/guide/en/elasticsearch/reference/2.4/using-elasticsearch-test-classes.html
+    -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-test-framework</artifactId>
+      <version>${lucene.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.elasticsearch</groupId>
+      <artifactId>elasticsearch</artifactId>
+      <version>${elasticsearch.version}</version>
+      <scope>test</scope>
+      <type>test-jar</type>
+    </dependency>
   </dependencies>
 
   <build>
@@ -190,10 +244,43 @@
         </executions>
       </plugin>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.0.0</version>
+        <executions>
+          <execution>
+            <id>add-source</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>src/it/java</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-resource</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-test-resource</goal>
+            </goals>
+            <configuration>
+              <resources>
+                <resource>
+                  <directory>src/it/resources</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <inherited>true</inherited>
-        <version>2.18.1</version>
+        <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <excludes>
             <exclude>**/*IntegrationTest.java</exclude>
@@ -203,6 +290,32 @@
             <ENV_VAR_EXISTS_BOOLEAN>true</ENV_VAR_EXISTS_BOOLEAN>
           </environmentVariables>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>2.20</version>
+        <configuration>
+          <argLine>-Djava.security.manager -Djava.security.policy=${basedir}/src/test/resources/java.policy</argLine>
+          <includes>
+            <include>**/*IntegrationTest.java</include>
+          </includes>
+          <!--
+            Excluded for now. See:
+            https://github.com/fabric8io/openshift-elasticsearch-plugin/issues/90
+          -->
+          <excludes>
+            <exclude>**/HttpsProxyClientCertAuthenticatorIntegrationTest.java</exclude>
+          </excludes>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -249,9 +362,9 @@
         </executions>
       </plugin>
        <plugin>
-		   <groupId>org.apache.maven.plugins</groupId>
-		   <artifactId>maven-checkstyle-plugin</artifactId>
-		   <version>2.16</version>
+         <groupId>org.apache.maven.plugins</groupId>
+         <artifactId>maven-checkstyle-plugin</artifactId>
+         <version>2.16</version>
            <dependencies>
             <dependency>
               <groupId>com.puppycrawl.tools</groupId>
@@ -259,26 +372,26 @@
               <version>6.19</version>
             </dependency>
           </dependencies>
-		   <executions>
-		     <execution>
-		       <id>checkstyle</id>
-		       <phase>validate</phase>
-		       <configuration>
-		         <configLocation>checkstyle.xml</configLocation>
-		         <encoding>UTF-8</encoding>
-		         <headerLocation>license.txt</headerLocation>
-		         <consoleOutput>true</consoleOutput>
-		         <failsOnError>true</failsOnError>
-		         <linkXRef>false</linkXRef>
-		         <includeTestSourceDirectory>true</includeTestSourceDirectory>
-		          <violationSeverity>warning</violationSeverity>
-		       </configuration>
-		       <goals>
-		         <goal>check</goal>
-		       </goals>
-		     </execution>
-		   </executions>
-		 </plugin>
+       <executions>
+         <execution>
+           <id>checkstyle</id>
+           <phase>validate</phase>
+           <configuration>
+             <configLocation>checkstyle.xml</configLocation>
+             <encoding>UTF-8</encoding>
+             <headerLocation>license.txt</headerLocation>
+             <consoleOutput>true</consoleOutput>
+             <failsOnError>true</failsOnError>
+             <linkXRef>false</linkXRef>
+             <includeTestSourceDirectory>true</includeTestSourceDirectory>
+              <violationSeverity>warning</violationSeverity>
+           </configuration>
+           <goals>
+             <goal>check</goal>
+           </goals>
+         </execution>
+       </executions>
+     </plugin>
     </plugins>
   </build>
 

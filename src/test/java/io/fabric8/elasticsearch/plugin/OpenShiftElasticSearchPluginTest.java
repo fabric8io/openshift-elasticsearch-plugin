@@ -16,7 +16,6 @@
 
 package io.fabric8.elasticsearch.plugin;
 
-
 import org.elasticsearch.action.ActionModule;
 import org.elasticsearch.common.settings.Settings;
 import org.junit.Before;
