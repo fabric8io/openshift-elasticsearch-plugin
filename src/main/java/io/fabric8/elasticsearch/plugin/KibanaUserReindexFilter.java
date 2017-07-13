@@ -17,6 +17,7 @@
 package io.fabric8.elasticsearch.plugin;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -31,47 +32,39 @@ import org.elasticsearch.rest.RestRequest;
 import org.jboss.netty.buffer.BigEndianHeapChannelBuffer;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 
-import io.fabric8.elasticsearch.util.RequestUtils;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 public class KibanaUserReindexFilter extends RestFilter implements ConfigurationSettings {
 
     private final ESLogger logger;
-    private final String kibanaIndex;
-    private final RequestUtils utils;
+    private final String defaultKibanaIndex;
 
-    public KibanaUserReindexFilter(final Settings settings, final ESLogger logger, RequestUtils utils) {
+    public KibanaUserReindexFilter(final Settings settings, final ESLogger logger) {
         this.logger = Loggers.getLogger(KibanaUserReindexFilter.class);
-        this.utils = utils;
-        this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
+        this.defaultKibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
     }
 
     @Override
     public void process(RestRequest request, RestChannel channel, RestFilterChain chain) throws Exception {
         try {
-            logger.debug("Handling Request in Kibana User Reindex filter...");
-            final String user = utils.getUser(request);
+            OpenshiftRequestContext userContext = (OpenshiftRequestContext) 
+                    ObjectUtils.defaultIfNull(request.getFromContext(OPENSHIFT_REQUEST_CONTEXT), OpenshiftRequestContext.EMPTY);
+            final String user = userContext.getUser();
+            final String kibanaIndex = userContext.getKibanaIndex();
             final String requestedIndex = getRequestedIndex(request);
 
-            logger.debug("Received user '{}' and index '{}', checking for kibana index '{}'", user, requestedIndex,
-                    kibanaIndex);
+            logger.debug("user: '{}'/ requested index: '{}'/ kibana index: '{}'", user, requestedIndex, kibanaIndex);
 
-            if (StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex)
-                    && requestedIndex.equalsIgnoreCase(kibanaIndex)) {
-
-                String userIndex = requestedIndex + "." + getUsernameHash(user);
-                logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
-
-                // update the request URI here
-                request = updateRequestIndex(request, requestedIndex, userIndex);
-
-                logger.debug("URI for request is '{}' after update", request.uri());
-            } else {
-                if (StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex)
-                        && requestedIndex.startsWith("_mget")) {
-                    String userIndex = ".kibana." + getUsernameHash(user);
-                    logger.debug("Matched for a kibana user header, will set to '{}' for user '{}'", userIndex, user);
-
-                    request = updateMGetRequest(request, ".kibana", userIndex);
+            if (StringUtils.isNotEmpty(user) && StringUtils.isNotEmpty(requestedIndex)){
+                if(requestedIndex.equalsIgnoreCase(defaultKibanaIndex)) {
+                    logger.debug("Request is for a kibana index. Updating to '{}' for user '{}'", kibanaIndex, user);
+                    // update the request URI here
+                    request = updateRequestIndex(request, requestedIndex, kibanaIndex);
+                    
+                    logger.debug("URI for request is '{}' after update", request.uri());
+                }else if(requestedIndex.startsWith("_mget")) {
+                    logger.debug("_mget Request for a kibana index. Updating to '{}' for user '{}'", kibanaIndex, user);
+                    request = updateMGetRequest(request, ".kibana", kibanaIndex);
 
                     logger.debug("URI for request is '{}' after update", request.uri());
                 }

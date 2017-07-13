@@ -16,6 +16,8 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
+import static io.fabric8.elasticsearch.plugin.TestUtils.assertJson;
+import static io.fabric8.elasticsearch.plugin.TestUtils.buildMap;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -31,11 +33,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.Before;
+import org.elasticsearch.common.settings.Settings;
 import org.junit.Test;
-import org.yaml.snakeyaml.Yaml;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.KibanaIndexMode;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
@@ -43,9 +45,30 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
 public class SearchGuardRoleACLTest {
 
-    @Before
-    public void setup() {
+    private UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
 
+    @Test
+    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user3", "user3token", new HashSet<String>(), true);
+        cache.update("user2", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        roles.syncFrom(cache, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        
+        assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles.toMap());
+    }
+    
+    @Test
+    public void testGeneratingKibanaOpsRole() throws Exception {
+        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user2", "user2token", new HashSet<String>(), true);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        roles.syncFrom(cache, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        
+        assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX.getContent(), roles.toMap());
     }
 
     @Test
@@ -79,7 +102,8 @@ public class SearchGuardRoleACLTest {
         SearchGuardRoles roles = new SearchGuardRoles()
                 .load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
         roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
-                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
+                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX,
+                KibanaIndexMode.SHARED_OPS);
 
         // assert acl added
         assertAclsHas(roles, createRoles("projectzz"));
@@ -110,8 +134,7 @@ public class SearchGuardRoleACLTest {
             String indexName = String.format("%s?*", project.replace('.', '?'));
 
             RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, "*",
-                new String[] { "indices:data/read*", "indices:admin/mappings/fields/get*",
-                    "indices:admin/validate/query*", "indices:admin/get*" });
+                new String[] { "INDEX_PROJECT" });
 
             builder.addRole(role.build());
         }
@@ -119,24 +142,24 @@ public class SearchGuardRoleACLTest {
         return builder.build();
     }
 
-    private void assertAclsHas(SearchGuardRoles roles, List<Roles> exp) {
+    private void assertAclsHas(SearchGuardRoles roles, List<Roles> expected) {
 
-        int expectedCount = exp.size();
+        int expectedCount = expected.size();
         int found = 0;
 
-        for (Roles act : exp) {
+        for (Roles exp : expected) {
             for (Roles role : roles) {
 
-                if (role.getName().equals(act.getName())) {
+                if (role.getName().equals(exp.getName())) {
                     found++;
                     // check name
-                    assertEquals(role.getName(), act.getName());
+                    assertEquals(role.getName(), exp.getName());
 
                     // check clusters
-                    assertArrayEquals("roles.clusters", role.getCluster().toArray(), act.getCluster().toArray());
+                    assertArrayEquals("roles.clusters", exp.getCluster().toArray(), role.getCluster().toArray());
 
                     // check indices
-                    assertEquals("roles.indices", role.getIndices().toString(), act.getIndices().toString());
+                    assertEquals("roles.indices", exp.getIndices().toString(), role.getIndices().toString());
                 }
             }
         }
@@ -149,9 +172,5 @@ public class SearchGuardRoleACLTest {
         types[0].setActions(Arrays.asList(new String[] { "ALL" }));
 
         return Arrays.asList(types);
-    }
-
-    private Map<String, Object> buildMap(StringReader reader) {
-        return (Map<String, Object>) new Yaml().load(reader);
     }
 }

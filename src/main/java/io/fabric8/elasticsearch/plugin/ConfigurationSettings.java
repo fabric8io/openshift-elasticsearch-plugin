@@ -16,7 +16,7 @@
 
 package io.fabric8.elasticsearch.plugin;
 
-public interface ConfigurationSettings {
+public interface ConfigurationSettings extends KibanaIndexMode{
 
     /** Searchguard settings here **/
     static final String SEARCHGUARD_AUTHENTICATION_PROXY_HEADER = "searchguard.authentication.proxy.header";
@@ -28,11 +28,6 @@ public interface ConfigurationSettings {
         "actiongroups", "internalusers" };
     static final String SEARCHGUARD_ADMIN_DN = "searchguard.authcz.admin_dn";
 
-    static final String SG_ACTION_ALL = "indices:*";
-    static final String SG_ACTION_READ = "indices:data/read*";
-    static final String SG_ACTION_WRITE = "indices:data/write*";
-    static final String SG_ACTION_CREATE_INDEX = "indices:admin/create";
-    static final String SG_ACTION_CLUSTER_ALL = "cluster:*";
     static final String SG_CONFIG_SETTING_PATH = "searchguard.config.path";
     static final String SG_CLIENT_KS_PATH = "openshift.searchguard.keystore.path";
     static final String SG_CLIENT_TS_PATH = "openshift.searchguard.truststore.path";
@@ -71,11 +66,11 @@ public interface ConfigurationSettings {
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS = "io.fabric8.elasticsearch.kibana.mapping.ops";
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY = "io.fabric8.elasticsearch.kibana.mapping.empty";
     static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
-    static final String OPENSHIFT_ROLES = "X-OpenShift-Roles";
 
     static final String OPENSHIFT_CONFIG_OPS_PROJECTS = "openshift.operations.project.names";
     static final String[] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String[] { "default", "openshift", "openshift-infra",
         "kube-system" };
+    static final String OPENSHIFT_REQUEST_CONTEXT = "x-openshift-request-context";
 
     static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
     static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
@@ -94,6 +89,7 @@ public interface ConfigurationSettings {
     static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
     static final String OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG = "openshift.kibana.rewrite.enabled";
 
+    
     static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;
     static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
 
