@@ -1,0 +1,8 @@
+gen_kibana_a1881c06eec96db9901c7bbfe41c42a3f08e9cb4:
+  users: [user2]
+gen_ocp_kibana_shared:
+  users: [user1, user3]
+gen_project_foo_bar:
+  users: [user2]
+gen_project_operations:
+  users: [user1, user3]

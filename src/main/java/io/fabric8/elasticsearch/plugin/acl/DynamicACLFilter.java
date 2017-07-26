@@ -16,12 +16,8 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchSecurityException;
@@ -52,33 +48,24 @@ import com.floragunn.searchguard.action.configupdate.ConfigUpdateResponse;
 import com.floragunn.searchguard.support.ConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
-import io.fabric8.elasticsearch.util.RequestUtils;
-import io.fabric8.kubernetes.client.ConfigBuilder;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
-import io.fabric8.openshift.client.DefaultOpenShiftClient;
-import io.fabric8.openshift.client.NamespacedOpenShiftClient;
-import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
  * REST filter to update the ACL when a user first makes a request
  */
 public class DynamicACLFilter extends RestFilter implements ConfigurationSettings {
 
-    private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final ESLogger LOGGER = Loggers.getLogger(DynamicACLFilter.class);
 
     private final UserProjectCache cache;
     private final String searchGuardIndex;
-    private final String kibanaIndex;
     private final String kibanaVersion;
-    private final String userProfilePrefix;
+    private final String defaultKibanaIndex;
     private final ReentrantLock lock = new ReentrantLock();
 
     private final String kbnVersionHeader;
-    private final String[] operationsProjects;
 
     private Boolean enabled;
 
@@ -87,21 +74,20 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private KibanaSeed kibanaSeed;
 
     private final Client client;
-    private final RequestUtils util;
+    private final OpenshiftRequestContextFactory contextFactory;
 
     @Inject
-    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, final Client client, final RequestUtils util) {
+    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, 
+            final Client client, final OpenshiftRequestContextFactory contextFactory) {
         this.client = client;
         this.cache = cache;
         this.kibanaSeed = seed;
-        this.util = util;
+        this.contextFactory = contextFactory;
         this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
-        this.userProfilePrefix = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
-        this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
+        this.defaultKibanaIndex = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
         this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
 
-        this.operationsProjects = settings.getAsArray(OPENSHIFT_CONFIG_OPS_PROJECTS, DEFAULT_OPENSHIFT_OPS_PROJECTS);
         this.cdmProjectPrefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
                 OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
 
@@ -120,29 +106,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 // grab the kibana version here out of "kbn-version" if we can
                 // -- otherwise use the config one
                 String kbnVersion = getKibanaVersion(request);
-                if (StringUtils.isEmpty(kbnVersion)) {
-                    kbnVersion = kibanaVersion;
-                }
-
-                final String user = util.getUser(request);
-                final String token = getBearerToken(request);
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Handling Request... {}", request.uri());
-                    if(LOGGER.isTraceEnabled()) {
-                        LOGGER.trace("Request headers: {}", request.headers());
-                        LOGGER.trace("Request context: {}", request.getContext());
-                    }
-                    LOGGER.debug("Evaluating request for user '{}' with a {} token", user,
-                            (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-                    LOGGER.debug("Cache has user: {}", cache.hasUser(user, token));
-                }
-                if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
-                    final boolean isOperationsUser = isOperationsUser(user, token);
-                    if (isOperationsUser) {
-                        request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
-                    }
-                    if (updateCache(user, token, isOperationsUser, kbnVersion)) {
-                        syncAcl();
+                final OpenshiftRequestContext requestContext = contextFactory.create(request, cache);
+                request.putInContext(OPENSHIFT_REQUEST_CONTEXT, requestContext);
+                if (requestContext.isAuthenticated() && !cache.hasUser(requestContext.getUser(), requestContext.getToken())) {
+                    if (updateCache(requestContext, kbnVersion)) {
+                        kibanaSeed.setDashboards(requestContext, client, kbnVersion, cdmProjectPrefix);
+                        syncAcl(requestContext);
                     }
 
                 }
@@ -160,90 +129,26 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         }
     }
 
-    private String getBearerToken(RestRequest request) {
-        final String[] auth = ((String) ObjectUtils.defaultIfNull(request.header(AUTHORIZATION_HEADER), "")).split(" ");
-        if (auth.length >= 2 && "Bearer".equals(auth[0])) {
-            return auth[1];
-        }
-        return "";
-    }
-
     private String getKibanaVersion(RestRequest request) {
-        return (String) ObjectUtils.defaultIfNull(request.header(kbnVersionHeader), "");
+        String kbnVersion = (String) ObjectUtils.defaultIfNull(request.header(kbnVersionHeader), "");
+        if (StringUtils.isEmpty(kbnVersion)) {
+            return kibanaVersion;
+        }
+        return kbnVersion;
     }
 
-    private boolean updateCache(final String user, final String token, final boolean isOperationsUser,
-            final String kbnVersion) {
-        LOGGER.debug("Updating the cache for user '{}'", user);
+    private boolean updateCache(final OpenshiftRequestContext context, final String kbnVersion) {
+        LOGGER.debug("Updating the cache for user '{}'", context.getUser());
         try {
-            // This is the key to authentication. Before listProjectsFor, we
-            // haven't actually authenticated
-            // anything in this plugin, using the given token. If the token is
-            // valid, we will get back a
-            // list of projects for the token. If not, listProjectsFor will
-            // throw an exception and we will
-            // not update the cache with the user and token. In this way we will
-            // keep bogus entries out of
-            // the cache.
-            Set<String> projects = listProjectsFor(token);
-            cache.update(user, token, projects, isOperationsUser);
-
-            Set<String> roles = new HashSet<String>();
-            if (isOperationsUser) {
-                roles.add("operations-user");
-            }
-
-            kibanaSeed.setDashboards(user, projects, roles, client, kibanaIndex, kbnVersion, cdmProjectPrefix);
-        } catch (KubernetesClientException e) {
-            LOGGER.error("Error retrieving project list for '{}'", e, user);
-            throw new ElasticsearchSecurityException(e.getMessage());
+            cache.update(context.getUser(), context.getToken(), context.getProjects(), context.isOperationsUser());
         } catch (Exception e) {
-            LOGGER.error("Error retrieving project list for '{}'", e, user);
+            LOGGER.error("Error updating cache for user '{}'", e, context.getUser());
             return false;
         }
         return true;
     }
 
-    // WARNING: This function must perform authentication with the given token.
-    // This
-    // is the only authentication performed in this plugin. This function must
-    // throw
-    // an exception if the token is invalid.
-    private Set<String> listProjectsFor(final String token) throws Exception {
-        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
-        Set<String> names = new HashSet<>();
-        try (OpenShiftClient client = new DefaultOpenShiftClient(builder.build())) {
-            List<Project> projects = client.projects().list().getItems();
-            for (Project project : projects) {
-                if (!isBlacklistProject(project.getMetadata().getName())) {
-                    names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
-                }
-            }
-        }
-        return names;
-    }
-
-    private boolean isBlacklistProject(String project) {
-        return ArrayUtils.contains(operationsProjects, project.toLowerCase());
-    }
-
-    private boolean isOperationsUser(final String user, final String token) {
-        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
-        boolean allowed = false;
-        try (NamespacedOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
-            LOGGER.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
-            SubjectAccessReviewResponse response = osClient.inAnyNamespace().subjectAccessReviews().createNew()
-                    .withVerb("get").withResource("pods/log").done();
-            allowed = response.getAllowed();
-        } catch (Exception e) {
-            LOGGER.error("Exception determining user's '{}' role.", e, user);
-        } finally {
-            LOGGER.debug("User '{}' isOperationsUser: {}", user, allowed);
-        }
-        return allowed;
-    }
-
-    private void syncAcl() {
+    private void syncAcl(OpenshiftRequestContext context) {
         LOGGER.debug("Syncing the ACL to ElasticSearch");
         try {
             lock.lock();
@@ -282,8 +187,8 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             }
 
             LOGGER.debug("Syncing from cache to ACL...");
-            roles.syncFrom(cache, userProfilePrefix, cdmProjectPrefix);
-            rolesMapping.syncFrom(cache, userProfilePrefix);
+            rolesMapping.syncFrom(cache, defaultKibanaIndex);
+            roles.syncFrom(cache, defaultKibanaIndex, cdmProjectPrefix, context.getKibanaIndexMode());
 
             writeAcl(roles, rolesMapping);
         } catch (Exception e) {

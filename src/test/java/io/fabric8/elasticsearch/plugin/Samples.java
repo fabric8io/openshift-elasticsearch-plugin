@@ -23,9 +23,13 @@ import org.apache.commons.io.IOUtils;
 
 public enum Samples {
 
-    ROLES_ACL("searchguard_roles_acl.yml"), ROLESMAPPING_ACL("searchguard_rolesmapping_acl.yml"), OPENSHIFT_ROLES_ACL(
-            "searchguard_roles_acl_with_openshift_projects.yml"), OPENSHIFT_ROLESMAPPING_ACL(
-                    "searchguard_rolesmapping_acl_with_openshift_projects.yml");
+    ROLES_ACL("searchguard_roles_acl.yml"), 
+    ROLESMAPPING_ACL("searchguard_rolesmapping_acl.yml"), 
+    OPENSHIFT_ROLES_ACL("searchguard_roles_acl_with_openshift_projects.yml"), 
+    OPENSHIFT_ROLESMAPPING_ACL("searchguard_rolesmapping_acl_with_openshift_projects.yml"),
+    ROLES_OPS_SHARED_KIBANA_INDEX("roles_ops_shared_kibana_index.yml"),
+    ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("roles_ops_shared_kibana_index_with_unique.yml"),
+    ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("rolesmapping_ops_shared_kibana_index.yml");
 
     private String path;
 

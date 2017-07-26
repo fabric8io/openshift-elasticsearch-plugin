@@ -16,6 +16,8 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
+import static io.fabric8.elasticsearch.plugin.TestUtils.assertJson;
+import static io.fabric8.elasticsearch.plugin.TestUtils.buildMap;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.PROJECT_PREFIX;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -33,9 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.junit.Before;
+import org.elasticsearch.common.settings.Settings;
 import org.junit.Test;
-import org.yaml.snakeyaml.Yaml;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.Samples;
@@ -43,9 +44,18 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
 
 public class SearchGuardRolesMappingACLTest {
 
-    @Before
-    public void setup() {
+    private UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
 
+    @Test
+    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user3", "user3token", new HashSet<String>(), true);
+        cache.update("user2", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
+        
+        SearchGuardRolesMapping roles = new SearchGuardRolesMapping();
+        roles.syncFrom(cache, ".kibana");
+        
+        assertJson("", Samples.ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles.toMap());
     }
 
     @Test
@@ -132,9 +142,5 @@ public class SearchGuardRolesMappingACLTest {
             assertEquals("Expected the acl to exist and only once for role ", 1, found);
         }
         assertEquals("Was able to match " + actualCount + " of " + expectedCount + " ACLs", expectedCount, actualCount);
-    }
-
-    private Map<String, Object> buildMap(StringReader reader) {
-        return (Map<String, Object>) new Yaml().load(reader);
     }
 }

@@ -16,7 +16,6 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.PROJECT_PREFIX;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.ROLE_PREFIX;
 
@@ -28,6 +27,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
@@ -40,8 +40,9 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping.RolesMapping>, SearchGuardACLDocument {
 
     private static final String USER_HEADER = "users";
-    private static final String ADMIN_ROLE = "sg_project_operations";
-    private List<RolesMapping> mappings;
+    public static final String ADMIN_ROLE = "gen_project_operations";
+    public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
+    private List<RolesMapping> mappings = new ArrayList<>();
 
     public static class RolesMapping {
 
@@ -89,15 +90,11 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
         removeSyncAcls();
 
         RolesMappingBuilder builder = new RolesMappingBuilder();
-
+        
         for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects()
                 .entrySet()) {
             String username = userProjects.getKey().getKey();
             String token = userProjects.getKey().getValue();
-            String usernameHash = getUsernameHash(username);
-            String kibanaRoleName = String.format("%s_%s_%s", ROLE_PREFIX, "kibana", usernameHash);
-
-            builder.addUser(kibanaRoleName, username);
 
             for (String project : userProjects.getValue()) {
                 String projectRoleName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
@@ -107,6 +104,11 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
 
             if (cache.isOperationsUser(username, token)) {
                 builder.addUser(ADMIN_ROLE, username);
+                builder.addUser(KIBANA_SHARED_ROLE, username);
+            } else {
+                //role mapping for user's kibana index
+                String kibanaRoleName = SearchGuardRoles.formatUniqueKibanaRoleName(username);
+                builder.addUser(kibanaRoleName, username);
             }
         }
 
@@ -137,11 +139,11 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
     }
 
     public Map<String, Object> toMap() {
-        Map<String, Object> output = new HashMap<String, Object>();
+        Map<String, Object> output = new TreeMap<String, Object>();
 
         // output keys are names of mapping
         for (RolesMapping mapping : mappings) {
-            Map<String, List<String>> mappingObject = new HashMap<String, List<String>>();
+            Map<String, List<String>> mappingObject = new TreeMap<String, List<String>>();
 
             mappingObject.put(USER_HEADER, mapping.getUsers());
 

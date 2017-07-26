@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
@@ -35,6 +36,7 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
@@ -42,17 +44,19 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
 
     public static final String ROLE_PREFIX = "gen";
     public static final String PROJECT_PREFIX = ROLE_PREFIX + "_project";
-    private static final String[] DEFAULT_ROLE_ACTIONS = { SG_ACTION_READ, "indices:admin/mappings/fields/get*",
-        "indices:admin/validate/query*", "indices:admin/get*" };
-    private static final String[] KIBANA_INDEX_ACTIONS = { SG_ACTION_ALL };
-    private static final String[] DEFAULT_CLUSTER_ACTIONS = { "cluster:monitor/nodes/info", "cluster:monitor/health" };
-    private static final String DEFAULT_ROLE_TYPE = "*";
-    private static final String DEFAULT_ROLE_INDEX = "*";
+    private static final String[] PROJECT_ROLE_ACTIONS = { "INDEX_PROJECT" };
+    private static final String[] KIBANA_ROLE_ALL_INDEX_ACTIONS = { "INDEX_ANY_KIBANA" };
+    private static final String[] KIBANA_ROLE_INDEX_ACTIONS = { "INDEX_KIBANA" };
+    private static final String[] KIBANA_ROLE_CLUSTER_ACTIONS = { "CLUSTER_MONITOR_KIBANA" };
+    private static final String[] OPERATIONS_ROLE_CLUSTER_ACTIONS = { "CLUSTER_OPERATIONS" };
+    private static final String[] OPERATIONS_ROLE_OPERATIONS_ACTIONS = { "INDEX_OPERATIONS" };
+    private static final String[] OPERATIONS_ROLE_ANY_ACTIONS = { "INDEX_ANY_OPERATIONS" };
+    private static final String ALL = "*";
 
     private static final String CLUSTER_HEADER = "cluster";
     private static final String INDICES_HEADER = "indices";
 
-    private List<Roles> roles;
+    private List<Roles> roles = new ArrayList<>();
 
     public static class Roles {
 
@@ -163,7 +167,7 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
         roles.remove(role);
     }
 
-    public void syncFrom(UserProjectCache cache, final String userProfilePrefix, final String cdmProjectPrefix) {
+    public void syncFrom(UserProjectCache cache, final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode) {
         removeSyncAcls();
 
         RolesBuilder builder = new RolesBuilder();
@@ -171,32 +175,67 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
         for (String project : cache.getAllProjects()) {
             String projectName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
             String indexName = String.format("%s?*", project.replace('.', '?'));
-            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, DEFAULT_ROLE_TYPE,
-                    DEFAULT_ROLE_ACTIONS);
+            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, ALL,
+                    PROJECT_ROLE_ACTIONS);
 
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
             // the project.$projname.$uuid.* indices for backwards compatibility
             if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
                 indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
-                role.setActions(indexName, DEFAULT_ROLE_TYPE, DEFAULT_ROLE_ACTIONS);
+                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
             }
 
             builder.addRole(role.build());
         }
-
-        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects()
+        
+        boolean foundAnOpsUser = false;
+        //create roles for every user we know about to their kibana index
+        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userToProjects : cache.getUserProjects()
                 .entrySet()) {
-            String usernameHash = getUsernameHash(userProjects.getKey().getKey());
-            String projectName = String.format("%s_%s_%s", ROLE_PREFIX, "kibana", usernameHash);
-            String indexName = String.format("%s?%s", userProfilePrefix.replace('.', '?'), usernameHash);
+            String username = userToProjects.getKey().getKey();
+            String token = userToProjects.getKey().getValue();
+            
+            String roleName = formatKibanaRoleName(cache, username, token);
+            String indexName = formatKibanaIndexName(cache, username, token, kibanaIndexMode);
 
-            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, DEFAULT_ROLE_TYPE,
-                    KIBANA_INDEX_ACTIONS);
+            RoleBuilder role = new RoleBuilder(roleName)
+                    .setActions(indexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
+            if (cache.isOperationsUser(username, token)) {
+                foundAnOpsUser = true;
+                role.setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
+                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
+            }
             builder.addRole(role.build());
+        }
+        if (foundAnOpsUser) {
+            RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
+                    .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
+                    .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)
+                    .setActions("*?*?*", ALL, OPERATIONS_ROLE_ANY_ACTIONS);
+            builder.addRole(opsRole.build());
         }
 
         roles.addAll(builder.build());
+    }
+    
+    private String formatKibanaRoleName(UserProjectCache cache, String username, String token) {
+        boolean isOperationsUser = cache.isOperationsUser(username, token);
+        if (isOperationsUser) {
+            return SearchGuardRolesMapping.KIBANA_SHARED_ROLE;
+        } else {
+            return formatUniqueKibanaRoleName(username);
+        }
+    }
+    
+    public static String formatUniqueKibanaRoleName(String username) {
+        return String.format("%s_%s_%s", ROLE_PREFIX, "kibana", getUsernameHash(username));
+    }
+    
+    private String formatKibanaIndexName(UserProjectCache cache, String username, String token, String kibanaIndexMode) {
+        String kibanaIndex = OpenshiftRequestContextFactory.getKibanaIndex(ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, 
+                kibanaIndexMode, username, cache.isOperationsUser(username, token));
+        return kibanaIndex.replace('.','?');
     }
 
     // Remove roles that start with "gen_"
@@ -239,16 +278,16 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
     }
 
     public Map<String, Object> toMap() {
-        Map<String, Object> output = new HashMap<String, Object>();
+        Map<String, Object> output = new TreeMap<String, Object>();
 
         // output keys are names of roles
         for (Roles role : roles) {
-            Map<String, Object> roleObject = new HashMap<String, Object>();
+            Map<String, Object> roleObject = new TreeMap<String, Object>();
 
-            Map<String, Object> indexObject = new HashMap<String, Object>();
+            Map<String, Object> indexObject = new TreeMap<String, Object>();
             for (Indices index : role.getIndices()) {
 
-                Map<String, List<String>> typeObject = new HashMap<String, List<String>>();
+                Map<String, List<String>> typeObject = new TreeMap<String, List<String>>();
                 for (Type type : index.getTypes()) {
                     typeObject.put(type.getType(), type.getActions());
                 }
@@ -256,8 +295,12 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
                 indexObject.put(index.getIndex(), typeObject);
             }
 
-            roleObject.put(INDICES_HEADER, indexObject);
-            roleObject.put(CLUSTER_HEADER, role.getCluster());
+            if (!indexObject.isEmpty()) { 
+                roleObject.put(INDICES_HEADER, indexObject);
+            }
+            if (!role.getCluster().isEmpty()) {
+                roleObject.put(CLUSTER_HEADER, role.getCluster());
+            }
 
             output.put(role.getName(), roleObject);
         }
