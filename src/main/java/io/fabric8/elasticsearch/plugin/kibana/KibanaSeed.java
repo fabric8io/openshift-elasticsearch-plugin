@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchException;
@@ -89,31 +88,29 @@ public class KibanaSeed implements ConfigurationSettings {
         // We want to seed the Kibana user index initially
         // since the logic from Kibana has changed to create before this plugin
         // starts...
-        AtomicBoolean changed = new AtomicBoolean(initialSeedKibanaIndex(context, client));
+        boolean changed = initialSeedKibanaIndex(context, client);
 
         // GET .../.kibana/index-pattern/_search?pretty=true&fields=
         // compare results to projects; handle any deltas (create, delete?)
 
-        Set<String> indexPatterns = getIndexPatterns(context, client, projectPrefix);
+        Set<String> indexPatterns = getProjectNamesFromIndexes(context, client, projectPrefix);
         LOGGER.debug("Found '{}' Index patterns for user", indexPatterns.size());
 
         
-        // Check roles here, if user is a cluster-admin we should add
-        // .operations to their project? -- correct way to do this?
-        Set<String> projects = new HashSet<>(context.getProjects());
-        if(context.isOperationsUser()) {
-            projects.add(ADMIN_ALIAS_NAME);
-        }
 
+        Set<String> projects = new HashSet<>(context.getProjects());
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
-        Collections.sort(filteredProjects);
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
 
         if (context.isOperationsUser()) {
+            // Check roles here, if user is a cluster-admin we should add
             LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
             buildAdminAlias(filteredProjects, projectPrefix);
+            filteredProjects.add(ADMIN_ALIAS_NAME);
+            filteredProjects.add(OPERATIONS_PROJECT);
         }
 
+        Collections.sort(filteredProjects);
         if (filteredProjects.isEmpty()) {
             filteredProjects.add(BLANK_PROJECT);
         }
@@ -121,7 +118,7 @@ public class KibanaSeed implements ConfigurationSettings {
         // If none have been set yet
         if (indexPatterns.isEmpty()) {
             create(context.getKibanaIndex(), filteredProjects, true, client, kibanaVersion, projectPrefix);
-            changed.set(true);
+            changed = true;
         } else {
             List<String> common = new ArrayList<String>(indexPatterns);
 
@@ -138,8 +135,8 @@ public class KibanaSeed implements ConfigurationSettings {
             }
 
             // check if we're going to be adding or removing any projects
-            if (filteredProjects.size() > 0 || indexPatterns.size() > 0) {
-                changed.set(true);
+            if (!filteredProjects.isEmpty() || !indexPatterns.isEmpty()) {
+                changed = true;
             }
 
             // for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
@@ -163,7 +160,7 @@ public class KibanaSeed implements ConfigurationSettings {
             }
         }
 
-        if ( changed.get() ) {
+        if ( changed ) {
             refreshKibanaUser(context.getKibanaIndex(), client);
         }
     }
@@ -324,9 +321,7 @@ public class KibanaSeed implements ConfigurationSettings {
         }
     }
 
-    // This is a mis-nomer... it actually returns the project name of index
-    // patterns (.operations included)
-    private Set<String> getIndexPatterns(OpenshiftRequestContext context, Client esClient, String projectPrefix) {
+    private Set<String> getProjectNamesFromIndexes(OpenshiftRequestContext context, Client esClient, String projectPrefix) {
 
         Set<String> patterns = new HashSet<String>();
 
