@@ -1,0 +1,26 @@
+gen_ocp_kibana_shared:
+  cluster: [CLUSTER_MONITOR_KIBANA]
+  indices:
+    '*':
+      '*': [INDEX_ANY_KIBANA]
+gen_project_operations:
+  cluster: [CLUSTER_OPERATIONS]
+  indices:
+    '*?*?*':
+      '*': [INDEX_ANY_OPERATIONS]
+    ?operations?:
+      '*': [INDEX_OPERATIONS]
+gen_user_user2_bar_email_com:
+  indices:
+    .all_user2_bar_email_com:
+      '*': [INDEX_PROJECT]
+    ?kibana?994a33f6a157ba4a286395f81a4333db1e6cefb6:
+      '*': [INDEX_KIBANA]
+    ?project?foo?bar?*:
+      '*': [INDEX_PROJECT]
+    ?project?xyz?*:
+      '*': [INDEX_PROJECT]
+    foo?bar?*:
+      '*': [INDEX_PROJECT]
+    xyz?*:
+      '*': [INDEX_PROJECT]

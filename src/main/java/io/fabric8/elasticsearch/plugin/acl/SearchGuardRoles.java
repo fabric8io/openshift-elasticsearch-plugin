@@ -19,16 +19,14 @@ package io.fabric8.elasticsearch.plugin.acl;
 import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
 
 import java.io.IOException;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -36,7 +34,6 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
-import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
@@ -44,14 +41,7 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
 
     public static final String ROLE_PREFIX = "gen";
     public static final String PROJECT_PREFIX = ROLE_PREFIX + "_project";
-    private static final String[] PROJECT_ROLE_ACTIONS = { "INDEX_PROJECT" };
-    private static final String[] KIBANA_ROLE_ALL_INDEX_ACTIONS = { "INDEX_ANY_KIBANA" };
-    private static final String[] KIBANA_ROLE_INDEX_ACTIONS = { "INDEX_KIBANA" };
-    private static final String[] KIBANA_ROLE_CLUSTER_ACTIONS = { "CLUSTER_MONITOR_KIBANA" };
-    private static final String[] OPERATIONS_ROLE_CLUSTER_ACTIONS = { "CLUSTER_OPERATIONS" };
-    private static final String[] OPERATIONS_ROLE_OPERATIONS_ACTIONS = { "INDEX_OPERATIONS" };
-    private static final String[] OPERATIONS_ROLE_ANY_ACTIONS = { "INDEX_ANY_OPERATIONS" };
-    private static final String ALL = "*";
+    public static final String USER_PREFIX = ROLE_PREFIX + "_user";
 
     private static final String CLUSTER_HEADER = "cluster";
     private static final String INDICES_HEADER = "indices";
@@ -166,85 +156,14 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
     public void removeRole(Roles role) {
         roles.remove(role);
     }
-
-    public void syncFrom(UserProjectCache cache, final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode) {
-        removeSyncAcls();
-
-        RolesBuilder builder = new RolesBuilder();
-
-        for (String project : cache.getAllProjects()) {
-            String projectName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
-            String indexName = String.format("%s?*", project.replace('.', '?'));
-            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, ALL,
-                    PROJECT_ROLE_ACTIONS);
-
-            // If using common data model, allow access to both the
-            // $projname.$uuid.* indices and
-            // the project.$projname.$uuid.* indices for backwards compatibility
-            if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
-                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
-                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
-            }
-
-            builder.addRole(role.build());
-        }
-        
-        boolean foundAnOpsUser = false;
-        //create roles for every user we know about to their kibana index
-        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userToProjects : cache.getUserProjects()
-                .entrySet()) {
-            String username = userToProjects.getKey().getKey();
-            String token = userToProjects.getKey().getValue();
-            
-            String roleName = formatKibanaRoleName(cache, username, token);
-            String indexName = formatKibanaIndexName(cache, username, token, kibanaIndexMode);
-
-            RoleBuilder role = new RoleBuilder(roleName)
-                    .setActions(indexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
-            if (cache.isOperationsUser(username, token)) {
-                foundAnOpsUser = true;
-                role.setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
-                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
-            }
-            builder.addRole(role.build());
-        }
-        if (foundAnOpsUser) {
-            RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
-                    .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
-                    .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)
-                    .setActions("*?*?*", ALL, OPERATIONS_ROLE_ANY_ACTIONS);
-            builder.addRole(opsRole.build());
-        }
-
-        roles.addAll(builder.build());
-    }
     
-    private String formatKibanaRoleName(UserProjectCache cache, String username, String token) {
-        boolean isOperationsUser = cache.isOperationsUser(username, token);
-        if (isOperationsUser) {
-            return SearchGuardRolesMapping.KIBANA_SHARED_ROLE;
-        } else {
-            return formatUniqueKibanaRoleName(username);
-        }
+
+    public void addAll(Collection<Roles> roles) {
+        this.roles.addAll(roles);
     }
     
     public static String formatUniqueKibanaRoleName(String username) {
         return String.format("%s_%s_%s", ROLE_PREFIX, "kibana", getUsernameHash(username));
-    }
-    
-    private String formatKibanaIndexName(UserProjectCache cache, String username, String token, String kibanaIndexMode) {
-        String kibanaIndex = OpenshiftRequestContextFactory.getKibanaIndex(ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, 
-                kibanaIndexMode, username, cache.isOperationsUser(username, token));
-        return kibanaIndex.replace('.','?');
-    }
-
-    // Remove roles that start with "gen_"
-    private void removeSyncAcls() {
-        for (Roles role : new ArrayList<>(roles)) {
-            if (role.getName() != null && role.getName().startsWith(ROLE_PREFIX)) {
-                removeRole(role);
-            }
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -322,4 +241,5 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
             throw new RuntimeException("Unable to convert the SearchGuardRoles to JSON", e);
         }
     }
+
 }

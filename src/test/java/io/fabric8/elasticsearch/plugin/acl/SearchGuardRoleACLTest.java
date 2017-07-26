@@ -54,9 +54,23 @@ public class SearchGuardRoleACLTest {
         cache.update("user2", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
         
         SearchGuardRoles roles = new SearchGuardRoles();
-        roles.syncFrom(cache, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(cache);
         
         assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles.toMap());
+    }
+    
+    @Test
+    public void testGeneratingKibanaUniqueRoleWithOpsUsersSyncedToUserRoles() throws Exception {
+        cache.update("user1", "user2token", new HashSet<String>(Arrays.asList("user2-proj")), true);
+        cache.update("user3", "user3token", new HashSet<String>(Arrays.asList("user3-proj")), true);
+        cache.update("user2.bar@email.com", "user2token", new HashSet<String>(Arrays.asList("foo.bar", "xyz")), false);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        RolesSyncStrategy strat = new UserRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(cache);
+        
+        assertJson("", Samples.USER_ROLES_STRATEGY.getContent(), roles.toMap());
     }
     
     @Test
@@ -66,7 +80,8 @@ public class SearchGuardRoleACLTest {
         cache.update("user2", "user2token", new HashSet<String>(), true);
         
         SearchGuardRoles roles = new SearchGuardRoles();
-        roles.syncFrom(cache, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(cache);
         
         assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX.getContent(), roles.toMap());
     }
@@ -101,9 +116,11 @@ public class SearchGuardRoleACLTest {
 
         SearchGuardRoles roles = new SearchGuardRoles()
                 .load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
-        roles.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
-                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX,
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, 
+                ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, 
+                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX, 
                 KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(cache);
 
         // assert acl added
         assertAclsHas(roles, createRoles("projectzz"));

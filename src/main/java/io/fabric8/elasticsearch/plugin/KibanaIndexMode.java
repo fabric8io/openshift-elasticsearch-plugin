@@ -28,4 +28,5 @@ public interface KibanaIndexMode {
     
     static final String UNIQUE = "unique";
     static final String SHARED_OPS = "shared_ops";
+    static final String DEFAULT_MODE = UNIQUE;
 }

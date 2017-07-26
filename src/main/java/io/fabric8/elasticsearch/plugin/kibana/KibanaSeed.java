@@ -45,7 +45,6 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.transport.RemoteTransportException;
@@ -55,6 +54,8 @@ import com.floragunn.searchguard.support.ConfigConstants;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
+import io.fabric8.elasticsearch.plugin.PluginSettings;
+import io.fabric8.elasticsearch.plugin.acl.UserRolesSyncStrategy;
 
 public class KibanaSeed implements ConfigurationSettings {
 
@@ -72,12 +73,14 @@ public class KibanaSeed implements ConfigurationSettings {
     private final IndexMappingLoader mappingLoader;
     private final PluginClient pluginClient;
     private final String defaultKibanaIndex;
+    private final PluginSettings settings;
 
     @Inject
-    public KibanaSeed(final Settings settings, final IndexMappingLoader loader, final PluginClient pluginClient)  {
+    public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient)  {
         this.mappingLoader = loader;
         this.pluginClient = pluginClient;
-        this.defaultKibanaIndex = settings.get(ConfigurationSettings.KIBANA_CONFIG_INDEX_NAME, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX);
+        this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
+        this.settings = settings;
     }
 
     public void setDashboards(final OpenshiftRequestContext context, Client client, String kibanaVersion, final String projectPrefix) {
@@ -96,30 +99,19 @@ public class KibanaSeed implements ConfigurationSettings {
         Set<String> indexPatterns = getProjectNamesFromIndexes(context, client, projectPrefix);
         LOGGER.debug("Found '{}' Index patterns for user", indexPatterns.size());
 
-        
-
         Set<String> projects = new HashSet<>(context.getProjects());
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
 
-        if (context.isOperationsUser()) {
-            // Check roles here, if user is a cluster-admin we should add
-            LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
-            buildAdminAlias(filteredProjects, projectPrefix);
-            filteredProjects.add(ADMIN_ALIAS_NAME);
-            filteredProjects.add(OPERATIONS_PROJECT);
-        }
-
+        addAliasToAllProjects(context, filteredProjects);
         Collections.sort(filteredProjects);
-        if (filteredProjects.isEmpty()) {
-            filteredProjects.add(BLANK_PROJECT);
-        }
         
         // If none have been set yet
         if (indexPatterns.isEmpty()) {
             create(context.getKibanaIndex(), filteredProjects, true, client, kibanaVersion, projectPrefix);
             changed = true;
         } else {
+            
             List<String> common = new ArrayList<String>(indexPatterns);
 
             common.retainAll(filteredProjects);
@@ -162,6 +154,26 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if ( changed ) {
             refreshKibanaUser(context.getKibanaIndex(), client);
+        }
+    }
+    
+    private void addAliasToAllProjects(final OpenshiftRequestContext context, List<String> filteredProjects) {
+        String projectPrefix = settings.getCdmProjectPrefix();
+        if (context.isOperationsUser()) {
+            // Check roles here, if user is a cluster-admin we should add
+            LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
+            buildAdminAlias(filteredProjects, projectPrefix);
+            filteredProjects.add(ADMIN_ALIAS_NAME);
+            filteredProjects.add(OPERATIONS_PROJECT);
+        } else {
+            if (filteredProjects.isEmpty()) {
+                filteredProjects.add(BLANK_PROJECT);
+            } else {
+                String alias = UserRolesSyncStrategy.formatAllAlias(context.getUser());
+                LOGGER.debug("Adding indexes to alias '{}' for user '{}'", alias, context.getUser());
+                buildUserAlias(filteredProjects, projectPrefix, alias);
+                filteredProjects.add(alias);
+            }
         }
     }
     
@@ -246,21 +258,25 @@ public class KibanaSeed implements ConfigurationSettings {
      * Create admin alias for a list of projects which are known to one or more associated indexes
      */
     private void buildAdminAlias(List<String> projects, String projectPrefix) {
+        buildUserAlias(projects, projectPrefix, ADMIN_ALIAS_NAME);
+    }
+
+    private void buildUserAlias(List<String> projects, String projectPrefix, String alias) {
         try {
             if (projects.isEmpty()) {
                 return;
             }
             Map<String, String> patternAlias = new HashMap<>(projects.size());
             for (String project : projects) {
-                patternAlias.put(getIndexPattern(project, projectPrefix), ADMIN_ALIAS_NAME);
+                patternAlias.put(getIndexPattern(project, projectPrefix), alias);
             }
             pluginClient.alias(patternAlias);
-
+            
         } catch (ElasticsearchException e) {
             // Avoid printing out any kibana specific information?
             LOGGER.error("Error executing Alias request", e);
         }
-
+        
     }
 
     private String getDefaultIndex(OpenshiftRequestContext context, Client esClient, String kibanaVersion, String projectPrefix) {
@@ -362,7 +378,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
         final String indexPattern = getIndexPattern(project, projectPrefix);
         String source;
-        if (project.equalsIgnoreCase(OPERATIONS_PROJECT) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
+        if (project.equalsIgnoreCase(OPERATIONS_PROJECT) || project.startsWith(ADMIN_ALIAS_NAME)) {
             source = mappingLoader.getOperationsMappingsTemplate();
         } else if (project.equalsIgnoreCase(BLANK_PROJECT)) {
             source = mappingLoader.getEmptyProjectMappingsTemplate();
@@ -425,12 +441,14 @@ public class KibanaSeed implements ConfigurationSettings {
 
     private String getIndexPattern(String project, String projectPrefix) {
 
-        if (project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
+        if (project.startsWith(ADMIN_ALIAS_NAME)) {
             return project;
         }
 
         if (project.equalsIgnoreCase(OPERATIONS_PROJECT) || StringUtils.isEmpty(projectPrefix)) {
             return project + ".*";
+        } else if (project.equalsIgnoreCase(BLANK_PROJECT)) { 
+            return projectPrefix + project + ".*";
         } else {
             return projectPrefix + "." + project + ".*";
         }
@@ -440,7 +458,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if (!StringUtils.isEmpty(index)) {
 
-            if (index.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
+            if (index.startsWith(ADMIN_ALIAS_NAME)) {
                 return index;
             }
 

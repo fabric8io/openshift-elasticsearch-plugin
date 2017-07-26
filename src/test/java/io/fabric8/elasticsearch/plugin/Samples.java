@@ -29,7 +29,9 @@ public enum Samples {
     OPENSHIFT_ROLESMAPPING_ACL("searchguard_rolesmapping_acl_with_openshift_projects.yml"),
     ROLES_OPS_SHARED_KIBANA_INDEX("roles_ops_shared_kibana_index.yml"),
     ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("roles_ops_shared_kibana_index_with_unique.yml"),
-    ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("rolesmapping_ops_shared_kibana_index.yml");
+    ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("rolesmapping_ops_shared_kibana_index.yml"),
+    USER_ROLESMAPPING_STRATEGY("user_rolesmapping_shared_ops_kibana_index_with_unique.yml"),
+    USER_ROLES_STRATEGY("user_role_with_shared_kibana_index_with_unique.yml");
 
     private String path;
 

@@ -16,17 +16,14 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.PROJECT_PREFIX;
-import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.ROLE_PREFIX;
 
 import java.io.IOException;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.commons.lang.builder.ToStringBuilder;
@@ -39,13 +36,14 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
 public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping.RolesMapping>, SearchGuardACLDocument {
 
-    private static final String USER_HEADER = "users";
     public static final String ADMIN_ROLE = "gen_project_operations";
     public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
+    private static final String USER_HEADER = "users";
     private List<RolesMapping> mappings = new ArrayList<>();
-
+    
     public static class RolesMapping {
 
+        
         private String name;
 
         private List<String> users = new ArrayList<String>();
@@ -84,44 +82,6 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
 
     public void removeRolesMapping(RolesMapping mapping) {
         mappings.remove(mapping);
-    }
-
-    public void syncFrom(UserProjectCache cache, final String userProfilePrefix) {
-        removeSyncAcls();
-
-        RolesMappingBuilder builder = new RolesMappingBuilder();
-        
-        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects()
-                .entrySet()) {
-            String username = userProjects.getKey().getKey();
-            String token = userProjects.getKey().getValue();
-
-            for (String project : userProjects.getValue()) {
-                String projectRoleName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
-
-                builder.addUser(projectRoleName, username);
-            }
-
-            if (cache.isOperationsUser(username, token)) {
-                builder.addUser(ADMIN_ROLE, username);
-                builder.addUser(KIBANA_SHARED_ROLE, username);
-            } else {
-                //role mapping for user's kibana index
-                String kibanaRoleName = SearchGuardRoles.formatUniqueKibanaRoleName(username);
-                builder.addUser(kibanaRoleName, username);
-            }
-        }
-
-        mappings.addAll(builder.build());
-    }
-
-    // Remove roles that start with "gen_"
-    private void removeSyncAcls() {
-        for (RolesMapping mapping : new ArrayList<>(mappings)) {
-            if (mapping.getName() != null && mapping.getName().startsWith(ROLE_PREFIX)) {
-                removeRolesMapping(mapping);
-            }
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -168,5 +128,9 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
             throw new RuntimeException("Unable to convert the SearchGuardRolesMapping to JSON", e);
         }
 
+    }
+
+    public void addAll(Collection<RolesMapping> mappings) {
+        this.mappings.addAll(mappings);
     }
 }
