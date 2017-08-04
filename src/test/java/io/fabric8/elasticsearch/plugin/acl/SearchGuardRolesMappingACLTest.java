@@ -38,7 +38,6 @@ import java.util.Set;
 import org.elasticsearch.common.settings.Settings;
 import org.junit.Test;
 
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
 
@@ -53,11 +52,25 @@ public class SearchGuardRolesMappingACLTest {
         cache.update("user2", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
         
         SearchGuardRolesMapping roles = new SearchGuardRolesMapping();
-        roles.syncFrom(cache, ".kibana");
+        RolesMappingSyncStrategy sync = new ProjectRolesMappingSyncStrategy(roles);
+        sync.syncFrom(cache);
         
         assertJson("", Samples.ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles.toMap());
     }
 
+    @Test
+    public void testGeneratingKibanaUniqueRoleWithOpsUsersSyncdToUserRolesMappings() throws Exception {
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user3", "user3token", new HashSet<String>(), true);
+        cache.update("user2.bar@email.com", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
+        
+        SearchGuardRolesMapping roles = new SearchGuardRolesMapping();
+        RolesMappingSyncStrategy sync = new UserRolesMappingSyncStrategy(roles);
+        sync.syncFrom(cache);
+        
+        assertJson("", Samples.USER_ROLESMAPPING_STRATEGY.getContent(), roles.toMap());
+    }
+    
     @Test
     public void testDeserialization() throws Exception {
         new SearchGuardRolesMapping().load(buildMap(new StringReader(Samples.ROLESMAPPING_ACL.getContent())));
@@ -83,12 +96,14 @@ public class SearchGuardRolesMappingACLTest {
         map.put(sie, new HashSet<>(Arrays.asList("projectzz")));
         Set<String> projects = new HashSet<>(Arrays.asList("projectA", "projectB", "projectC", "projectzz"));
         UserProjectCache cache = mock(UserProjectCache.class);
-        when(cache.getUserProjects()).thenReturn(map);
+        when(cache.getUserProjects()).thenReturn(map, null);
         when(cache.getAllProjects()).thenReturn(projects);
 
         SearchGuardRolesMapping mappings = new SearchGuardRolesMapping()
                 .load(buildMap(new StringReader(Samples.ROLESMAPPING_ACL.getContent())));
-        mappings.syncFrom(cache, ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX);
+        RolesMappingSyncStrategy sync = new ProjectRolesMappingSyncStrategy(mappings);
+        sync.syncFrom(cache);
+
 
         // assert acl added
         assertAclsHas(mappings, createRolesMapping("mythirduser", "projectzz"));

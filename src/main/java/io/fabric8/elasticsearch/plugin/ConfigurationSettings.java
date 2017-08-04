@@ -87,6 +87,13 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      * Kibana index.
      */
     static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
+    
+    /**
+     * The strategy to use for generating roles and role mappings
+     */
+    static final String OPENSHIFT_ACL_ROLE_STRATEGY = "openshift.acl.role_strategy";
+    static final String DEFAULT_ACL_ROLE_STRATEGY = "user";
+    
     static final String OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG = "openshift.kibana.rewrite.enabled";
 
     

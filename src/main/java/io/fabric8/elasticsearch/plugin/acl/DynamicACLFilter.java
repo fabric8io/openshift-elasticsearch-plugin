@@ -33,7 +33,6 @@ import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
@@ -50,6 +49,7 @@ import com.floragunn.searchguard.support.ConfigConstants;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
+import io.fabric8.elasticsearch.plugin.PluginSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
 
 /**
@@ -62,7 +62,6 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private final UserProjectCache cache;
     private final String searchGuardIndex;
     private final String kibanaVersion;
-    private final String defaultKibanaIndex;
     private final ReentrantLock lock = new ReentrantLock();
 
     private final String kbnVersionHeader;
@@ -75,26 +74,23 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
     private final Client client;
     private final OpenshiftRequestContextFactory contextFactory;
+    private final SearchGuardSyncStrategyFactory documentFactory;
+
 
     @Inject
-    public DynamicACLFilter(final UserProjectCache cache, final Settings settings, final KibanaSeed seed, 
-            final Client client, final OpenshiftRequestContextFactory contextFactory) {
+    public DynamicACLFilter(final UserProjectCache cache, final PluginSettings settings, final KibanaSeed seed, 
+            final Client client, final OpenshiftRequestContextFactory contextFactory,
+            final SearchGuardSyncStrategyFactory documentFactory) {
         this.client = client;
         this.cache = cache;
         this.kibanaSeed = seed;
         this.contextFactory = contextFactory;
-        this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
-        this.defaultKibanaIndex = settings.get(OPENSHIFT_ES_USER_PROFILE_PREFIX, DEFAULT_USER_PROFILE_PREFIX);
-        this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
-        this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
-
-        this.cdmProjectPrefix = settings.get(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX,
-                OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
-
-        LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
-
-        this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-
+        this.documentFactory = documentFactory;
+        this.searchGuardIndex = settings.getSearchGuardIndex();
+        this.kibanaVersion = settings.getKibanaVersion();
+        this.kbnVersionHeader = settings.getKbnVersionHeader();
+        this.cdmProjectPrefix = settings.getCdmProjectPrefix();
+        this.enabled = settings.isEnabled();
     }
 
     @Override
@@ -187,8 +183,11 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             }
 
             LOGGER.debug("Syncing from cache to ACL...");
-            rolesMapping.syncFrom(cache, defaultKibanaIndex);
-            roles.syncFrom(cache, defaultKibanaIndex, cdmProjectPrefix, context.getKibanaIndexMode());
+            RolesMappingSyncStrategy rolesMappingSync = documentFactory.createRolesMappingSyncStrategy(rolesMapping);
+            rolesMappingSync.syncFrom(cache);
+            
+            RolesSyncStrategy rolesSync = documentFactory.createRolesSyncStrategy(roles);
+            rolesSync.syncFrom(cache);
 
             writeAcl(roles, rolesMapping);
         } catch (Exception e) {
