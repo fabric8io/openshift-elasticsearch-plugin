@@ -20,10 +20,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.lang.ObjectUtils;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.index.get.GetField;
 import org.elasticsearch.index.get.GetResult;
@@ -34,7 +34,7 @@ import org.elasticsearch.index.get.GetResult;
  */
 public class GetResultBuilder {
     
-    private static final ESLogger LOG = Loggers.getLogger(GetResultBuilder.class);
+    private static final Logger LOG = Loggers.getLogger(GetResultBuilder.class);
     private String index;
     private String replacedIndex;
     private String type = "";
@@ -71,7 +71,7 @@ public class GetResultBuilder {
         // Check for .kibana.* in the source
         BytesReference replacedContent = null;
         if (response != null && !response.isSourceEmpty() && replacedIndex != null && index != null) {
-            String source = response.getSourceAsBytesRef().toUtf8();
+            String source = response.getSourceAsBytesRef().utf8ToString();
             String replaced = source.replaceAll(replacedIndex, index);
             replacedContent = new BytesArray(replaced);
         }

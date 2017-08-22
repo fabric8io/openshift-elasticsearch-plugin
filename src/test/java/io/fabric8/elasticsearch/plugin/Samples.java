@@ -28,6 +28,7 @@ public enum Samples {
     OPENSHIFT_ROLES_ACL("searchguard_roles_acl_with_openshift_projects.yml"), 
     OPENSHIFT_ROLESMAPPING_ACL("searchguard_rolesmapping_acl_with_openshift_projects.yml"),
     ROLES_OPS_SHARED_KIBANA_INDEX("roles_ops_shared_kibana_index.yml"),
+    PASSWORDS("passwords.yml"),
     ROLES_SHARED_KIBANA_INDEX("roles_shared_kibana_index.yml"),
     ROLES_SHARED_OPS_KIBANA_INDEX("roles_shared_ops_kibana_index.yml"),
     ROLES_SHARED_NON_OPS_KIBANA_INDEX("roles_shared_non_ops_kibana_index.yml"),

@@ -16,11 +16,15 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
+import java.util.Map;
+
 import org.elasticsearch.common.xcontent.XContentBuilder;
 
-public interface SearchGuardACLDocument {
+public interface SearchGuardACLDocument<T> {
 
     XContentBuilder toXContentBuilder();
 
     String getType();
+
+    T load(Map<String, Object> sourceAsMap);
 }

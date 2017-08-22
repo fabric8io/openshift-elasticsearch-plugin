@@ -75,7 +75,7 @@ public class GetResultBuilderTest {
         when(response.getSourceAsBytesRef()).thenReturn(source);
         GetResult result = builder.build();
         assertNotNull(result);
-        assertEquals("foo",result.internalSourceRef().toUtf8());
+        assertEquals("foo",result.internalSourceRef().utf8ToString());
     }
     
     @Test

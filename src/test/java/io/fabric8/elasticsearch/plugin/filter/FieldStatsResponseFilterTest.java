@@ -21,7 +21,6 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,10 +57,11 @@ public class FieldStatsResponseFilterTest {
     }
 
     @Test
-    public void testFilterIsOrderedToBeFirst() {
-        assertEquals(Integer.MIN_VALUE, filter.order());
+    public void testFilterIsOrderedToBeLast() {
+        assertEquals(Integer.MAX_VALUE, filter.order());
     }
     
+    @SuppressWarnings("unchecked")
     private void givenAnExeptionOccurs() {
         doAnswer(new Answer<Object>() {
             @Override
@@ -151,12 +151,6 @@ public class FieldStatsResponseFilterTest {
         
         //then the original listener should be notified
         verify(listener).onResponse(response);
-    }
-    
-    @Test
-    public void testApplyActionResponsePassesDownTheChain() {
-        filter.apply(action, response, listener, chain );
-        verify(chain, times(1)).proceed(action, response, listener);
     }
 
 }

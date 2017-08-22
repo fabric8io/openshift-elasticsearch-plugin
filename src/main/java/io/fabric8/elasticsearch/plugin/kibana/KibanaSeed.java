@@ -24,29 +24,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
-import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
-import org.elasticsearch.action.delete.DeleteRequest;
-import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.index.IndexNotFoundException;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.transport.RemoteTransportException;
+import org.elasticsearch.threadpool.ThreadPool;
 
 import com.floragunn.searchguard.support.ConfigConstants;
 
@@ -65,7 +56,7 @@ public class KibanaSeed implements ConfigurationSettings {
     private static final String OPERATIONS_PROJECT = ".operations";
     private static final String BLANK_PROJECT = ".empty-project";
     private static final String ADMIN_ALIAS_NAME = ".all";
-    private static final ESLogger LOGGER = Loggers.getLogger(KibanaSeed.class);
+    private static final Logger LOGGER = Loggers.getLogger(KibanaSeed.class);
 
     public static final String DEFAULT_INDEX_FIELD = "defaultIndex";
 
@@ -73,16 +64,21 @@ public class KibanaSeed implements ConfigurationSettings {
     private final PluginClient pluginClient;
     private final String defaultKibanaIndex;
     private final PluginSettings settings;
+    private final ThreadContext threadContext;
 
-    @Inject
-    public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient)  {
+    public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient, final ThreadPool threadPool)  {
         this.mappingLoader = loader;
         this.pluginClient = pluginClient;
         this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
         this.settings = settings;
+        this.threadContext = threadPool.getThreadContext();
     }
 
     public void setDashboards(final OpenshiftRequestContext context, Client client, String kibanaVersion, final String projectPrefix) {
+        if(!pluginClient.indexExists(defaultKibanaIndex)) {
+            LOGGER.debug("Default Kibana index '{}' does not exist. Skipping Kibana seeding", defaultKibanaIndex);
+            return;
+        }
 
         LOGGER.debug("Begin setDashboards:  projectPrefix '{}' for user '{}' projects '{}' kibanaIndex '{}'",
                 projectPrefix, context.getUser(), context.getProjects(), context.getKibanaIndex());
@@ -187,17 +183,15 @@ public class KibanaSeed implements ConfigurationSettings {
     }
 
     private void refreshKibanaUser(String kibanaIndex, Client esClient) {
-
-        RefreshRequest request = new RefreshRequest().indices(kibanaIndex);
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-        RefreshResponse response = esClient.admin().indices().refresh(request).actionGet();
-
+        if(StringUtils.isBlank(threadContext.getTransient(ConfigConstants.SG_CHANNEL_TYPE))) {
+            threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
+        }
+        RefreshResponse response = esClient.admin().indices().prepareRefresh(kibanaIndex).get();
         LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", kibanaIndex, response.getSuccessfulShards(),
-                response.getTotalShards());
+                    response.getTotalShards());
     }
 
     private boolean initialSeedKibanaIndex(final OpenshiftRequestContext context, Client esClient) {
-
         try {
             String userIndex = context.getKibanaIndex();
             boolean kibanaIndexExists = pluginClient.indexExists(userIndex);
@@ -206,32 +200,30 @@ public class KibanaSeed implements ConfigurationSettings {
             // copy the defaults if the userindex is not the kibanaindex
             if (!kibanaIndexExists && !defaultKibanaIndex.equals(userIndex)) {
                 LOGGER.debug("Copying '{}' to '{}'", defaultKibanaIndex, userIndex);
-
-                GetIndexRequest getRequest = new GetIndexRequest().indices(defaultKibanaIndex);
-                getRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-                GetIndexResponse getResponse = esClient.admin().indices().getIndex(getRequest).get();
-
-                CreateIndexRequest createRequest = new CreateIndexRequest().index(userIndex);
-                createRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-
-                createRequest.settings(getResponse.settings().get(defaultKibanaIndex));
-
+                
+                GetIndexResponse getResponse = pluginClient.getIndex(defaultKibanaIndex);
                 Map<String, Object> configMapping = getResponse.mappings().get(defaultKibanaIndex).get("config")
                         .getSourceAsMap();
+                if(StringUtils.isBlank(threadContext.getTransient(ConfigConstants.SG_CHANNEL_TYPE))) {
+                    threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
+                }
+                esClient.admin().indices().prepareCreate(userIndex)
+                    .setSettings(Settings.builder()
+                            .put("index.number_of_shards", 1)
+                            .put("index.number_of_replicas", 0)
+                            .build())
+                    .addMapping("config", configMapping).get();
 
-                createRequest.mapping("config", configMapping);
-
-                esClient.admin().indices().create(createRequest).actionGet();
 
                 // Wait for health status of YELLOW
-                ClusterHealthRequest healthRequest = new ClusterHealthRequest().indices(new String[] { userIndex })
-                        .waitForYellowStatus();
-
-                esClient.admin().cluster().health(healthRequest).actionGet().getStatus();
+                esClient.admin().cluster().prepareHealth(userIndex)
+                    .setWaitForYellowStatus()
+                    .get()
+                    .getStatus();
 
                 return true;
             }
-        } catch (ExecutionException | InterruptedException | IOException e) {
+        } catch (IOException e) {
             LOGGER.error("Unable to create initial Kibana index", e);
         }
 
@@ -244,8 +236,8 @@ public class KibanaSeed implements ConfigurationSettings {
         // this will create a default index of [index.]YYYY.MM.DD in
         // .kibana.username
         String source = new DocumentBuilder().defaultIndex(getIndexPattern(project, projectPrefix)).build();
+        pluginClient.updateDocument(kibanaIndex, DEFAULT_INDEX_TYPE, kibanaVersion, source);
 
-        executeUpdate(kibanaIndex, DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
     }
 
     /*
@@ -279,35 +271,22 @@ public class KibanaSeed implements ConfigurationSettings {
     }
     
     private String getDefaultIndex(OpenshiftRequestContext context, Client esClient, String kibanaVersion, String projectPrefix) {
-        GetRequest request = esClient
-                .prepareGet(context.getKibanaIndex(), DEFAULT_INDEX_TYPE, kibanaVersion)
-                .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
-                .request();
 
-        try {
-            GetResponse response = esClient.get(request).get();
-
+        GetResponse response = pluginClient.getDocument(context.getKibanaIndex(), DEFAULT_INDEX_TYPE, kibanaVersion);
+        if(response.isExists()) {
             Map<String, Object> source = response.getSource();
-
             // if source == null then its a different version of kibana that was
             // used -- we'll need to recreate
             if (source != null && source.containsKey(DEFAULT_INDEX_FIELD)) {
                 LOGGER.debug("Received response with 'defaultIndex' = {}", source.get(DEFAULT_INDEX_FIELD));
                 String index = (String) source.get(DEFAULT_INDEX_FIELD);
-
+                
                 return getProjectFromIndex(index, projectPrefix);
             } else {
                 LOGGER.debug("Received response without 'defaultIndex'");
             }
-
-        } catch (InterruptedException | ExecutionException e) {
-
-            if (e.getCause() instanceof RemoteTransportException
-                    && e.getCause().getCause() instanceof IndexNotFoundException) {
-                LOGGER.debug("No index found");
-            } else {
-                LOGGER.error("Error getting default index for {}", e, context.getUser());
-            }
+        } else {
+            LOGGER.debug("Default index does not exist: '{}'", context.getKibanaIndex());
         }
 
         return "";
@@ -336,42 +315,26 @@ public class KibanaSeed implements ConfigurationSettings {
     private void remove(String kibanaIndex, Set<String> projects, Client esClient, String projectPrefix) {
 
         for (String project : projects) {
-            deleteIndex(kibanaIndex, project, esClient, projectPrefix);
+            pluginClient.deleteDocument(kibanaIndex, INDICIES_TYPE, getIndexPattern(project, projectPrefix));
         }
     }
 
     private Set<String> getProjectNamesFromIndexes(OpenshiftRequestContext context, Client esClient, String projectPrefix) {
-
         Set<String> patterns = new HashSet<String>();
+        SearchResponse response = pluginClient.search(context.getKibanaIndex(), INDICIES_TYPE);
+        if (response.getHits() != null && response.getHits().getTotalHits() > 0) {
+            for (SearchHit hit : response.getHits().getHits()) {
+                String id = hit.getId();
+                String project = getProjectFromIndex(id, projectPrefix);
 
-        SearchRequest request = esClient.prepareSearch(context.getKibanaIndex()).setTypes(INDICIES_TYPE)
-                .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
-                .request();
-
-        try {
-            SearchResponse response = esClient.search(request).get();
-
-            if (response.getHits() != null && response.getHits().getTotalHits() > 0) {
-                for (SearchHit hit : response.getHits().getHits()) {
-                    String id = hit.getId();
-                    String project = getProjectFromIndex(id, projectPrefix);
-
-                    if (!project.equals(id) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
-                        patterns.add(project);
-                    }
-
-                    // else -> this is user created, leave it alone
+                if (!project.equals(id) || project.equalsIgnoreCase(ADMIN_ALIAS_NAME)) {
+                    patterns.add(project);
                 }
-            }
 
-        } catch (InterruptedException | ExecutionException e) {
-            // if is ExecutionException with cause of IndexMissingException
-            if (e.getCause() instanceof RemoteTransportException
-                    && e.getCause().getCause() instanceof IndexNotFoundException) {
-                LOGGER.debug("Encountered IndexMissingException, returning empty response");
-            } else {
-                LOGGER.error("Error getting index patterns for {}", e, context.getUser());
+                // else -> this is user created, leave it alone
             }
+        } else {
+            LOGGER.debug("No index-mappings found in the kibana index '{}'", context.getKibanaIndex());
         }
 
         return patterns;
@@ -395,36 +358,6 @@ public class KibanaSeed implements ConfigurationSettings {
             pluginClient.createDocument(kibanaIndex, INDICIES_TYPE, indexPattern, source);
         } else {
             LOGGER.debug("The source for the index mapping is null.  Skipping trying to create index pattern {}", indexPattern);
-        }
-    }
-
-    private void deleteIndex(String kibanaIndex, String project, Client esClient, String projectPrefix) {
-
-        executeDelete(kibanaIndex, INDICIES_TYPE, getIndexPattern(project, projectPrefix), esClient);
-    }
-
-    private void executeUpdate(String index, String type, String id, String source, Client esClient) {
-
-        LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
-
-        UpdateRequest request = esClient.prepareUpdate(index, type, id).setDoc(source).setDocAsUpsert(true).request();
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-
-
-        LOGGER.debug("Created with update? '{}'", esClient.update(request).actionGet().isCreated());
-    }
-
-    private void executeDelete(String index, String type, String id, Client esClient) {
-
-        LOGGER.debug("DELETE: '{}/{}/{}'", index, type, id);
-
-        DeleteRequest request = esClient.prepareDelete(index, type, id).request();
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-        try {
-            esClient.delete(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            // Avoid printing out any kibana specific information?
-            LOGGER.error("Error executing delete request", e);
         }
     }
 
