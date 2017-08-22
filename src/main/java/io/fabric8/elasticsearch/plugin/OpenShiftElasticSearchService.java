@@ -21,30 +21,24 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
-import org.elasticsearch.rest.RestController;
 
-import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 
 /**
- * Service to handle spawning threads, lifecycles, and REST filter registrations
- * 
- * @author jeff.cantrill
- *
+ * Service to handle spawning threads, lifecycles
  */
-public class OpenShiftElasticSearchService extends AbstractLifecycleComponent<OpenShiftElasticSearchService>
+public class OpenShiftElasticSearchService extends AbstractLifecycleComponent
         implements ConfigurationSettings {
 
-    private final ESLogger logger;
+    private final Logger logger;
     private final UserProjectCache cache;
     private final Settings settings;
     private ScheduledThreadPoolExecutor scheduler;
@@ -52,14 +46,12 @@ public class OpenShiftElasticSearchService extends AbstractLifecycleComponent<Op
     @SuppressWarnings("rawtypes")
     private ScheduledFuture scheduledFuture;
 
-    @Inject
-    public OpenShiftElasticSearchService(final Settings settings, final Client esClient,
-            final RestController restController, final UserProjectCache cache, final DynamicACLFilter aclFilter) {
+    // @TODO - Determine if we should be using the Threadpool provided by Elastic
+    public OpenShiftElasticSearchService(final Settings settings, final Client esClient, final UserProjectCache cache) {
         super(settings);
         this.settings = settings;
         this.logger = Loggers.getLogger(getClass(), settings);
         this.cache = cache;
-        restController.registerFilter(aclFilter);
     }
 
     @Override

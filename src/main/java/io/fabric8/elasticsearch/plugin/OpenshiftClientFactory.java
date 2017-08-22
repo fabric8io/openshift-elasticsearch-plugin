@@ -21,7 +21,7 @@ import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 public class OpenshiftClientFactory {
-    
+
     public OpenShiftClient create(Config config) {
         return new DefaultOpenShiftClient(config);
     }

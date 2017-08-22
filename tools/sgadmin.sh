@@ -21,7 +21,9 @@ fi
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 BIN_PATH="java"
+ES_CONF="${ES_CONF:-$DIR/../../config}"
 
-cd "$DIR/../../config"
-echo $(pwd)
-"$BIN_PATH" $JAVA_OPTS -cp "$DIR/*:$DIR/../../lib/*" com.floragunn.searchguard.tools.SearchGuardAdmin "$@"
+pushd "${ES_CONF}"
+  echo $(pwd)
+  "$BIN_PATH" $JAVA_OPTS -Dsg.display_lic_none=true -cp "$DIR/*:$DIR/../../lib/*" com.floragunn.searchguard.tools.SearchGuardAdmin "$@"
+popd

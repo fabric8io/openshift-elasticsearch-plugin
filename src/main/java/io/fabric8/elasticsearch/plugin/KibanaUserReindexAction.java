@@ -19,11 +19,12 @@ package io.fabric8.elasticsearch.plugin;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Map.Entry;
 
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionResponse;
-import org.elasticsearch.action.ActionWriteResponse.ShardInfo;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse;
 import org.elasticsearch.action.admin.indices.mapping.get.GetFieldMappingsResponse.FieldMappingMetaData;
 import org.elasticsearch.action.delete.DeleteResponse;
@@ -32,44 +33,44 @@ import org.elasticsearch.action.get.MultiGetItemResponse;
 import org.elasticsearch.action.get.MultiGetResponse;
 import org.elasticsearch.action.get.MultiGetResponse.Failure;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.ActionFilter;
 import org.elasticsearch.action.support.ActionFilterChain;
+import org.elasticsearch.action.support.replication.ReplicationResponse.ShardInfo;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.ClusterService;
-import org.elasticsearch.common.inject.Inject;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.stream.ByteBufferStreamInput;
 import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.concurrent.ThreadContext;
+import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentParser;
+import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.index.get.GetResult;
+import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.tasks.Task;
 
-import com.google.common.collect.ImmutableMap;
-
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.kibana.GetResultBuilder;
 
+//TODO: This should be combinable with KibanaUserReindexFilter
+@SuppressWarnings("rawtypes")
 public class KibanaUserReindexAction implements ActionFilter, ConfigurationSettings {
 
-    private final ESLogger logger;
-    private final String kibanaIndex;
+    private static final Logger LOG = Loggers.getLogger(KibanaUserReindexAction.class);
+    private final String defaultKibanaIndex;
+    private final ThreadContext threadContext;
 
-    private Boolean enabled;
-
-    @Inject
-    public KibanaUserReindexAction(final Settings settings, final ClusterService clusterService, final Client client) {
-        this.enabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG,
-                OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
-        this.logger = Loggers.getLogger(KibanaUserReindexAction.class);
-        this.kibanaIndex = settings.get(KIBANA_CONFIG_INDEX_NAME, DEFAULT_USER_PROFILE_PREFIX);
-
-        if (enabled) {
-            logger.debug("Initializing KibanaUserReindexAction");
-        }
+    public KibanaUserReindexAction(final PluginSettings settings, final Client client, final ThreadContext threadContext) {
+        this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
+        this.threadContext = threadContext;
     }
 
     @Override
@@ -78,90 +79,111 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
         return Integer.MAX_VALUE;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void apply(Task task, String action, ActionRequest request, ActionListener listener,
+    public void apply(Task task, String action, final ActionRequest request, final ActionListener listener,
             ActionFilterChain chain) {
-        chain.proceed(task, action, request, listener);
-    }
+        LOG.debug("Response with Action '{}'", action);
+        chain.proceed(task, action, request, new ActionListener<ActionResponse>() {
 
-    @Override
-    public void apply(String action, ActionResponse response, @SuppressWarnings("rawtypes") ActionListener listener,
-            ActionFilterChain chain) {
+            @Override
+            public void onResponse(ActionResponse response) {
+                final OpenshiftRequestContext context = threadContext.getTransient(OPENSHIFT_REQUEST_CONTEXT);
+                if (containsKibanaUserIndex(response)) {
+                    if (response instanceof IndexResponse) {
+                        final IndexResponse ir = (IndexResponse) response;
 
-        if (enabled) {
-            logger.debug("Response with Action '{}' and class '{}'", action, response.getClass());
+                        String index = getIndex(ir);
+                        ShardId shardId = ir.getShardId();
 
-            if (containsKibanaUserIndex(response)) {
+                        IndexResponse.Builder builder = new IndexResponse.Builder();
+                        builder.setShardId(new ShardId(index, shardId.getIndex().getUUID(), shardId.id()));
+                        builder.setType(ir.getType());
+                        builder.setId(ir.getId());
+                        builder.setVersion(ir.getVersion());
+                        builder.setResult(ir.getResult());
+                        builder.setShardInfo(ir.getShardInfo());
+                        response = builder.build();
+                    } else if (response instanceof GetResponse) {
+                        response = new GetResponse(buildNewResult((GetResponse) response));
+                    } else if (response instanceof DeleteResponse) {
+                        final DeleteResponse dr = (DeleteResponse) response;
+                        String index = getIndex(dr);
+                        ShardId shardId = dr.getShardId();
+                        ShardInfo shardInfo = dr.getShardInfo();
 
-                if (response instanceof IndexResponse) {
-                    final IndexResponse ir = (IndexResponse) response;
+                        ShardId replacedShardId = new ShardId(index, shardId.getIndex().getUUID(), shardId.id());
+                        response = new DeleteResponse(replacedShardId, dr.getType(), dr.getId(), dr.getVersion(),
+                                RestStatus.NOT_FOUND != dr.status());
+                        ((DeleteResponse) response).setShardInfo(shardInfo);
+                    } else if (response instanceof MultiGetResponse) {
+                        final MultiGetResponse mgr = (MultiGetResponse) response;
 
-                    String index = getIndex(ir);
-                    ShardInfo shardInfo = ir.getShardInfo();
+                        MultiGetItemResponse[] responses = new MultiGetItemResponse[mgr.getResponses().length];
+                        int index = 0;
 
-                    response = new IndexResponse(index, ir.getType(), ir.getId(), ir.getVersion(), ir.isCreated());
-                    ((IndexResponse) response).setShardInfo(shardInfo);
-                } else if (response instanceof GetResponse) {
-                    response = new GetResponse(buildNewResult((GetResponse) response));
-                } else if (response instanceof DeleteResponse) {
-                    final DeleteResponse dr = (DeleteResponse) response;
-                    String index = getIndex(dr);
-                    ShardInfo shardInfo = dr.getShardInfo();
+                        for (MultiGetItemResponse item : mgr.getResponses()) {
 
-                    response = new DeleteResponse(index, dr.getType(), dr.getId(), dr.getVersion(), dr.isFound());
-                    ((DeleteResponse) response).setShardInfo(shardInfo);
-                } else if (response instanceof MultiGetResponse) {
-                    final MultiGetResponse mgr = (MultiGetResponse) response;
+                            GetResponse itemResponse = item.getResponse();
+                            Failure itemFailure = item.getFailure();
 
-                    MultiGetItemResponse[] responses = new MultiGetItemResponse[mgr.getResponses().length];
-                    int index = 0;
+                            GetResponse getResponse = (itemResponse != null)
+                                    ? new GetResponse(buildNewResult(itemResponse))
+                                    : null;
+                            Failure failure = (itemFailure != null) ? buildNewFailure(itemFailure) : null;
 
-                    for (MultiGetItemResponse item : mgr.getResponses()) {
+                            responses[index] = new MultiGetItemResponse(getResponse, failure);
+                            index++;
+                        }
 
-                        GetResponse itemResponse = item.getResponse();
-                        Failure itemFailure = item.getFailure();
+                        response = new MultiGetResponse(responses);
+                    } else if (response instanceof GetFieldMappingsResponse) {
+                        final GetFieldMappingsResponse gfmResponse = (GetFieldMappingsResponse) response;
+                        Map<String, Map<String, Map<String, FieldMappingMetaData>>> mappings = gfmResponse
+                                .mappings();
 
-                        GetResponse getResponse = (itemResponse != null) ? new GetResponse(buildNewResult(itemResponse))
-                                : null;
-                        Failure failure = (itemFailure != null) ? buildNewFailure(itemFailure) : null;
+                        String index = "";
+                        for (String key : mappings.keySet()) {
 
-                        responses[index] = new MultiGetItemResponse(getResponse, failure);
-                        index++;
-                    }
+                            index = key;
+                            if (isKibanaUserIndex(index)) {
+                                index = defaultKibanaIndex;
+                            }
+                        }
 
-                    response = new MultiGetResponse(responses);
-                } else if (response instanceof GetFieldMappingsResponse) {
-                    final GetFieldMappingsResponse gfmResponse = (GetFieldMappingsResponse) response;
-                    ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = gfmResponse
-                            .mappings();
+                        BytesStreamOutput bso = new BytesStreamOutput();
+                        try {
 
-                    String index = "";
-                    for (String key : mappings.keySet()) {
+                            MappingResponseRemapper remapper = new MappingResponseRemapper();
+                            remapper.updateMappingResponse(bso, index, mappings);
 
-                        index = key;
-                        if (isKibanaUserIndex(index)) {
-                            index = kibanaIndex;
+                            ByteBuffer buffer = ByteBuffer.wrap(bso.bytes().toBytesRef().bytes);
+                            ByteBufferStreamInput input = new ByteBufferStreamInput(buffer);
+
+                            response.readFrom(input);
+                        } catch (IOException e) {
+                            LOG.error("Error while rewriting GetFieldMappingsResponse", e);
+                        }
+                    } else if (response instanceof SearchResponse && context != null) {
+                        String json = Strings.toString((SearchResponse)response);
+                        json = json.replaceAll("_index\".?:.?\"" + context.getKibanaIndex() + "\"", "_index\":\"" + defaultKibanaIndex + "\"");
+                        LOG.debug("Modified SearchResponse to {}", json);
+                        try (XContentParser parser = XContentFactory.xContent(XContentType.JSON).createParser(NamedXContentRegistry.EMPTY, json)) {
+                            response = SearchResponse.fromXContent(parser);
+                        } catch (IOException e) {
+                            LOG.error("Error trying to modify kibana index response", e);
                         }
                     }
-
-                    BytesStreamOutput bso = new BytesStreamOutput();
-                    try {
-
-                        MappingResponseRemapper remapper = new MappingResponseRemapper();
-                        remapper.updateMappingResponse(bso, index, mappings);
-
-                        ByteBuffer buffer = ByteBuffer.wrap(bso.bytes().toBytes());
-                        ByteBufferStreamInput input = new ByteBufferStreamInput(buffer);
-
-                        response.readFrom(input);
-                    } catch (IOException e) {
-                        logger.error("Error while rewriting GetFieldMappingsResponse", e);
-                    }
                 }
+                listener.onResponse(response);
             }
-        }
 
-        chain.proceed(action, response, listener);
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+
+            }
+        });
     }
 
     private GetResult buildNewResult(GetResponse response) {
@@ -175,17 +197,17 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
         String message = failure.getMessage();
 
         if (isKibanaUserIndex(index)) {
-            message = message.replace(index, kibanaIndex);
-            index = kibanaIndex;
+            message = message.replace(index, defaultKibanaIndex);
+            index = defaultKibanaIndex;
         }
 
-        Throwable t = new Throwable(message, failure.getFailure().getCause());
+        Exception t = new Exception(message, failure.getFailure().getCause());
 
         return new Failure(index, failure.getType(), failure.getId(), t);
     }
 
     private boolean isKibanaUserIndex(String index) {
-        return (index.startsWith(kibanaIndex) && !index.equalsIgnoreCase(kibanaIndex));
+        return (index.startsWith(defaultKibanaIndex) && !index.equalsIgnoreCase(defaultKibanaIndex));
     }
 
     private String getIndex(ActionResponse response) {
@@ -200,7 +222,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
         }
 
         if (isKibanaUserIndex(index)) {
-            index = kibanaIndex;
+            index = defaultKibanaIndex;
         }
 
         return index;
@@ -227,6 +249,15 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
 
             return false;
         }
+        
+        if (response instanceof SearchResponse) {
+            SearchResponse search = (SearchResponse) response;
+            for (SearchHit hit : search.getHits()) {
+                if (isKibanaUserIndex(hit.getIndex())) {
+                    return true;
+                }
+            }
+        }
 
         if (response instanceof IndexResponse) {
             index = ((IndexResponse) response).getIndex();
@@ -235,7 +266,7 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
         } else if (response instanceof DeleteResponse) {
             index = ((DeleteResponse) response).getIndex();
         } else if (response instanceof GetFieldMappingsResponse) {
-            ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings = ((GetFieldMappingsResponse) response)
+            Map<String, Map<String, Map<String, FieldMappingMetaData>>> mappings = ((GetFieldMappingsResponse) response)
                     .mappings();
             for (String key : mappings.keySet()) {
                 index = key;
@@ -250,18 +281,16 @@ public class KibanaUserReindexAction implements ActionFilter, ConfigurationSetti
      */
     private static class MappingResponseRemapper extends ActionResponse implements ToXContent {
 
-        ESLogger logger = Loggers.getLogger(MappingResponseRemapper.class);
-
         public void updateMappingResponse(StreamOutput out, String index,
-                ImmutableMap<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> mappings)
+                Map<String, Map<String, Map<String, FieldMappingMetaData>>> mappings)
                 throws IOException {
             super.writeTo(out);
             out.writeVInt(mappings.size());
-            for (Map.Entry<String, ImmutableMap<String, ImmutableMap<String, FieldMappingMetaData>>> indexEntry : mappings
+            for (Entry<String, Map<String, Map<String, FieldMappingMetaData>>> indexEntry : mappings
                     .entrySet()) {
                 out.writeString(index);
                 out.writeVInt(indexEntry.getValue().size());
-                for (Map.Entry<String, ImmutableMap<String, FieldMappingMetaData>> typeEntry : indexEntry.getValue()
+                for (Map.Entry<String, Map<String, FieldMappingMetaData>> typeEntry : indexEntry.getValue()
                         .entrySet()) {
                     out.writeString(typeEntry.getKey());
                     out.writeVInt(typeEntry.getValue().size());

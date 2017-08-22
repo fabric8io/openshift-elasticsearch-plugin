@@ -17,9 +17,11 @@
 package io.fabric8.elasticsearch.util;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
@@ -27,6 +29,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.PluginSettings;
 
 public class RequestUtilsTest {
     
@@ -37,13 +40,15 @@ public class RequestUtilsTest {
     @Before
     public void setUp() throws Exception {
         Settings settings = Settings.builder().put(ConfigurationSettings.SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, PROXY_HEADER).build();
-        util = new RequestUtils(settings);
+        PluginSettings pluginSettings = new PluginSettings(settings);
+        util = new RequestUtils(pluginSettings, null);
     }
 
     @Test
     public void testGetUserFromHeader() {
-        RestRequest request = mock(RestRequest.class);
-        when(request.header(eq(PROXY_HEADER))).thenReturn(USER);
+        Map<String, List<String>> headers = new TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
+        headers.put(PROXY_HEADER, Arrays.asList(USER));
+        RestRequest request = new TestRestRequest(headers);
         
         assertEquals(USER, util.getUser(request));
     }

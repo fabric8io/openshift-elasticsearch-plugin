@@ -50,6 +50,9 @@ sg_role_admin:
   cluster:
     - CLUSTER_ALL
 
+sg_role_prometheus:
+  cluster: [METRICS]
+
 sg_project_operations:
   indices:
     '?operations?*':

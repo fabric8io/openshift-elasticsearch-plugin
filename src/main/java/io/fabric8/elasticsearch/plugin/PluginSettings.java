@@ -20,15 +20,14 @@ import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory.USER;
 
 import org.apache.commons.lang.ArrayUtils;
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 
 public class PluginSettings implements ConfigurationSettings {
 
-    private static final ESLogger LOGGER = Loggers.getLogger(PluginSettings.class);
-    
+    private static final Logger LOGGER = Loggers.getLogger(PluginSettings.class);
+
     private String kibanaIndexMode;
     private String roleStrategy;
     private final String cdmProjectPrefix;
@@ -37,16 +36,18 @@ public class PluginSettings implements ConfigurationSettings {
     private final String kibanaVersion;
     private final String kbnVersionHeader;
     private final Boolean enabled;
-    
-    @Inject
+    private final Boolean reWriteEnabled;
+    private final Settings settings;
+
     public PluginSettings(final Settings settings) {
+        this.settings = settings;
         this.kibanaIndexMode = settings.get(OPENSHIFT_KIBANA_INDEX_MODE, KibanaIndexMode.DEFAULT_MODE);
-        if(!ArrayUtils.contains(new String [] {UNIQUE, SHARED_OPS, SHARED_NON_OPS}, kibanaIndexMode.toLowerCase())) {
+        if (!ArrayUtils.contains(new String[] { UNIQUE, SHARED_OPS, SHARED_NON_OPS }, kibanaIndexMode.toLowerCase())) {
             this.kibanaIndexMode = UNIQUE;
         }
-        
+
         this.roleStrategy = settings.get(OPENSHIFT_ACL_ROLE_STRATEGY, DEFAULT_ACL_ROLE_STRATEGY);
-        if(!ArrayUtils.contains(new String [] {PROJECT, USER}, roleStrategy.toLowerCase())) {
+        if (!ArrayUtils.contains(new String[] { PROJECT, USER }, roleStrategy.toLowerCase())) {
             this.kibanaIndexMode = USER;
         }
 
@@ -57,29 +58,35 @@ public class PluginSettings implements ConfigurationSettings {
         this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+        this.reWriteEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG,
+                OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
 
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
         LOGGER.debug("roleStrategy: {}", this.roleStrategy);
 
     }
-    
+
+    public Settings getSettings() {
+        return this.settings;
+    }
+
     public String getRoleStrategy() {
         return this.roleStrategy;
     }
-    
+
     public String getKibanaIndexMode() {
         return kibanaIndexMode;
     }
-    
+
     public String getCdmProjectPrefix() {
         return cdmProjectPrefix;
     }
-    
+
     public String getDefaultKibanaIndex() {
         return defaultKibanaIndex;
     }
-    
+
     public String getSearchGuardIndex() {
         return searchGuardIndex;
     }
@@ -94,6 +101,10 @@ public class PluginSettings implements ConfigurationSettings {
 
     public Boolean isEnabled() {
         return enabled;
+    }
+
+    public Boolean isKibanaRewriteEnabled() {
+        return reWriteEnabled;
     }
 
     public void setKibanaIndexMode(String kibanaIndexMode) {

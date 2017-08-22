@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.elasticsearch.common.settings.Settings;
 import org.junit.Test;
 
 import io.fabric8.elasticsearch.plugin.Samples;
@@ -43,7 +42,7 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
 
 public class SearchGuardRolesMappingACLTest {
 
-    private UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+    private UserProjectCache cache = new UserProjectCacheMapAdapter();
 
     @Test
     public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
@@ -86,6 +85,7 @@ public class SearchGuardRolesMappingACLTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testSyncFromCache() throws Exception {
 
