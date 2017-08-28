@@ -41,7 +41,7 @@ public class PluginSettings implements ConfigurationSettings {
     @Inject
     public PluginSettings(final Settings settings) {
         this.kibanaIndexMode = settings.get(OPENSHIFT_KIBANA_INDEX_MODE, KibanaIndexMode.DEFAULT_MODE);
-        if(!ArrayUtils.contains(new String [] {UNIQUE, SHARED_OPS}, kibanaIndexMode.toLowerCase())) {
+        if(!ArrayUtils.contains(new String [] {UNIQUE, SHARED_OPS, SHARED_NON_OPS}, kibanaIndexMode.toLowerCase())) {
             this.kibanaIndexMode = UNIQUE;
         }
         

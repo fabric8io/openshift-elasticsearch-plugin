@@ -169,10 +169,13 @@ public class KibanaSeed implements ConfigurationSettings {
             if (filteredProjects.isEmpty()) {
                 filteredProjects.add(BLANK_PROJECT);
             } else {
-                String alias = UserRolesSyncStrategy.formatAllAlias(context.getUser());
-                LOGGER.debug("Adding indexes to alias '{}' for user '{}'", alias, context.getUser());
-                buildUserAlias(filteredProjects, projectPrefix, alias);
-                filteredProjects.add(alias);
+                // only add alias if kibana index mode is UNIQUE
+                if(context.getKibanaIndexMode() == UNIQUE) {
+                    String alias = UserRolesSyncStrategy.formatAllAlias(context.getUser());
+                    LOGGER.debug("Adding indexes to alias '{}' for user '{}'", alias, context.getUser());
+                    buildUserAlias(filteredProjects, projectPrefix, alias);
+                    filteredProjects.add(alias);
+                }
             }
         }
     }

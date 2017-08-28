@@ -87,6 +87,45 @@ public class SearchGuardRoleACLTest {
     }
 
     @Test
+    public void testGeneratingKibanaOpsShared() throws Exception {
+        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user2", "user2token", new HashSet<String>(), true);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(cache);
+        
+        assertJson("", Samples.ROLES_SHARED_OPS_KIBANA_INDEX.getContent(), roles.toMap());
+    }
+    
+    @Test
+    public void testGeneratingKibanaNonOpsShared() throws Exception {
+        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        cache.update("user1", "user2token", new HashSet<String>(), false);
+        cache.update("user2", "user2token", new HashSet<String>(), false);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_NON_OPS);
+        strat.syncFrom(cache);
+        
+        assertJson("", Samples.ROLES_SHARED_NON_OPS_KIBANA_INDEX.getContent(), roles.toMap());
+    }
+    
+    @Test
+    public void testGeneratingKibanaShared() throws Exception {
+        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        cache.update("user1", "user2token", new HashSet<String>(), true);
+        cache.update("user2", "user2token", new HashSet<String>(), false);
+        
+        SearchGuardRoles roles = new SearchGuardRoles();
+        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_NON_OPS);
+        strat.syncFrom(cache);
+        
+        assertJson("", Samples.ROLES_SHARED_KIBANA_INDEX.getContent(), roles.toMap());
+    }
+    
+    @Test
     public void testDeserialization() throws Exception {
         new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
     }
