@@ -11,6 +11,7 @@ gen_project_operations:
     ?operations?:
       '*': [INDEX_OPERATIONS]
 gen_user_user2_bar_email_com:
+  cluster: [USER_CLUSTER_OPERATIONS]
   indices:
     .all_user2_bar_email_com:
       '*': [INDEX_PROJECT]

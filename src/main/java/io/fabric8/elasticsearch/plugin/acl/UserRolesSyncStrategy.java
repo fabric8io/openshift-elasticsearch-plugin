@@ -49,6 +49,7 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
                 //permissions for kibana Index
                 String kibIndexName = formatKibanaIndexName(cache, user, token, kibanaIndexMode);
                 RoleBuilder role = new RoleBuilder(roleName)
+                        .setClusters(USER_ROLE_CLUSTER_ACTIONS)
                         .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
                 
                 //permissions for projects
