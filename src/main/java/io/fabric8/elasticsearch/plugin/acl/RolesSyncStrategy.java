@@ -22,6 +22,7 @@ package io.fabric8.elasticsearch.plugin.acl;
  */
 public interface RolesSyncStrategy {
     
+    static final String[] USER_ROLE_CLUSTER_ACTIONS = { "USER_CLUSTER_OPERATIONS" };
     static final String[] PROJECT_ROLE_ACTIONS = { "INDEX_PROJECT" };
     static final String[] KIBANA_ROLE_ALL_INDEX_ACTIONS = { "INDEX_ANY_KIBANA" };
     static final String[] KIBANA_ROLE_INDEX_ACTIONS = { "INDEX_KIBANA" };
