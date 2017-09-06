@@ -106,6 +106,11 @@ public class OpenshiftRequestContextFactoryTest {
                     ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
                     context.getKibanaIndex());
             break;
+        case "shared_non_ops":
+            assertEquals("Exp. Kibana index mode to to be '.kibana_non_ops'",
+                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "_non_ops",
+                    context.getKibanaIndex());
+            break;    
         case "unique":
             assertEquals("Exp. Kibana index mode to to be '.kibana.<userhash>'",
                     ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "." + KibanaUserReindexFilter.getUsernameHash(context.getUser()),
@@ -147,6 +152,22 @@ public class OpenshiftRequestContextFactoryTest {
         assertKibanaIndexIs("shared_ops");
     }
 
+    @Test
+    public void testGetKibanaIndexWhenNonOpsSharedModeForOperationsUser() throws Exception {
+        givenKibanaIndexMode("shared_non_ops");
+        givenUserContextFactory(true);
+        whenCreatingUserContext();
+        assertKibanaIndexIs("shared_ops");
+    }
+    
+    @Test
+    public void testGetKibanaIndexWhenNonOpsSharedModeForNonOperationsUser() throws Exception {
+        givenKibanaIndexMode("shared_non_ops");
+        givenUserContextFactory(false);
+        whenCreatingUserContext();
+        assertKibanaIndexIs("shared_non_ops");
+    }
+    
     @Test
     public void testGetKibanaIndexWhenOpsSharedModeForNonOperationsUser() throws Exception {
         givenKibanaIndexMode("shared_ops");
