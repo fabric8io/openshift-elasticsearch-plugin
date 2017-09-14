@@ -71,7 +71,7 @@ public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
     }
     
     public static String formatUserRoleName(String username) {
-        return String.format("%s_%s", USER_PREFIX, username.replaceAll("[\\.@]", "_"));
+        return String.format("%s_%s", USER_PREFIX, username.replaceAll("[\\\\.@/]", "_"));
     }
 
 }

@@ -21,9 +21,12 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.http.netty.NettyHttpRequest;
 import org.elasticsearch.rest.RestRequest;
+import org.jboss.netty.handler.codec.http.HttpRequest;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
@@ -69,5 +72,26 @@ public class RequestUtils implements ConfigurationSettings  {
             LOGGER.debug("User '{}' isOperationsUser: {}", user, allowed);
         }
         return allowed;
+    }
+
+    public void setUser(RestRequest request, String user) {
+        LOGGER.debug("Modifying header '{}' to be '{}'", proxyUserHeader, user);
+        request.putHeader(proxyUserHeader, user);
+    }
+    
+    /**
+     * Modify the request of needed
+     * @param request the original request
+     * @param context the Openshift context 
+     * @return  a modified request
+     */
+    public RestRequest modifyRequest(RestRequest request, OpenshiftRequestContext context) {
+        if(!getUser(request).equals(context.getUser()) && request instanceof NettyHttpRequest) {
+            NettyHttpRequest netty = (NettyHttpRequest)request;
+            HttpRequest httpRequest = netty.request();
+            httpRequest.headers().set(proxyUserHeader, context.getUser());
+            return new NettyHttpRequest(httpRequest, netty.getChannel());
+        }
+        return request;
     }
 }

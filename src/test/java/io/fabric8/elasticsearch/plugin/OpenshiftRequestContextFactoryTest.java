@@ -49,10 +49,10 @@ import io.fabric8.openshift.api.model.ProjectListBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
 
 public class OpenshiftRequestContextFactoryTest {
-    
+
     private Settings.Builder settingsBuilder = Settings.builder();
     private OpenshiftRequestContextFactory factory;
-    private OpenshiftRequestContext context; 
+    private OpenshiftRequestContext context;
     private OpenshiftClientFactory clientFactory = mock(OpenshiftClientFactory.class);
     private RestRequest request;
     private UserProjectCache cache = mock(UserProjectCache.class);
@@ -65,60 +65,68 @@ public class OpenshiftRequestContextFactoryTest {
         when(request.header(eq("Authorization"))).thenReturn("Bearer ABC123");
         givenUserIsCashed(true);
     }
-    
+
     private void givenUserIsCashed(boolean cached) {
         when(cache.hasUser(anyString(), anyString())).thenReturn(cached);
     }
-    
+
     private void givenUserContextFactory(boolean isOperationsUser) {
         Settings settings = settingsBuilder.build();
         utils = spy(new RequestUtils(settings));
         doReturn(isOperationsUser).when(utils).isOperationsUser(any(RestRequest.class));
-        
-        factory = new OpenshiftRequestContextFactory(settings , utils, clientFactory);
+
+        factory = new OpenshiftRequestContextFactory(settings, utils, clientFactory);
     }
-    
+
     @SuppressWarnings("unchecked")
     private void givenUserHasProjects() {
         OpenShiftClient client = mock(OpenShiftClient.class);
-        ClientNonNamespaceOperation<Project, ProjectList, DoneableProject, ClientResource<Project, DoneableProject>> projects =  mock(ClientNonNamespaceOperation.class);
+        ClientNonNamespaceOperation<Project, ProjectList, DoneableProject, ClientResource<Project, DoneableProject>> projects = mock(
+                ClientNonNamespaceOperation.class);
         ProjectList projectList = new ProjectListBuilder(false)
-                .addToItems(new ProjectBuilder(false).withNewMetadata().withName("foo").endMetadata().build())
-                .build();
+                .addToItems(new ProjectBuilder(false).withNewMetadata().withName("foo").endMetadata().build()).build();
         when(projects.list()).thenReturn(projectList);
         when(client.projects()).thenReturn(projects);
         when(clientFactory.create(any(Config.class))).thenReturn(client);
     }
-    
+
     private void givenKibanaIndexMode(String value) {
         settingsBuilder.put(ConfigurationSettings.OPENSHIFT_KIBANA_INDEX_MODE, value);
     }
-    
-    private OpenshiftRequestContext whenCreatingUserContext() throws Exception{
+
+    private OpenshiftRequestContext whenCreatingUserContext() throws Exception {
         this.context = factory.create(request, cache);
         return this.context;
     }
-    
+
     private void assertKibanaIndexIs(String mode) {
         switch (mode) {
         case "shared_ops":
-            assertEquals("Exp. Kibana index mode to to be '.kibana'",
-                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
+            assertEquals("Exp. Kibana index mode to to be '.kibana'", ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX,
                     context.getKibanaIndex());
             break;
         case "shared_non_ops":
             assertEquals("Exp. Kibana index mode to to be '.kibana_non_ops'",
-                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "_non_ops",
-                    context.getKibanaIndex());
-            break;    
+                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "_non_ops", context.getKibanaIndex());
+            break;
         case "unique":
             assertEquals("Exp. Kibana index mode to to be '.kibana.<userhash>'",
-                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "." + KibanaUserReindexFilter.getUsernameHash(context.getUser()),
+                    ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX + "."
+                            + KibanaUserReindexFilter.getUsernameHash(context.getUser()),
                     context.getKibanaIndex());
             break;
         default:
             fail("Unable to assert the kibana index since the kibanaIndexMode is unrecognized: " + mode);
         }
+    }
+
+    @Test
+    public void testCreatingUserContextWhenUserHasBackSlash() throws Exception {
+        when(request.header(eq(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER))).thenReturn("test\\user");
+
+        givenUserContextFactory(false);
+        whenCreatingUserContext();
+        assertEquals("test/user", context.getUser());
     }
 
     @Test
@@ -135,7 +143,7 @@ public class OpenshiftRequestContextFactoryTest {
         whenCreatingUserContext();
         assertKibanaIndexIs("unique");
     }
-    
+
     @Test
     public void testGetKibanaIndexWhenUniqueMode() throws Exception {
         givenKibanaIndexMode("unique");
@@ -143,7 +151,7 @@ public class OpenshiftRequestContextFactoryTest {
         whenCreatingUserContext();
         assertKibanaIndexIs("unique");
     }
-    
+
     @Test
     public void testGetKibanaIndexWhenOpsSharedModeForOperationsUser() throws Exception {
         givenKibanaIndexMode("shared_ops");
@@ -159,7 +167,7 @@ public class OpenshiftRequestContextFactoryTest {
         whenCreatingUserContext();
         assertKibanaIndexIs("shared_ops");
     }
-    
+
     @Test
     public void testGetKibanaIndexWhenNonOpsSharedModeForNonOperationsUser() throws Exception {
         givenKibanaIndexMode("shared_non_ops");
@@ -167,7 +175,7 @@ public class OpenshiftRequestContextFactoryTest {
         whenCreatingUserContext();
         assertKibanaIndexIs("shared_non_ops");
     }
-    
+
     @Test
     public void testGetKibanaIndexWhenOpsSharedModeForNonOperationsUser() throws Exception {
         givenKibanaIndexMode("shared_ops");
@@ -175,7 +183,7 @@ public class OpenshiftRequestContextFactoryTest {
         whenCreatingUserContext();
         assertKibanaIndexIs("unique");
     }
-    
+
     @Test
     public void testCreateUserContextWhenRequestHasUsernameAndPassword() throws Exception {
         givenUserContextFactory(true);
