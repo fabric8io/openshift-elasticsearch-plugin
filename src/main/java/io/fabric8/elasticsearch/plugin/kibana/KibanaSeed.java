@@ -37,7 +37,6 @@ import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.update.UpdateRequest;
@@ -56,6 +55,7 @@ import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftR
 import io.fabric8.elasticsearch.plugin.PluginClient;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
 import io.fabric8.elasticsearch.plugin.acl.UserRolesSyncStrategy;
+import io.fabric8.elasticsearch.util.IndexUtil;
 
 public class KibanaSeed implements ConfigurationSettings {
 
@@ -108,7 +108,7 @@ public class KibanaSeed implements ConfigurationSettings {
         
         // If none have been set yet
         if (indexPatterns.isEmpty()) {
-            create(context.getKibanaIndex(), filteredProjects, true, client, kibanaVersion, projectPrefix);
+            create(context.getKibanaIndex(), filteredProjects, true, client, kibanaVersion, projectPrefix, indexPatterns);
             changed = true;
         } else {
             
@@ -132,7 +132,7 @@ public class KibanaSeed implements ConfigurationSettings {
             }
 
             // for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
-            create(context.getKibanaIndex(), filteredProjects, false, client, kibanaVersion, projectPrefix);
+            create(context.getKibanaIndex(), filteredProjects, false, client, kibanaVersion, projectPrefix, indexPatterns);
 
             // cull any that are in ES but not in OS (remaining in indexPatterns)
             remove(context.getKibanaIndex(), indexPatterns, client, projectPrefix);
@@ -269,9 +269,14 @@ public class KibanaSeed implements ConfigurationSettings {
             if (projects.isEmpty()) {
                 return;
             }
+            Set<String> aliasedIndicies = pluginClient.getIndicesForAlias(alias);
+            aliasedIndicies = new IndexUtil().replaceDateSuffix("*", aliasedIndicies);
             Map<String, String> patternAlias = new HashMap<>(projects.size());
             for (String project : projects) {
-                patternAlias.put(getIndexPattern(project, projectPrefix), alias);
+                String indexPattern = getIndexPattern(project, projectPrefix);
+                if(!aliasedIndicies.contains(indexPattern)) {
+                    patternAlias.put(indexPattern, alias);
+                }
             }
             pluginClient.alias(patternAlias);
             
@@ -281,7 +286,7 @@ public class KibanaSeed implements ConfigurationSettings {
         }
         
     }
-
+    
     private String getDefaultIndex(OpenshiftRequestContext context, Client esClient, String kibanaVersion, String projectPrefix) {
         GetRequest request = esClient
                 .prepareGet(context.getKibanaIndex(), DEFAULT_INDEX_TYPE, kibanaVersion)
@@ -318,11 +323,15 @@ public class KibanaSeed implements ConfigurationSettings {
     }
 
     private void create(String kibanaIndex, List<String> projects, boolean setDefault, Client esClient,
-            String kibanaVersion, String projectPrefix) {
+            String kibanaVersion, String projectPrefix, Set<String> indexPatterns) {
         boolean defaultSet = !setDefault;
-
+        LOGGER.trace("Creating index-patterns for projects: '{}'", projects);
         for (String project : projects) {
-            createIndex(kibanaIndex, project, esClient, projectPrefix);
+            if(indexPatterns.contains(project)) { //no need to update
+                LOGGER.trace("Skipping creation of index-pattern for project '{}'. It already exists.", project);
+                continue;
+            }
+            createIndexPattern(kibanaIndex, project, esClient, projectPrefix);
 
             // set default
             if (!defaultSet) {
@@ -377,7 +386,7 @@ public class KibanaSeed implements ConfigurationSettings {
         return patterns;
     }
 
-    private void createIndex(String kibanaIndex, String project, Client esClient, String projectPrefix) {
+    private void createIndexPattern(String kibanaIndex, String project, Client esClient, String projectPrefix) {
 
         final String indexPattern = getIndexPattern(project, projectPrefix);
         String source;
@@ -390,31 +399,17 @@ public class KibanaSeed implements ConfigurationSettings {
         }
 
         if (source != null) {
+            LOGGER.trace("Creating index-pattern for project '{}'", project);
             source = source.replaceAll("$TITLE$", indexPattern);
-            executeCreate(kibanaIndex, INDICIES_TYPE, indexPattern, source, esClient);
+            pluginClient.createDocument(kibanaIndex, INDICIES_TYPE, indexPattern, source);
         } else {
-            LOGGER.debug("The source for the index mapping is null.  Skipping trying to createIndex {}", indexPattern);
+            LOGGER.debug("The source for the index mapping is null.  Skipping trying to create index pattern {}", indexPattern);
         }
     }
 
     private void deleteIndex(String kibanaIndex, String project, Client esClient, String projectPrefix) {
 
         executeDelete(kibanaIndex, INDICIES_TYPE, getIndexPattern(project, projectPrefix), esClient);
-    }
-
-    private void executeCreate(String index, String type, String id, String source, Client esClient) {
-
-        LOGGER.debug("CREATE: '{}/{}/{}' source: '{}'", index, type, id, source);
-
-        IndexRequest request = esClient.prepareIndex(index, type, id).setSource(source).request();
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-
-        try {
-            esClient.index(request).get();
-        } catch (InterruptedException | ExecutionException e) {
-            // Avoid printing out any kibana specific information?
-            LOGGER.error("Error executing create request", e);
-        }
     }
 
     private void executeUpdate(String index, String type, String id, String source, Client esClient) {
