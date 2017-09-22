@@ -162,9 +162,8 @@ public class KibanaSeed implements ConfigurationSettings {
         if (context.isOperationsUser()) {
             // Check roles here, if user is a cluster-admin we should add
             LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
-            buildAdminAlias(filteredProjects, projectPrefix);
-            filteredProjects.add(ADMIN_ALIAS_NAME);
             filteredProjects.add(OPERATIONS_PROJECT);
+            buildAdminAlias(filteredProjects, projectPrefix);
         } else {
             if (filteredProjects.isEmpty()) {
                 filteredProjects.add(BLANK_PROJECT);
