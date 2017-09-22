@@ -85,6 +85,6 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
     }
 
     public static String formatAllAlias(final String user) {
-        return ".all_" + user.replaceAll("[\\.@]", "_");
+        return ".all_" + user.replaceAll("[\\\\.@/]", "_");
     }
 }

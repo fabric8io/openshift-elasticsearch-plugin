@@ -51,6 +51,7 @@ import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
+import io.fabric8.elasticsearch.util.RequestUtils;
 
 /**
  * REST filter to update the ACL when a user first makes a request
@@ -75,12 +76,14 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     private final Client client;
     private final OpenshiftRequestContextFactory contextFactory;
     private final SearchGuardSyncStrategyFactory documentFactory;
+    private final RequestUtils utils;
 
 
     @Inject
     public DynamicACLFilter(final UserProjectCache cache, final PluginSettings settings, final KibanaSeed seed, 
             final Client client, final OpenshiftRequestContextFactory contextFactory,
-            final SearchGuardSyncStrategyFactory documentFactory) {
+            final SearchGuardSyncStrategyFactory documentFactory,
+            final RequestUtils utils) {
         this.client = client;
         this.cache = cache;
         this.kibanaSeed = seed;
@@ -91,6 +94,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         this.kbnVersionHeader = settings.getKbnVersionHeader();
         this.cdmProjectPrefix = settings.getCdmProjectPrefix();
         this.enabled = settings.isEnabled();
+        this.utils = utils;
     }
 
     @Override
@@ -103,6 +107,7 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 // -- otherwise use the config one
                 String kbnVersion = getKibanaVersion(request);
                 final OpenshiftRequestContext requestContext = contextFactory.create(request, cache);
+                request = utils.modifyRequest(request, requestContext);
                 request.putInContext(OPENSHIFT_REQUEST_CONTEXT, requestContext);
                 if (requestContext.isAuthenticated() && !cache.hasUser(requestContext.getUser(), requestContext.getToken())) {
                     if (updateCache(requestContext, kbnVersion)) {
