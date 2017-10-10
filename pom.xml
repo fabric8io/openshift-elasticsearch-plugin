@@ -16,20 +16,6 @@
     limitations under the License.
 
 -->
-<!-- Copyright (C) 2015 Red Hat, Inc. Licensed under the Apache License, 
-    Version 2.0 (the "License"); you may not use this file except in compliance 
-    with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 
-    Unless required by applicable law or agreed to in writing, software distributed 
-    under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES 
-    OR CONDITIONS OF ANY KIND, either express or implied. See the License for 
-    the specific language governing permissions and limitations under the License. -->
-<!-- Copyright (C) 2015 Red Hat, Inc. Licensed under the Apache License, 
-    Version 2.0 (the "License"); you may not use this file except in compliance 
-    with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 
-    Unless required by applicable law or agreed to in writing, software distributed 
-    under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES 
-    OR CONDITIONS OF ANY KIND, either express or implied. See the License for 
-    the specific language governing permissions and limitations under the License. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
@@ -89,10 +75,6 @@
 
         <elasticsearch.plugin.name>openshift-elasticsearch</elasticsearch.plugin.name>
         <elasticsearch.version>2.4.4</elasticsearch.version>
-        <!-- Whenever you change Elasticsearch version verify and update 
-            Lucene version as well. Why? Because ES integration test support is based 
-            on Lucene randomized testing framework. https://www.elastic.co/guide/en/elasticsearch/reference/2.4/why-randomized-testing.html -->
-        <lucene.version>5.5.2</lucene.version>
         <kubernetes-client.version>2.6.3</kubernetes-client.version>
         <searchguard.version>2.4.4.10</searchguard.version>
         <searchguard-ssl.version>2.4.4.19</searchguard-ssl.version>
@@ -106,16 +88,6 @@
             <artifactId>elasticsearch</artifactId>
             <version>${elasticsearch.version}</version>
             <scope>provided</scope>
-            <exclusions>
-                <exclusion>
-                    <artifactId>jackson-core</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-dataformat-yaml</artifactId>
-                    <groupId>com.fasterxml.jackson.dataformat</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.fabric8</groupId>
@@ -217,20 +189,6 @@
             <version>1.16</version>
             <scope>test</scope>
         </dependency>
-        <!-- Why we need lucene-test-framework? See the following doc: https://www.elastic.co/guide/en/elasticsearch/reference/2.4/using-elasticsearch-test-classes.html -->
-        <dependency>
-            <groupId>org.apache.lucene</groupId>
-            <artifactId>lucene-test-framework</artifactId>
-            <version>${lucene.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.elasticsearch</groupId>
-            <artifactId>elasticsearch</artifactId>
-            <version>${elasticsearch.version}</version>
-            <scope>test</scope>
-            <type>test-jar</type>
-        </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
@@ -320,10 +278,6 @@
                     <includes>
                         <include>**/*IntegrationTest.java</include>
                     </includes>
-                    <!-- Excluded for now. See: https://github.com/fabric8io/openshift-elasticsearch-plugin/issues/90 -->
-                    <excludes>
-                        <exclude>**/ElasticsearchIntegrationTest.java</exclude>
-                    </excludes>
                 </configuration>
                 <executions>
                     <execution>
