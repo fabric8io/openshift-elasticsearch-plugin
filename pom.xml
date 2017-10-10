@@ -80,6 +80,7 @@
         <searchguard-ssl.version>2.4.4.19</searchguard-ssl.version>
         <!-- used by vendor builds to use vendor version of searchguard plugins -->
         <version.suffix />
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencies>

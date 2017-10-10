@@ -63,7 +63,8 @@ public class SearchGuardRolesMappingACLTest {
         cache.update("user1", "user2token", new HashSet<String>(), true);
         cache.update("user3", "user3token", new HashSet<String>(), true);
         cache.update("user2.bar@email.com", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
-        
+        cache.update("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", "anothertoken", new HashSet<String>(Arrays.asList("distinguishedproj")), false);
+
         SearchGuardRolesMapping roles = new SearchGuardRolesMapping();
         RolesMappingSyncStrategy sync = new UserRolesMappingSyncStrategy(roles);
         sync.syncFrom(cache);

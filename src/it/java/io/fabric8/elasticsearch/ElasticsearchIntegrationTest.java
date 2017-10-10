@@ -16,6 +16,7 @@
 
 package io.fabric8.elasticsearch;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import java.io.File;
@@ -66,6 +67,8 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
+import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -91,6 +94,9 @@ import org.junit.runner.Description;
 import com.floragunn.searchguard.support.ConfigConstants;
 import com.google.common.base.Strings;
 
+import io.fabric8.elasticsearch.ElasticsearchIntegrationTest.HttpResponse;
+import io.fabric8.elasticsearch.ElasticsearchIntegrationTest.RequestRunner;
+import io.fabric8.elasticsearch.ElasticsearchIntegrationTest.RequestRunnerBuilder;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenShiftElasticSearchPlugin;
 import io.fabric8.elasticsearch.util.RequestUtils;
@@ -104,6 +110,9 @@ import io.fabric8.openshift.client.server.mock.OpenShiftServer;
 public abstract class ElasticsearchIntegrationTest {
 
     private static final String CLUSTER_NAME = "openshift_elastic_test_cluster";
+    private static final String USERNAME = "username";
+    private static final String RESPONSE = "response";
+    private static final String URI = "uri";
     
     @Rule
     public TestName name = new TestName();
@@ -125,6 +134,7 @@ public abstract class ElasticsearchIntegrationTest {
     private static String keystore;
     private static String truststore;
     private static String password = "changeit";
+    private final Map<String, Object> testContext = new HashMap<>();
 
     protected final ESLogger log = Loggers.getLogger(this.getClass());
 
@@ -132,7 +142,6 @@ public abstract class ElasticsearchIntegrationTest {
     public static void setupOnce() throws Exception {
         basedir = System.getenv("PROJECT_DIR");
 
-        Path tmp = Files.createTempDirectory(null);
         appFile = basedir + "/src/it/resources/index-pattern.json";
         keystore = basedir + "/src/it/resources/keystore.jks";
         truststore = basedir + "/src/it/resources/keystore.jks";
@@ -279,33 +288,32 @@ public abstract class ElasticsearchIntegrationTest {
         XContentBuilder content = XContentFactory.jsonBuilder().startObject()
             .field("key","value")
             .endObject();
-        esNode1.client()
-            .prepareIndex(".kibana","config","0")
-            .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
-            .setSource(content)
-            .execute()
-            .get();
+        givenDocumentIsIndexed(".kibana","config","0", content);
         seedSearchGuardAcls();
         
         //create ops user to avoid issue: https://github.com/fabric8io/openshift-elasticsearch-plugin/issues/106
+        givenDocumentIsIndexed(".operations.1970.01.01","data","0", content);
+    }
+    
+    protected void givenDocumentIsIndexed(String index, String type, String id, XContentBuilder content) throws Exception {
         esNode1.client()
-            .prepareIndex(".operations.1970.01.01","data","0")
+            .prepareIndex(index, type, id)
             .putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true")
             .setSource(content)
             .execute()
             .get();
-        
-        waitForCluster(ClusterHealthStatus.GREEN, TimeValue.timeValueSeconds(timeOutSec), esNode1.client(),
-                assertNodes);
-
     }
     
     protected void givenUserIsClusterAdmin(String user) {
-        SubjectAccessReviewResponse response = new SubjectAccessReviewResponse(Boolean.TRUE, "v1", null, null, null, "");
-        apiServer.expect().post().withPath("/oapi/v1/subjectaccessreviews").andReturn(200,response).once();
+        expSubjectAcccessReviewToBe(Boolean.TRUE, user);
     }
 
     protected void givenUserIsNotClusterAdmin(String user) {
+        expSubjectAcccessReviewToBe(Boolean.FALSE, user);
+    }
+    
+    private void expSubjectAcccessReviewToBe(boolean value, String user) {
+        testContext.put(USERNAME, user);
         SubjectAccessReviewResponse response = new SubjectAccessReviewResponse(Boolean.FALSE, "v1", null, null, null, "");
         apiServer.expect().post().withPath("/oapi/v1/subjectaccessreviews").andReturn(200,response).once();
     }
@@ -316,6 +324,34 @@ public abstract class ElasticsearchIntegrationTest {
             builder.addToItems(new ProjectBuilder(false).withNewMetadata().withName(project).endMetadata().build());
         }
         apiServer.expect().withPath("/oapi/v1/projects").andReturn(200, builder.build()).once();
+    }
+    
+    protected void whenGettingDocument(String uri) throws Exception{
+        testContext.put(URI, uri);
+        RequestRunner runner = new RequestRunnerBuilder().username((String)testContext.get(USERNAME)).build();
+        testContext.put(RESPONSE, runner.run(uri));
+    }
+    
+    protected void whenCheckingIndexExists(String uri) throws Exception{
+        RequestRunner runner = new RequestRunnerBuilder()
+                .username((String)testContext.get(USERNAME))
+                .method("head")
+                .build();
+        testContext.put(RESPONSE, runner.run(uri));
+    }
+    
+    protected void assertThatResponseIsSuccessful() {
+        String username = (String)testContext.get(USERNAME);
+        HttpResponse response = (HttpResponse)testContext.get(RESPONSE);
+        String uri = (String)testContext.get(URI);
+        assertEquals(String.format("Exp. %s request to succeed for %s", username, uri), 200, response.getStatusCode());
+    }
+
+    protected void assertThatResponseIsForbidden() {
+        String username = (String)testContext.get(USERNAME);
+        HttpResponse response = (HttpResponse)testContext.get(RESPONSE);
+        String uri = (String)testContext.get(URI);
+        assertEquals(String.format("Exp. %s to be unauthorized for %s", username, uri), 403, response.getStatusCode());
     }
 
     protected Client client() {
