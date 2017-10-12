@@ -16,9 +16,9 @@
 
 package io.fabric8.elasticsearch;
 
-import static org.junit.Assert.assertEquals;
-
 import org.junit.Test;
+
+import io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter;
 
 public class ProxyUsernameIntegrationTest extends ElasticsearchIntegrationTest {
 
@@ -26,17 +26,36 @@ public class ProxyUsernameIntegrationTest extends ElasticsearchIntegrationTest {
     public void testUserWithSimpleNameCreatesProfileIndex() throws Exception {
         startES();
 
-        // test admin user
+        //ops user
         givenUserIsClusterAdmin("admin");
         givenUserIsAdminForProjects("logging", "openshift");
-        RequestRunner runner = new RequestRunnerBuilder().username("admin").build();
-        HttpResponse response = runner.run("_cat/indices");
-        assertEquals("Exp. admin user to list indices", 200, response.getStatusCode());
+        whenGettingDocument("_cat/indices");
+        assertThatResponseIsSuccessful();
 
-        givenUserIsClusterAdmin("somerandomuser");
+        //non-ops user
+        givenUserIsNotClusterAdmin("somerandomuser");
         givenUserIsAdminForProjects("myproject");
-        runner = new RequestRunnerBuilder().username("somerandomuser").build();
-        response = runner.run("_cat/indices");
-        assertEquals("Exp. somerandom user to be unable to list indices", 403, response.getStatusCode());
+        whenGettingDocument("_cat/indices");
+        assertThatResponseIsForbidden();
+
+        String [] users = {"foo@email.com", 
+            "CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", 
+            "test\\username",
+            "CN=Lastname\\\\, Firstname,OU=Users,OU=TDBFG,DC=d2-tdbfg,DC=com"
+            };
+        for (String username : users) {
+            givenUserIsNotClusterAdmin(username);
+            givenUserIsAdminForProjects("myproject");
+            whenCheckingIndexExists(".kibana." + KibanaUserReindexFilter.getUsernameHash(formatUserName(username)));
+            assertThatResponseIsSuccessful();
+        }
     }
+    
+    private String formatUserName(String username) {
+        if(username.contains("\\")){
+            return username.replace("\\", "/");
+        }
+        return username;
+    }
+
 }

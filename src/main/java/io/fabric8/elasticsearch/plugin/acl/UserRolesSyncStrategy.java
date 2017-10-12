@@ -22,6 +22,7 @@ import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 
+
 public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements RolesSyncStrategy {
 
     private final String cdmProjectPrefix;
@@ -64,10 +65,6 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
                         role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
                     }
                 }
-                
-                //permissions for alias
-                role.setActions(formatAllAlias(user), ALL, PROJECT_ROLE_ACTIONS);
-                
                 builder.addRole(role.build());
             }
         }
@@ -82,9 +79,5 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
                     .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
             builder.addRole(kibanaOpsRole.build());
         }        
-    }
-
-    public static String formatAllAlias(final String user) {
-        return ".all_" + user.replaceAll("[\\\\.@/]", "_");
     }
 }

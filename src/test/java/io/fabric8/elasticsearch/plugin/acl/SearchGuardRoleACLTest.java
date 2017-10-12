@@ -65,6 +65,7 @@ public class SearchGuardRoleACLTest {
         cache.update("user1", "user2token", new HashSet<String>(Arrays.asList("user2-proj")), true);
         cache.update("user3", "user3token", new HashSet<String>(Arrays.asList("user3-proj")), true);
         cache.update("user2.bar@email.com", "user2token", new HashSet<String>(Arrays.asList("foo.bar", "xyz")), false);
+        cache.update("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", "anothertoken", new HashSet<String>(Arrays.asList("distinguishedproj")), false);
         
         SearchGuardRoles roles = new SearchGuardRoles();
         RolesSyncStrategy strat = new UserRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
