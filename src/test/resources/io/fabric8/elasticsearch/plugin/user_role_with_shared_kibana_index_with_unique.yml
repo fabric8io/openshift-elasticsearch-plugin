@@ -10,18 +10,11 @@ gen_project_operations:
       '*': [INDEX_ANY_OPERATIONS]
     ?operations?:
       '*': [INDEX_OPERATIONS]
-gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
+gen_user_user2_bar_email_com:
   cluster: [USER_CLUSTER_OPERATIONS]
   indices:
-    ?kibana?4c54bf89fe913f39fc22d76309f80cdc6192928f:
-      '*': [INDEX_KIBANA]
-    ?project?distinguishedproj?*:
+    .all_user2_bar_email_com:
       '*': [INDEX_PROJECT]
-    distinguishedproj?*:
-      '*': [INDEX_PROJECT]
-gen_user_994a33f6a157ba4a286395f81a4333db1e6cefb6:
-  cluster: [USER_CLUSTER_OPERATIONS]
-  indices:
     ?kibana?994a33f6a157ba4a286395f81a4333db1e6cefb6:
       '*': [INDEX_KIBANA]
     ?project?foo?bar?*:

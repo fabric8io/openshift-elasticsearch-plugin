@@ -30,7 +30,6 @@ import static org.mockito.Mockito.when;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
@@ -40,17 +39,17 @@ import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftR
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.Config;
+import io.fabric8.kubernetes.client.dsl.ClientNonNamespaceOperation;
+import io.fabric8.kubernetes.client.dsl.ClientResource;
+import io.fabric8.openshift.api.model.DoneableProject;
+import io.fabric8.openshift.api.model.Project;
 import io.fabric8.openshift.api.model.ProjectBuilder;
 import io.fabric8.openshift.api.model.ProjectList;
 import io.fabric8.openshift.api.model.ProjectListBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
-import io.fabric8.openshift.client.server.mock.OpenShiftServer;
 
 public class OpenshiftRequestContextFactoryTest {
-    
-    @Rule
-    public OpenShiftServer server = new OpenShiftServer();
-    
+
     private Settings.Builder settingsBuilder = Settings.builder();
     private OpenshiftRequestContextFactory factory;
     private OpenshiftRequestContext context;
@@ -79,14 +78,15 @@ public class OpenshiftRequestContextFactoryTest {
         factory = new OpenshiftRequestContextFactory(settings, utils, clientFactory);
     }
 
+    @SuppressWarnings("unchecked")
     private void givenUserHasProjects() {
-        
+        OpenShiftClient client = mock(OpenShiftClient.class);
+        ClientNonNamespaceOperation<Project, ProjectList, DoneableProject, ClientResource<Project, DoneableProject>> projects = mock(
+                ClientNonNamespaceOperation.class);
         ProjectList projectList = new ProjectListBuilder(false)
                 .addToItems(new ProjectBuilder(false).withNewMetadata().withName("foo").endMetadata().build()).build();
-        
-        server.expect().withPath("/oapi/v1/projects").andReturn(200, projectList).always();
-        OpenShiftClient client = server.getOpenshiftClient();
-        
+        when(projects.list()).thenReturn(projectList);
+        when(client.projects()).thenReturn(projects);
         when(clientFactory.create(any(Config.class))).thenReturn(client);
     }
 
@@ -118,6 +118,15 @@ public class OpenshiftRequestContextFactoryTest {
         default:
             fail("Unable to assert the kibana index since the kibanaIndexMode is unrecognized: " + mode);
         }
+    }
+
+    @Test
+    public void testCreatingUserContextWhenUserHasBackSlash() throws Exception {
+        when(request.header(eq(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER))).thenReturn("test\\user");
+
+        givenUserContextFactory(false);
+        whenCreatingUserContext();
+        assertEquals("test/user", context.getUser());
     }
 
     @Test

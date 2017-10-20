@@ -84,10 +84,9 @@ public class OpenshiftRequestContextFactory  {
         boolean isClusterAdmin = false;
         String user = utils.getUser(request);
         if(user.contains("\\")){
-            user = user.replace("\\", "/");
+            user = user.replaceAll("\\\\", "/");
             utils.setUser(request, user);
         }
-
         String token = utils.getBearerToken(request);
         if (StringUtils.isNotBlank(user) && StringUtils.isNotBlank(token)){
             isClusterAdmin = utils.isOperationsUser(request);

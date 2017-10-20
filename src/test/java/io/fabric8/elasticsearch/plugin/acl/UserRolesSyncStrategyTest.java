@@ -16,26 +16,26 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.acl.BaseRolesSyncStrategy.formatUserRoleName;
+import static io.fabric8.elasticsearch.plugin.acl.UserRolesSyncStrategy.formatAllAlias;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-public class BaseRolesSyncStrategyTest {
+public class UserRolesSyncStrategyTest {
 
     @Test
-    public void testFormatUserNameRoleFromEmail() {
-        assertEquals("gen_user_user_email_com", formatUserRoleName("user@email.com"));
+    public void testFormatAllAliasWithEmail() {
+        assertEquals(".all_user_email_com", formatAllAlias("user@email.com"));
     }
 
     @Test
-    public void testFormatUserNameRoleThatHasSlash() {
-        assertEquals("gen_user_test__user", formatUserRoleName("test\\\\user"));
+    public void testFormatAllAliasWithSlash() {
+        assertEquals(".all_test_user", formatAllAlias("test\\user"));
     }
 
     @Test
-    public void testFormatUserNameRoleThatHasForwardSlash() {
-        assertEquals("gen_user_test_user", formatUserRoleName("test/user"));
+    public void testFormatAllAliasWithForwardSlash() {
+        assertEquals(".all_test_user", formatAllAlias("test/user"));
     }
 
 }

@@ -2,7 +2,5 @@ gen_ocp_kibana_shared:
   users: [user1, user3]
 gen_project_operations:
   users: [user1, user3]
-gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
-  users: ['CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com']
-gen_user_994a33f6a157ba4a286395f81a4333db1e6cefb6:
+gen_user_user2_bar_email_com:
   users: [user2.bar@email.com]
