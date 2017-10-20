@@ -54,7 +54,6 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
-import io.fabric8.elasticsearch.plugin.acl.UserRolesSyncStrategy;
 import io.fabric8.elasticsearch.util.IndexUtil;
 
 public class KibanaSeed implements ConfigurationSettings {
@@ -164,18 +163,9 @@ public class KibanaSeed implements ConfigurationSettings {
             LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
             filteredProjects.add(OPERATIONS_PROJECT);
             buildAdminAlias(filteredProjects, projectPrefix);
-        } else {
-            if (filteredProjects.isEmpty()) {
-                filteredProjects.add(BLANK_PROJECT);
-            } else {
-                // only add alias if kibana index mode is UNIQUE
-                if(context.getKibanaIndexMode() == UNIQUE) {
-                    String alias = UserRolesSyncStrategy.formatAllAlias(context.getUser());
-                    LOGGER.debug("Adding indexes to alias '{}' for user '{}'", alias, context.getUser());
-                    buildUserAlias(filteredProjects, projectPrefix, alias);
-                    filteredProjects.add(alias);
-                }
-            }
+            filteredProjects.add(ADMIN_ALIAS_NAME);
+        } else if (filteredProjects.isEmpty()) {
+            filteredProjects.add(BLANK_PROJECT);
         }
     }
     

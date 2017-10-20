@@ -20,6 +20,7 @@ import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.USER_PREFIX;
 
 import java.util.Iterator;
 
+import io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
 
@@ -71,7 +72,7 @@ public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
     }
     
     public static String formatUserRoleName(String username) {
-        return String.format("%s_%s", USER_PREFIX, username.replaceAll("[\\\\.@/]", "_"));
+        return String.format("%s_%s", USER_PREFIX, KibanaUserReindexFilter.getUsernameHash(username));
     }
 
 }
