@@ -26,7 +26,7 @@
 
   <groupId>io.fabric8.elasticsearch</groupId>
   <artifactId>openshift-elasticsearch-plugin</artifactId>
-  <version>2.4.4.16</version>
+  <version>2.4.4.17-SNAPSHOT</version>
   <name>OpenShift ElasticSearch Plugin</name>
 
   <url>http://fabric8.io/</url>
