@@ -163,6 +163,7 @@ public class KibanaSeed implements ConfigurationSettings {
             LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
             filteredProjects.add(OPERATIONS_PROJECT);
             buildAdminAlias(filteredProjects, projectPrefix);
+            filteredProjects.add(ADMIN_ALIAS_NAME);
         } else if (filteredProjects.isEmpty()) {
             filteredProjects.add(BLANK_PROJECT);
         }

@@ -18,13 +18,10 @@
 if [ -n "${DEBUG:-}" ]; then
   set -x
 fi
-
-DIR="${DIR:-$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )}"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 BIN_PATH="java"
-CONFIG_DIR="${CONFIG_DIR:-$DIR/../../config}"
-SCRIPT_CP="${SCRIPT_CP:-$DIR/*:$DIR/../../lib/*}"
 
-cd "$CONFIG_DIR"
+cd "$DIR/../../config"
 echo $(pwd)
-"$BIN_PATH" $JAVA_OPTS -cp "${SCRIPT_CP}" com.floragunn.searchguard.tools.SearchGuardAdmin "$@"
+"$BIN_PATH" $JAVA_OPTS -cp "$DIR/*:$DIR/../../lib/*" com.floragunn.searchguard.tools.SearchGuardAdmin "$@"
