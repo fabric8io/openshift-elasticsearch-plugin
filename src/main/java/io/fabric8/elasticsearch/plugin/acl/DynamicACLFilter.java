@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -33,6 +34,7 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
@@ -53,6 +55,9 @@ import com.floragunn.searchguard.action.configupdate.ConfigUpdateRequest;
 import com.floragunn.searchguard.action.configupdate.ConfigUpdateResponse;
 import com.floragunn.searchguard.ssl.SearchGuardSSLPlugin;
 import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
+
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
@@ -174,18 +179,30 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 if (logger.isDebugEnabled()) {
                     logger.debug("Handling Request... {}", request.uri());
                     logger.debug("Evaluating request for user '{}' with a {} token", user,
-                            (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
+                            (StringUtils.isNotBlank(token) ? "non-empty" : "empty"));
                     logger.debug("Cache has user: {}", cache.hasUser(user, token));
                 }
-                if (StringUtils.isNotEmpty(token) && StringUtils.isNotEmpty(user) && !cache.hasUser(user, token)) {
-                    final boolean isOperationsUser = isOperationsUser(user, token);
-                    if (isOperationsUser) {
-                        request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+                if (StringUtils.isNotBlank(token) && StringUtils.isNotBlank(user)) {
+                    // this is key to auth - this is what validates the given token,
+                    // and verifies that the token corresponds to the given username
+                    // do not alter this without good reason
+                    assertUser(request);
+                    if (!cache.hasUser(user, token)) {
+                        final boolean isOperationsUser = isOperationsUser(user, token);
+                        if (isOperationsUser) {
+                            request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+                        }
+                        if (updateCache(user, token, isOperationsUser, kbnVersion)) {
+                            syncAcl();
+                        }
                     }
-                    if (updateCache(user, token, isOperationsUser, kbnVersion)) {
-                        syncAcl();
-                    }
-
+                } else if (isClientCertAuth(request) && StringUtils.isBlank(user) && StringUtils.isBlank(token)) {
+                    return; // nothing more we can do here
+                } else {
+                    String message = "Incorrect authentication credentials were given - must provide client cert, or username/token, or all 3."
+                            + "  It is not correct to provide username without token, or token without username.";
+                    logger.debug(message);
+                    throw new ElasticsearchSecurityException(message);
                 }
             }
         } catch (ElasticsearchSecurityException ese) {
@@ -221,15 +238,6 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
             final String kbnVersion) {
         logger.debug("Updating the cache for user '{}'", user);
         try {
-            // This is the key to authentication. Before listProjectsFor, we
-            // haven't actually authenticated
-            // anything in this plugin, using the given token. If the token is
-            // valid, we will get back a
-            // list of projects for the token. If not, listProjectsFor will
-            // throw an exception and we will
-            // not update the cache with the user and token. In this way we will
-            // keep bogus entries out of
-            // the cache.
             Set<String> projects = listProjectsFor(token);
             cache.update(user, token, projects, isOperationsUser);
 
@@ -250,11 +258,6 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         return true;
     }
 
-    // WARNING: This function must perform authentication with the given token.
-    // This
-    // is the only authentication performed in this plugin. This function must
-    // throw
-    // an exception if the token is invalid.
     private Set<String> listProjectsFor(final String token) throws Exception {
         ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
         Set<String> names = new HashSet<>();
@@ -367,5 +370,48 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
     public int order() {
         // need to run before search guard
         return Integer.MIN_VALUE;
+    }
+
+    public boolean isClientCertAuth(final RestRequest request) {
+        return (request != null) && request.hasInContext("_sg_ssl_principal")
+                && StringUtils.isNotEmpty(request.getFromContext("_sg_ssl_principal", ""));
+    }
+
+    @SuppressWarnings("rawtypes")
+    public void assertUser(RestRequest request) throws Exception {
+        final String user = getUser(request);
+        final String token = getBearerToken(request);
+        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
+        try (DefaultOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
+            logger.debug("Verifying user {} matches the given token.", user);
+            Request okRequest = new Request.Builder()
+                    .addHeader(AUTHORIZATION_HEADER, "Bearer " + token)
+                    .url(osClient.getMasterUrl() + "oapi/v1/users/~")
+                    .build();
+            String username = null;
+            Response response = null;
+            try {
+                response = osClient.getHttpClient().newCall(okRequest).execute();
+                final String body = response.body().string();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Response: code '{}' {}", response.code(), body);
+                }
+                if(response.code() != RestStatus.OK.getStatus()) {
+                    throw new ElasticsearchSecurityException("", RestStatus.UNAUTHORIZED);
+                }
+                Map<String, Object> userResponse = XContentHelper.convertToMap(new BytesArray(body), false).v2();
+                if(userResponse.containsKey("metadata") && ((Map)userResponse.get("metadata")).containsKey("name")) {
+                    username = (String) ((Map)userResponse.get("metadata")).get("name");
+                }
+            }catch (Exception e) {
+                logger.debug("Exception trying to assertUser '{}'", e, user);
+                throw e;
+            }
+            if(!user.equals(username)) {
+                String message = String.format("The username '%s' does not own the token provided with the request.", username);
+                logger.debug(message);
+                throw new ElasticsearchSecurityException("", RestStatus.UNAUTHORIZED);
+            }
+        }
     }
 }
