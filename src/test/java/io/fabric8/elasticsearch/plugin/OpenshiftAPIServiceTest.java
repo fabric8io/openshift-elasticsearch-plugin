@@ -18,6 +18,7 @@ package io.fabric8.elasticsearch.plugin;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
@@ -29,6 +30,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.commons.lang.ArrayUtils;
+import org.elasticsearch.common.settings.Settings;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -55,7 +57,8 @@ public class OpenshiftAPIServiceTest {
 
     @Rule
     public OpenShiftServer apiServer = new OpenShiftServer();
-    private OpenshiftAPIService service = new OpenshiftAPIService();
+    private final PluginSettings pluginSettings = new PluginSettings(Settings.EMPTY);
+    private OpenshiftAPIService service = new OpenshiftAPIService(pluginSettings);
 
     @Before
     public void setup() {
@@ -105,7 +108,7 @@ public class OpenshiftAPIServiceTest {
         DefaultOpenShiftClient client = mock(DefaultOpenShiftClient.class);
         OpenShiftClientFactory factory = mock(OpenShiftClientFactory.class);
         Call call = mock(Call.class);
-        when(factory.buildClient(anyString())).thenReturn(client);
+        when(factory.buildClient(eq(pluginSettings), anyString())).thenReturn(client);
         when(client.getHttpClient()).thenReturn(okClient);
         when(client.getMasterUrl()).thenReturn(new URL("https://localhost:8443/"));
         
@@ -121,7 +124,7 @@ public class OpenshiftAPIServiceTest {
         when(okClient.newCall(any(Request.class))).thenAnswer(answer);
         when(call.execute()).thenReturn(response);
         
-        service = new OpenshiftAPIService(factory );
+        service = new OpenshiftAPIService(factory, pluginSettings);
         
         assertTrue(service.localSubjectAccessReview("sometoken", "openshift-logging", "get", "pod/metrics", null, ArrayUtils.EMPTY_STRING_ARRAY));
         Buffer buffer = new Buffer();
@@ -139,7 +142,7 @@ public class OpenshiftAPIServiceTest {
         DefaultOpenShiftClient client = mock(DefaultOpenShiftClient.class);
         OpenShiftClientFactory factory = mock(OpenShiftClientFactory.class);
         Call call = mock(Call.class);
-        when(factory.buildClient(anyString())).thenReturn(client);
+        when(factory.buildClient(eq(pluginSettings), anyString())).thenReturn(client);
         when(client.getHttpClient()).thenReturn(okClient);
         when(client.getMasterUrl()).thenReturn(new URL("https://localhost:8443/"));
         
@@ -155,7 +158,7 @@ public class OpenshiftAPIServiceTest {
         when(okClient.newCall(any(Request.class))).thenAnswer(answer);
         when(call.execute()).thenReturn(response);
         
-        service = new OpenshiftAPIService(factory );
+        service = new OpenshiftAPIService(factory, pluginSettings);
         
         assertTrue(service.localSubjectAccessReview("sometoken", "openshift-logging", "get", "/metrics", null, ArrayUtils.EMPTY_STRING_ARRAY));
         Buffer buffer = new Buffer();
