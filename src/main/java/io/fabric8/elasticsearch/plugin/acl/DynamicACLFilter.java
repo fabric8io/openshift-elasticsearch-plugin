@@ -187,14 +187,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                     // and verifies that the token corresponds to the given username
                     // do not alter this without good reason
                     assertUser(request);
-                    if (!cache.hasUser(user, token)) {
-                        final boolean isOperationsUser = isOperationsUser(user, token);
-                        if (isOperationsUser) {
-                            request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
-                        }
-                        if (updateCache(user, token, isOperationsUser, kbnVersion)) {
-                            syncAcl();
-                        }
+                    final boolean isOperationsUser = isOperationsUser(user, token);
+                    if (isOperationsUser) {
+                        request.putInContext(OPENSHIFT_ROLES, "cluster-admin");
+                    }
+                    if (updateCache(user, token, isOperationsUser, kbnVersion)) {
+                        syncAcl();
                     }
                 } else if (isClientCertAuth(request) && StringUtils.isBlank(user) && StringUtils.isBlank(token)) {
                     return; // nothing more we can do here
