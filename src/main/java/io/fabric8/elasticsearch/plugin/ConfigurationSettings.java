@@ -80,23 +80,23 @@ public interface ConfigurationSettings extends KibanaIndexMode{
 
     /**
      * The configurations for enabling/disabling portions of this plugin
-     * defaults to 'true' => enabled.
+     * defaults to 'true' === enabled.
      *
      * This need came from integrating with APIMan -- we needed to seed our
      * initial ACL but didn't need to dynamically update the ACL or rewrite our
      * Kibana index.
      */
     static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
-    
+
     /**
      * The strategy to use for generating roles and role mappings
      */
     static final String OPENSHIFT_ACL_ROLE_STRATEGY = "openshift.acl.role_strategy";
     static final String DEFAULT_ACL_ROLE_STRATEGY = "user";
-    
+
     static final String OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG = "openshift.kibana.rewrite.enabled";
 
-    
+
     static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;
     static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
 

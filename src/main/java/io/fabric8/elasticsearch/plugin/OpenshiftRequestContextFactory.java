@@ -74,8 +74,9 @@ public class OpenshiftRequestContextFactory  {
      * Create a user context from the given request
      * 
      * @param   cache - The cache of user projects to create ACLs
+     * @param   request - The RestRequest to create from
      * @return  an OpenshiftRequestContext 
-     * @throws  All exceptions
+     * @throws  java.lang.Exception for any exception encountered
      */
     public OpenshiftRequestContext create(final RestRequest request, final UserProjectCache cache) throws Exception {
         logRequest(request, cache);

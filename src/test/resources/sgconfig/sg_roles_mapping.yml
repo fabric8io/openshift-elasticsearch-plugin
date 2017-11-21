@@ -1,4 +1,3 @@
-#!/bin/bash
 #
 # Copyright (C) 2015 Red Hat, Inc.
 #
@@ -15,15 +14,19 @@
 # limitations under the License.
 #
 
-if [ -n "${DEBUG:-}" ]; then
-  set -x
-fi
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+sg_role_kibana:
+  users:
+    - 'kibana'
 
-BIN_PATH="java"
-CONFIG_DIR="${CONFIG_DIR:-$DIR/../../config}"
-SCRIPT_CP="${SCRIPT_CP:-$DIR/*:$DIR/../../lib/*}"
+sg_role_fluentd:
+  users:
+    - 'fluentd'
 
-cd "$CONFIG_DIR"
-echo $(pwd)
-"$BIN_PATH" $JAVA_OPTS -cp "${SCRIPT_CP}" com.floragunn.searchguard.tools.SearchGuardAdmin "$@"
+sg_role_curator:
+  users:
+    - 'curator'
+
+sg_role_admin:
+  users:
+    - 'admin'
+    - '_sg_internal'

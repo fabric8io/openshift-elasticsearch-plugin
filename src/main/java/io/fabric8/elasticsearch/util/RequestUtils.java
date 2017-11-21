@@ -32,16 +32,14 @@ import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
-
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.NamespacedOpenShiftClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class RequestUtils implements ConfigurationSettings  {
     

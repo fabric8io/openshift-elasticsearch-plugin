@@ -40,8 +40,8 @@ import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftR
 import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.dsl.ClientNonNamespaceOperation;
-import io.fabric8.kubernetes.client.dsl.ClientResource;
+import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
+import io.fabric8.kubernetes.client.dsl.Resource;
 import io.fabric8.openshift.api.model.DoneableProject;
 import io.fabric8.openshift.api.model.Project;
 import io.fabric8.openshift.api.model.ProjectBuilder;
@@ -82,8 +82,8 @@ public class OpenshiftRequestContextFactoryTest {
     @SuppressWarnings("unchecked")
     private void givenUserHasProjects() {
         OpenShiftClient client = mock(OpenShiftClient.class);
-        ClientNonNamespaceOperation<Project, ProjectList, DoneableProject, ClientResource<Project, DoneableProject>> projects = mock(
-                ClientNonNamespaceOperation.class);
+        NonNamespaceOperation<Project, ProjectList, DoneableProject, Resource<Project, DoneableProject>> projects = mock(
+                NonNamespaceOperation.class);
         ProjectList projectList = new ProjectListBuilder(false)
                 .addToItems(new ProjectBuilder(false).withNewMetadata().withName("foo").endMetadata().build()).build();
         when(projects.list()).thenReturn(projectList);
