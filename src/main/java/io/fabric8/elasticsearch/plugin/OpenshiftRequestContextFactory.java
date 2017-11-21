@@ -54,7 +54,7 @@ public class OpenshiftRequestContextFactory {
     private String kibanaIndexMode;
 
     public OpenshiftRequestContextFactory(
-            final Settings settings, 
+            final Settings settings,
             final RequestUtils utils,
             final OpenshiftAPIService apiService) {
         this.apiService = apiService;
@@ -72,10 +72,10 @@ public class OpenshiftRequestContextFactory {
 
     /**
      * Create a user context from the given request
-     * 
+     *
      * @param   request - The RestRequest to create from
-     * @return  an OpenshiftRequestContext 
-     * @throws  Exception All exceptions
+     * @return  an OpenshiftRequestContext
+     * @throws  java.lang.Exception for any exception encountered
      */
     public OpenshiftRequestContext create(final RestRequest request) throws Exception {
         logRequest(request);
@@ -96,7 +96,7 @@ public class OpenshiftRequestContextFactory {
         LOGGER.debug("Returning EMPTY request context; either was provided client cert or empty token.");
         return OpenshiftRequestContext.EMPTY;
     }
-    
+
     private void logRequest(final RestRequest request) {
         if (LOGGER.isDebugEnabled()) {
             String user = utils.getUser(request);
@@ -139,7 +139,7 @@ public class OpenshiftRequestContextFactory {
                     }
                 }
                 return projects;
-            }   
+            }
         });
     }
 
