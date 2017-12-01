@@ -103,18 +103,23 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
 
         try {
             if (enabled) {
-                // grab the kibana version here out of "kbn-version" if we can
-                // -- otherwise use the config one
-                String kbnVersion = getKibanaVersion(request);
+                // create authenticates the request - if it returns null, this means
+                // this plugin cannot handle this request, and should pass it to the
+                // next plugin for processing e.g. client cert auth with no username/password
+                // if create throws an exception, it means there was an issue with the token
+                // and username and the request failed authentication
                 final OpenshiftRequestContext requestContext = contextFactory.create(request, cache);
+                if (requestContext == OpenshiftRequestContext.EMPTY) {
+                    return; // do not process in this plugin
+                }
                 request = utils.modifyRequest(request, requestContext);
                 request.putInContext(OPENSHIFT_REQUEST_CONTEXT, requestContext);
-                if (requestContext.isAuthenticated() && !cache.hasUser(requestContext.getUser(), requestContext.getToken())) {
-                    if (updateCache(requestContext, kbnVersion)) {
-                        kibanaSeed.setDashboards(requestContext, client, kbnVersion, cdmProjectPrefix);
-                        syncAcl(requestContext);
-                    }
-
+                // grab the kibana version here out of "kbn-version" if we can
+                // -- otherwise use the config one
+                final String kbnVersion = getKibanaVersion(request);
+                if (updateCache(requestContext, kbnVersion)) {
+                    kibanaSeed.setDashboards(requestContext, client, kbnVersion, cdmProjectPrefix);
+                    syncAcl(requestContext);
                 }
             }
         } catch (ElasticsearchSecurityException ese) {

@@ -21,6 +21,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
@@ -95,6 +96,11 @@ public class OpenshiftRequestContextFactoryTest {
     }
 
     private OpenshiftRequestContext whenCreatingUserContext() throws Exception {
+        return whenCreatingUserContext("someusername");
+    }
+
+    private OpenshiftRequestContext whenCreatingUserContext(String username) throws Exception {
+        doReturn(username).when(utils).assertUser(any(RestRequest.class));
         this.context = factory.create(request, cache);
         return this.context;
     }
@@ -125,7 +131,7 @@ public class OpenshiftRequestContextFactoryTest {
         when(request.header(eq(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER))).thenReturn("test\\user");
 
         givenUserContextFactory(false);
-        whenCreatingUserContext();
+        whenCreatingUserContext("test\\user");
         assertEquals("test/user", context.getUser());
     }
 

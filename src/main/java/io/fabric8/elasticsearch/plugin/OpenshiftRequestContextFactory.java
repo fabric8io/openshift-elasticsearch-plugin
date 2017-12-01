@@ -83,19 +83,23 @@ public class OpenshiftRequestContextFactory  {
         Set<String> projects = new HashSet<>();
         boolean isClusterAdmin = false;
         String user = utils.getUser(request);
-        if(user.contains("\\")){
-            user = user.replace("\\", "/");
+        String token = utils.getBearerToken(request);
+        if (StringUtils.isNotBlank(token)){
+            user = utils.assertUser(request);
+            isClusterAdmin = utils.isOperationsUser(request);
+            projects = listProjectsFor(user, token);
+            if(user.contains("\\")){
+                user = user.replace("\\", "/");
+            }
             utils.setUser(request, user);
+        } else if (utils.isClientCertAuth(request) && StringUtils.isBlank(token) && StringUtils.isBlank(user)) {
+            return OpenshiftRequestContext.EMPTY; // nothing more we can do here
+        } else {
+            String message = "Incorrect authentication credentials were given - must provide client cert, or token with optional username, or all of these.";
+            LOGGER.debug(message);
+            throw new ElasticsearchSecurityException(message);
         }
 
-        String token = utils.getBearerToken(request);
-        if (StringUtils.isNotBlank(user) && StringUtils.isNotBlank(token)){
-            isClusterAdmin = utils.isOperationsUser(request);
-                
-            if(!cache.hasUser(user, token)) {
-                projects = listProjectsFor(user, token);
-            }
-        }
         return new OpenshiftRequestContext(user, token, isClusterAdmin, projects, getKibanaIndex(user, isClusterAdmin), this.kibanaIndexMode);
     }
     

@@ -16,14 +16,25 @@
 
 package io.fabric8.elasticsearch.util;
 
+import java.util.Map;
+
 import org.apache.commons.lang.ObjectUtils;
+import org.apache.commons.lang.StringUtils;
+import org.elasticsearch.ElasticsearchSecurityException;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.http.netty.NettyHttpRequest;
 import org.elasticsearch.rest.RestRequest;
+import org.elasticsearch.rest.RestStatus;
 import org.jboss.netty.handler.codec.http.HttpRequest;
+
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
@@ -56,6 +67,11 @@ public class RequestUtils implements ConfigurationSettings  {
         return "";
     }
     
+    public boolean isClientCertAuth(final RestRequest request) {
+        return (request != null) && request.hasInContext("_sg_ssl_principal")
+                && StringUtils.isNotEmpty(request.getFromContext("_sg_ssl_principal", ""));
+    }
+
     public boolean isOperationsUser(RestRequest request) {
         final String user = getUser(request);
         final String token = getBearerToken(request);
@@ -72,6 +88,48 @@ public class RequestUtils implements ConfigurationSettings  {
             LOGGER.debug("User '{}' isOperationsUser: {}", user, allowed);
         }
         return allowed;
+    }
+
+    @SuppressWarnings("rawtypes")
+    public String assertUser(RestRequest request) throws Exception {
+        String username = null;
+        final String user = getUser(request);
+        final String token = getBearerToken(request);
+        ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
+        try (DefaultOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
+            LOGGER.debug("Verifying user {} matches the given token.", user);
+            Request okRequest = new Request.Builder()
+                    .addHeader(AUTHORIZATION_HEADER, "Bearer " + token)
+                    .url(osClient.getMasterUrl() + "oapi/v1/users/~")
+                    .build();
+            Response response = null;
+            try {
+                response = osClient.getHttpClient().newCall(okRequest).execute();
+                final String body = response.body().string();
+                if (LOGGER.isDebugEnabled()) {
+                    LOGGER.debug("Response: code '{}' {}", response.code(), body);
+                }
+                if(response.code() != RestStatus.OK.getStatus()) {
+                    throw new ElasticsearchSecurityException("Could not authenticate with given token", RestStatus.UNAUTHORIZED);
+                }
+                Map<String, Object> userResponse = XContentHelper.convertToMap(new BytesArray(body), false).v2();
+                if(userResponse.containsKey("metadata") && ((Map)userResponse.get("metadata")).containsKey("name")) {
+                    username = (String) ((Map)userResponse.get("metadata")).get("name");
+                }
+            }catch (Exception e) {
+                LOGGER.debug("Exception trying to assertUser '{}'", e, user);
+                throw e;
+            }
+            if(StringUtils.isNotBlank(username) && StringUtils.isNotBlank(user) && !user.equals(username)) {
+                String message = String.format("The given username '%s' does not match the username '%s' associated with the token provided with the request.",
+                                               user, username);
+                LOGGER.debug(message);
+            }
+        }
+        if (null == username) {
+            throw new ElasticsearchSecurityException("Could not determine username from token", RestStatus.UNAUTHORIZED);
+        }
+        return username;
     }
 
     public void setUser(RestRequest request, String user) {
