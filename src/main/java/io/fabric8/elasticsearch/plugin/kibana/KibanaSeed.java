@@ -99,6 +99,9 @@ public class KibanaSeed implements ConfigurationSettings {
         LOGGER.debug("Found '{}' Index patterns for user", indexPatterns.size());
 
         Set<String> projects = new HashSet<>(context.getProjects());
+        if(context.isOperationsUser()) {
+            projects.add(OPERATIONS_PROJECT);
+        }
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
 
@@ -161,7 +164,6 @@ public class KibanaSeed implements ConfigurationSettings {
         if (context.isOperationsUser()) {
             // Check roles here, if user is a cluster-admin we should add
             LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
-            filteredProjects.add(OPERATIONS_PROJECT);
             buildAdminAlias(filteredProjects, projectPrefix);
             filteredProjects.add(ADMIN_ALIAS_NAME);
         } else if (filteredProjects.isEmpty()) {
