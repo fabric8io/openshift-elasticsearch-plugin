@@ -31,8 +31,8 @@ import org.elasticsearch.common.settings.Settings;
 import io.netty.util.internal.ConcurrentSet;
 
 /**
- * A simple cache implementation for users->projects
- * 
+ * A simple cache implementation for users mapped to projects
+ *
  * @author jeff.cantrill
  *
  */

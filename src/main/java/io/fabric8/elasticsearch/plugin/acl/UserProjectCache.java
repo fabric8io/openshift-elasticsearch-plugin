@@ -28,7 +28,7 @@ public interface UserProjectCache {
 
     /**
      * Add users for a project
-     * 
+     *
      * @param user
      *            the user
      * @param token
@@ -42,13 +42,13 @@ public interface UserProjectCache {
 
     /**
      * Retrieve an unmodifiable mapping of users to their projects
-     * 
+     *
      * @return Immutable map of user/token to projects
      */
     Map<SimpleImmutableEntry<String, String>, Set<String>> getUserProjects();
 
     /**
-     * 
+     *
      * @param  user  The user to check in the cache
      * @param  token The user's token to check in the cache
      * @return true if the cache has an entry for a user
@@ -61,7 +61,7 @@ public interface UserProjectCache {
 
     /**
      * Retrieve names of all projects that users belong to
-     * 
+     *
      * @return  The set of all the projects in the cache
      */
     Set<String> getAllProjects();
