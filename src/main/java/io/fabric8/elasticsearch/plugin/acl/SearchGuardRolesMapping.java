@@ -16,7 +16,6 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -34,7 +33,7 @@ import org.elasticsearch.common.xcontent.XContentType;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
-public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping.RolesMapping>, SearchGuardACLDocument {
+public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping.RolesMapping>, SearchGuardACLDocument<SearchGuardRolesMapping> {
 
     public static final String ADMIN_ROLE = "gen_project_operations";
     public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
