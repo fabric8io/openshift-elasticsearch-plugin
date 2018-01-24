@@ -92,15 +92,14 @@ public class OpenshiftRequestContextFactory  {
                 user = user.replace("\\", "/");
             }
             utils.setUser(request, user);
-        } else if (utils.isClientCertAuth(request) && StringUtils.isBlank(token) && StringUtils.isBlank(user)) {
-            return OpenshiftRequestContext.EMPTY; // nothing more we can do here
-        } else {
-            String message = "Incorrect authentication credentials were given - must provide client cert, or token with optional username, or all of these.";
-            LOGGER.debug(message);
-            throw new ElasticsearchSecurityException(message);
+            return new OpenshiftRequestContext(user, token, isClusterAdmin, projects, getKibanaIndex(user, isClusterAdmin), this.kibanaIndexMode);
         }
-
-        return new OpenshiftRequestContext(user, token, isClusterAdmin, projects, getKibanaIndex(user, isClusterAdmin), this.kibanaIndexMode);
+        if(StringUtils.isNotBlank(user)) {
+            LOGGER.debug("Received a request with a user but no token. Setting userheader to empty.");
+            utils.setUser(request, "");
+        }
+        LOGGER.debug("Returing EMPTY request context; either was provided client cert or empty token.");
+        return OpenshiftRequestContext.EMPTY;
     }
     
     private void logRequest(final RestRequest request, final UserProjectCache cache) {
