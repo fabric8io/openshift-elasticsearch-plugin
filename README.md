@@ -5,6 +5,7 @@ This is an OpenShift plugin to ElasticSearch to:
 * Transform kibana index requests to support multitenant deployments for 
   non-operations users when so configured.
 
+
 *Note:*
 Previous versions of this plugin created a Kibana profile for each user regardless of their role,
 which is still the default mode of operation.  It is now possible to configure the Kibana index mode 

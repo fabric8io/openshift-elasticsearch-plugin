@@ -109,10 +109,10 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
                 // if create throws an exception, it means there was an issue with the token
                 // and username and the request failed authentication
                 final OpenshiftRequestContext requestContext = contextFactory.create(request, cache);
+                request = utils.modifyRequest(request, requestContext);
                 if (requestContext == OpenshiftRequestContext.EMPTY) {
                     return; // do not process in this plugin
                 }
-                request = utils.modifyRequest(request, requestContext);
                 request.putInContext(OPENSHIFT_REQUEST_CONTEXT, requestContext);
                 // grab the kibana version here out of "kbn-version" if we can
                 // -- otherwise use the config one
