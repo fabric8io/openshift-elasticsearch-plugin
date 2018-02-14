@@ -96,11 +96,18 @@ public class KibanaSeed implements ConfigurationSettings {
         // compare results to projects; handle any deltas (create, delete?)
 
         Set<String> indexPatterns = getProjectNamesFromIndexes(context, client, projectPrefix);
-        LOGGER.debug("Found '{}' Index patterns for user", indexPatterns.size());
+        LOGGER.debug("Found '{}' Index patterns for user {}", indexPatterns.size(), indexPatterns);
 
         Set<String> projects = new HashSet<>(context.getProjects());
         if(context.isOperationsUser()) {
             projects.add(OPERATIONS_PROJECT);
+            for (String pattern : indexPatterns) {
+                // Project might no longer exist, but the data can still be retrieved from elasticsearch
+                if (!projects.contains(pattern) && !pattern.equals(ADMIN_ALIAS_NAME)) {
+                    LOGGER.debug("Index {} belongs to a no longer existing project", pattern);
+                    projects.add(pattern);
+                }
+            }
         }
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
@@ -136,8 +143,20 @@ public class KibanaSeed implements ConfigurationSettings {
             // for any to create (remaining in projects) call createIndices, createSearchmapping?, create dashboard
             create(context.getKibanaIndex(), filteredProjects, false, client, kibanaVersion, projectPrefix, indexPatterns);
 
-            // cull any that are in ES but not in OS (remaining in indexPatterns)
-            remove(context.getKibanaIndex(), indexPatterns, client, projectPrefix);
+            if (!context.isOperationsUser()) {
+                // cull any that are in ES but not in OS (remaining in indexPatterns)
+                remove(context.getKibanaIndex(), indexPatterns, client, projectPrefix);
+            } else {
+                // delete index patterns only if the data has been deleted
+                Set<String> patternsWithoutData = new HashSet<>(indexPatterns.size());
+                for (String pattern : indexPatterns) {
+                    if (!pluginClient.indexExists(getIndexPattern(pattern, projectPrefix))) {
+                        patternsWithoutData.add(pattern);
+                    }
+                }
+                LOGGER.debug("Removing patterns with no data: {}", patternsWithoutData);
+                remove(context.getKibanaIndex(), patternsWithoutData, client, projectPrefix);
+            }
 
             common.addAll(filteredProjects);
             Collections.sort(common);
