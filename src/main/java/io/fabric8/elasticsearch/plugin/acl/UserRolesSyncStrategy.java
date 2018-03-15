@@ -16,76 +16,72 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.commons.lang.StringUtils;
+
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 
 public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements RolesSyncStrategy {
 
     private final String cdmProjectPrefix;
     private final String kibanaIndexMode;
+    private String expire;
 
-    public UserRolesSyncStrategy(SearchGuardRoles roles, String userProfilePrefix, String cdmProjectPrefix, String kibanaIndexMode) {
+    public UserRolesSyncStrategy(SearchGuardRoles roles, String userProfilePrefix, String cdmProjectPrefix, String kibanaIndexMode, long expiresInMillis) {
         super(roles, userProfilePrefix);
         this.cdmProjectPrefix = cdmProjectPrefix;
         this.kibanaIndexMode = kibanaIndexMode;
+        this.expire = String.valueOf(expiresInMillis);
     }
 
-    protected void syncFromImpl(UserProjectCache cache, RolesBuilder builder) {
-        boolean foundAnOpsUser = false;
-        //create roles for every user we know about to their kibana index
-        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userToProjects : cache.getUserProjects()
-                .entrySet()) {
-
-            String user = userToProjects.getKey().getKey();
-            String token = userToProjects.getKey().getValue();
-            if (cache.isOperationsUser(user, token)) {
-                foundAnOpsUser = true;
-            } else {
-                
-                String kibIndexName = formatKibanaIndexName(cache, user, token, kibanaIndexMode);
-
-                //specific permissions for kibana index
-                RoleBuilder kibRole = new RoleBuilder(formatUserKibanaRoleName(user))
-                        .setClusterActions(USER_KIBANA_ROLE_CLUSTER_ACTIONS)
-                        .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
-                        .setActions(ALL, ALL, USER_ALL_INDEX_ACTIONS);
-                builder.addRole(kibRole.build());
-                
-                //permissions for kibana Index
-                String roleName = formatUserRoleName(user);
-                RoleBuilder role = new RoleBuilder(roleName)
-                        .setClusters(USER_ROLE_CLUSTER_ACTIONS)
-                        .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
-                
-                //permissions for projects
-                for (String project : userToProjects.getValue()) {
-                    String indexName = String.format("%s?*", project.replace('.', '?'));
-                    role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
-                    // If using common data model, allow access to both the
-                    // $projname.$uuid.* indices and
-                    // the project.$projname.$uuid.* indices for backwards compatibility
-                    if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
-                        indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
-                        role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
-                    }
-                }
-                builder.addRole(role.build());
-            }
-        }
-        if (foundAnOpsUser) {
+    protected void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder) {
+        //think this can be statically added to roles doc
+        if (context.isOperationsUser()) {
             RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
                     .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
                     .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)
-                    .setActions("*?*?*", ALL, OPERATIONS_ROLE_ANY_ACTIONS);
+                    .setActions("*?*?*", ALL, OPERATIONS_ROLE_ANY_ACTIONS)
+                    .expires(expire);
             builder.addRole(opsRole.build());
             RoleBuilder kibanaOpsRole = new RoleBuilder(SearchGuardRolesMapping.KIBANA_SHARED_ROLE)
                     .setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
-                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
+                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS)
+                    .expires(expire);
             builder.addRole(kibanaOpsRole.build());
+            return;
         }        
+        
+        String kibIndexName = formatKibanaIndexName(context, kibanaIndexMode);
+
+        //specific permissions to kibana index for unique kibana role 
+        RoleBuilder kibRole = new RoleBuilder(formatUserKibanaRoleName(context.getUser()))
+                .setClusterActions(USER_KIBANA_ROLE_CLUSTER_ACTIONS)
+                .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
+                .setActions(ALL, ALL, USER_ALL_INDEX_ACTIONS)
+                .expires(expire);
+        builder.addRole(kibRole.build());
+
+        String roleName = formatUserRoleName(context.getUser());
+        
+        //permissions for kibana Index in user's role
+        RoleBuilder role = new RoleBuilder(roleName)
+                .setClusters(USER_ROLE_CLUSTER_ACTIONS)
+                .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
+                .expires(expire);
+        
+        //permissions for projects
+        for (String project : context.getProjects()) {
+            String indexName = String.format("%s?*", project.replace('.', '?'));
+            role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+            // If using common data model, allow access to both the
+            // $projname.$uuid.* indices and
+            // the project.$projname.$uuid.* indices for backwards compatibility
+            if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
+                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
+                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+            }
+        }
+        builder.addRole(role.build());
+        
     }
 }

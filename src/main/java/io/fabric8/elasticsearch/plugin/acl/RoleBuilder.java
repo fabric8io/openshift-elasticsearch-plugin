@@ -34,9 +34,15 @@ public class RoleBuilder {
     private String name;
     private Set<String> clusters = new HashSet<String>();
     private Map<String, HashMap<String, HashSet<String>>> indices = new HashMap<String, HashMap<String, HashSet<String>>>();
+    private String expires;
 
     public RoleBuilder(String name) {
         this.name = name;
+    }
+    
+    public RoleBuilder expires(String expiresInMillis) {
+        this.expires = expiresInMillis;
+        return this;
     }
 
     public RoleBuilder setClusters(List<String> clusters) {
@@ -75,6 +81,7 @@ public class RoleBuilder {
     public Roles build() {
         role.setName(name);
         role.setCluster(new ArrayList<String>(clusters));
+        role.setExpires(expires);
 
         List<Indices> roleIndices = new ArrayList<Indices>();
         for (String indexKey : indices.keySet()) {

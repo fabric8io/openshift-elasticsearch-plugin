@@ -61,7 +61,6 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      * ACL from a write from this plugin until load by searchguard
      */
     /** OpenShift settings here **/
-    static final String OPENSHIFT_ES_ACL_DELAY_IN_MILLIS = "io.fabric8.elasticsearch.acl.sync_delay_millis";
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP = "io.fabric8.elasticsearch.kibana.mapping.app";
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS = "io.fabric8.elasticsearch.kibana.mapping.ops";
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY = "io.fabric8.elasticsearch.kibana.mapping.empty";
@@ -91,7 +90,9 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      * Kibana index.
      */
     static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
-    
+
+    static final String OPENSHIFT_ACL_EXPIRE_IN_MILLIS = "openshift.acl.expire_in_millis";
+
     /**
      * The strategy to use for generating roles and role mappings
      */

@@ -59,12 +59,10 @@ import org.elasticsearch.transport.TransportInterceptor;
 import org.elasticsearch.watcher.ResourceWatcherService;
 
 import com.floragunn.searchguard.SearchGuardPlugin;
-import com.floragunn.searchguard.configuration.ConfigurationLoader;
 
+import io.fabric8.elasticsearch.plugin.acl.ACLDocumentManager;
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
 import io.fabric8.elasticsearch.plugin.filter.FieldStatsResponseFilter;
 import io.fabric8.elasticsearch.plugin.kibana.IndexMappingLoader;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
@@ -86,7 +84,6 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
             ResourceWatcherService resourceWatcherService, ScriptService scriptService,
             NamedXContentRegistry namedXContentRegistry) {
 
-        final UserProjectCache cache = new UserProjectCacheMapAdapter();
         final PluginSettings pluginSettings = new PluginSettings(settings);
         final IndexMappingLoader indexMappingLoader = new IndexMappingLoader(settings);
         final PluginClient pluginClient = new PluginClient(client, threadPool.getThreadContext());
@@ -96,14 +93,14 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
                 clientFactory);
         final SearchGuardSyncStrategyFactory documentFactory = new SearchGuardSyncStrategyFactory(pluginSettings);
         final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient);
-
-        this.aclFilter = new DynamicACLFilter(cache, pluginSettings, seed, client, contextFactory, documentFactory,
-                threadPool, requestUtils, new ConfigurationLoader(client, threadPool, settings));
+        final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
+        this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, contextFactory, threadPool, requestUtils, aclDocumentManager);
         this.kibanaReindexAction = new KibanaUserReindexAction(pluginSettings, client, threadPool.getThreadContext());
-        OpenShiftElasticSearchService osElasticSearvice = new OpenShiftElasticSearchService(settings, client, cache);
+        OpenShiftElasticSearchService osElasticService = new OpenShiftElasticSearchService(aclDocumentManager, pluginSettings);
+        clusterService.addLocalNodeMasterListener(osElasticService);
 
         List<Object> list = new ArrayList<>();
-        list.add(cache);
+        list.add(aclDocumentManager);
         list.add(pluginSettings);
         list.add(indexMappingLoader);
         list.add(pluginClient);
@@ -114,7 +111,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         list.add(seed);
         list.add(aclFilter);
         list.add(kibanaReindexAction);
-        list.add(osElasticSearvice);
+        list.add(osElasticService);
         list.add(new FieldStatsResponseFilter(pluginClient));
         list.addAll(sgPlugin.createComponents(client, clusterService, threadPool, resourceWatcherService, scriptService,
                 namedXContentRegistry));

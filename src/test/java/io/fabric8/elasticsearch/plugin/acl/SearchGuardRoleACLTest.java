@@ -16,118 +16,112 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.TestUtils.assertJson;
+import static io.fabric8.elasticsearch.plugin.TestUtils.assertYaml;
 import static io.fabric8.elasticsearch.plugin.TestUtils.buildMap;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.StringReader;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
+import org.elasticsearch.common.bytes.BytesArray;
+import org.elasticsearch.common.xcontent.XContentHelper;
+import org.elasticsearch.common.xcontent.XContentType;
 import org.junit.Test;
 
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.KibanaIndexMode;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
 public class SearchGuardRoleACLTest {
 
-    private UserProjectCache cache = new UserProjectCacheMapAdapter();
+    private SearchGuardRoles roles = new SearchGuardRoles();
+    
+    private OpenshiftRequestContext givenContextFor(String user, boolean isOperations, String mode, String...projects) {
+        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "abc", mode);
+    }
+    
+    private ProjectRolesSyncStrategy givenProjectRolesSyncStrategyFor(String mode) {
+        return new ProjectRolesSyncStrategy(roles, ".kibana", ".project", mode, 10);
+    }
 
-    @Test
-    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
-        cache.update("user1", "user2token", new HashSet<String>(), true);
-        cache.update("user3", "user3token", new HashSet<String>(), true);
-        cache.update("user2", "user2token", new HashSet<String>(Arrays.asList("foo.bar")), false);
-        
-        SearchGuardRoles roles = new SearchGuardRoles();
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(cache);
-        
-        assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles.toMap());
+    private UserRolesSyncStrategy givenUserRolesSyncStrategyFor(String mode) {
+        return new UserRolesSyncStrategy(roles, ".kibana", ".project", mode, 15);
     }
     
     @Test
+    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
+        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_OPS, "foo.bar"));
+        
+        assertYaml("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles);
+    }
+
+    
+    @Test
     public void testGeneratingKibanaUniqueRoleWithOpsUsersSyncedToUserRoles() throws Exception {
-        cache.update("user1", "user2token", new HashSet<String>(Arrays.asList("user2-proj")), true);
-        cache.update("user3", "user3token", new HashSet<String>(Arrays.asList("user3-proj")), true);
-        cache.update("user2.bar@email.com", "user2token", new HashSet<String>(Arrays.asList("foo.bar", "xyz")), false);
-        cache.update("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", "anothertoken", new HashSet<String>(Arrays.asList("distinguishedproj")), false);
+        RolesSyncStrategy strat = givenUserRolesSyncStrategyFor(KibanaIndexMode.UNIQUE);
         
-        SearchGuardRoles roles = new SearchGuardRoles();
-        RolesSyncStrategy strat = new UserRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(cache);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.UNIQUE, "user2-proj"));
+        strat.syncFrom(givenContextFor("user3", true, KibanaIndexMode.UNIQUE, "user3-proj"));
+        strat.syncFrom(givenContextFor("user2.bar@email.com", false, KibanaIndexMode.UNIQUE, "xyz", "foo.bar"));
+        strat.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", false, KibanaIndexMode.UNIQUE, "distinguishedproj"));
         
-        assertJson("", Samples.USER_ROLES_STRATEGY.getContent(), roles.toMap());
+        assertYaml("", Samples.USER_ROLES_STRATEGY.getContent(), roles);
     }
     
     @Test
     public void testGeneratingKibanaOpsRole() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter();
-        cache.update("user1", "user2token", new HashSet<String>(), true);
-        cache.update("user2", "user2token", new HashSet<String>(), true);
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
+        strat.syncFrom(givenContextFor("user2", true, KibanaIndexMode.SHARED_OPS));
         
-        SearchGuardRoles roles = new SearchGuardRoles();
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(cache);
-        
-        assertJson("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX.getContent(), roles.toMap());
+        assertYaml("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX.getContent(), roles);
     }
 
     @Test
     public void testGeneratingKibanaOpsShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter();
-        cache.update("user1", "user2token", new HashSet<String>(), true);
-        cache.update("user2", "user2token", new HashSet<String>(), true);
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
+        strat.syncFrom(givenContextFor("user2", true, KibanaIndexMode.SHARED_OPS));
         
-        SearchGuardRoles roles = new SearchGuardRoles();
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(cache);
-        
-        assertJson("", Samples.ROLES_SHARED_OPS_KIBANA_INDEX.getContent(), roles.toMap());
+        assertYaml("", Samples.ROLES_SHARED_OPS_KIBANA_INDEX.getContent(), roles);
     }
     
     @Test
     public void testGeneratingKibanaNonOpsShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter();
-        cache.update("user1", "user2token", new HashSet<String>(), false);
-        cache.update("user2", "user2token", new HashSet<String>(), false);
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
+        strat.syncFrom(givenContextFor("user1", false, KibanaIndexMode.SHARED_NON_OPS));
+        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_NON_OPS));
         
-        SearchGuardRoles roles = new SearchGuardRoles();
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_NON_OPS);
-        strat.syncFrom(cache);
-        
-        assertJson("", Samples.ROLES_SHARED_NON_OPS_KIBANA_INDEX.getContent(), roles.toMap());
+        assertYaml("", Samples.ROLES_SHARED_NON_OPS_KIBANA_INDEX.getContent(), roles);
     }
     
     @Test
     public void testGeneratingKibanaShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter();
-        cache.update("user1", "user2token", new HashSet<String>(), true);
-        cache.update("user2", "user2token", new HashSet<String>(), false);
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_NON_OPS));
+        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_NON_OPS));
         
-        SearchGuardRoles roles = new SearchGuardRoles();
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, ".kibana", ".project", KibanaIndexMode.SHARED_NON_OPS);
-        strat.syncFrom(cache);
-        
-        assertJson("", Samples.ROLES_SHARED_KIBANA_INDEX.getContent(), roles.toMap());
+        assertYaml("", Samples.ROLES_SHARED_KIBANA_INDEX.getContent(), roles);
     }
     
     @Test
-    public void testDeserialization() throws Exception {
-        new SearchGuardRoles().load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
+    public void testSerialization() throws Exception {
+        Roles role = new RolesBuilder().newRoleBuilder("foo")
+            .addClusterAction("myClusterAction")
+            .addIndexAction("*", "*", "*")
+            .expires("12345")
+            .build();
+        SearchGuardRoles sgRoles = new SearchGuardRoles(8901L);
+        sgRoles.addAll(Arrays.asList(role));
+        final String out = XContentHelper.toString(sgRoles);
+        Map<String, Object> in = XContentHelper.convertToMap(new BytesArray(out), true, XContentType.JSON).v2();
+        SearchGuardRoles inRoles = new SearchGuardRoles().load(in);
+        assertEquals("Exp serialization to equal derialization", out,  XContentHelper.toString(inRoles));
     }
 
     @Test
@@ -139,94 +133,4 @@ public class SearchGuardRoleACLTest {
         }
     }
 
-    @Test
-    public void testSyncFromCache() throws Exception {
-
-        // cache
-        Map<SimpleImmutableEntry<String, String>, Set<String>> map = new HashMap<>();
-        SimpleImmutableEntry<String, String> sie = new SimpleImmutableEntry<>("mytestuser", "tokenA");
-        map.put(sie, new HashSet<>(Arrays.asList("projectA", "projectB", "projectC")));
-        sie = new SimpleImmutableEntry<>("mythirduser", "tokenB");
-        map.put(sie, new HashSet<>(Arrays.asList("projectzz")));
-        Set<String> projects = new HashSet<>(Arrays.asList("projectA", "projectB", "projectC", "projectzz"));
-        UserProjectCache cache = mock(UserProjectCache.class);
-        when(cache.getUserProjects()).thenReturn(map);
-        when(cache.getAllProjects()).thenReturn(projects);
-
-        SearchGuardRoles roles = new SearchGuardRoles()
-                .load(buildMap(new StringReader(Samples.ROLES_ACL.getContent())));
-        ProjectRolesSyncStrategy strat = new ProjectRolesSyncStrategy(roles, 
-                ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, 
-                ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX, 
-                KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(cache);
-
-        // assert acl added
-        assertAclsHas(roles, createRoles("projectzz"));
-
-        // assert acl updated
-        assertAclsHas(roles, createRoles("projectA", "projectB", "projectC"));
-
-        // assert acl removed
-        assertNoAclForProject(roles, "myotherproject");
-    }
-
-    private void assertNoAclForProject(final SearchGuardRoles roles, final String project) {
-        for (Roles role : roles) {
-            Indices index = new Indices();
-            index.setIndex(project);
-            index.setTypes(buildDefaultTypes());
-
-            assertFalse("Exp. to not find any roles for projects not in the cache",
-                    role.getIndices().toString().contains(index.getIndex()));
-        }
-    }
-
-    private List<Roles> createRoles(String... projects) {
-        RolesBuilder builder = new RolesBuilder();
-
-        for (String project : projects) {
-            String projectName = String.format("%s_%s", "gen_project", project.replace('.', '_'));
-            String indexName = String.format("%s?*", project.replace('.', '?'));
-
-            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, "*",
-                new String[] { "INDEX_PROJECT" });
-
-            builder.addRole(role.build());
-        }
-
-        return builder.build();
-    }
-
-    private void assertAclsHas(SearchGuardRoles roles, List<Roles> expected) {
-
-        int expectedCount = expected.size();
-        int found = 0;
-
-        for (Roles exp : expected) {
-            for (Roles role : roles) {
-
-                if (role.getName().equals(exp.getName())) {
-                    found++;
-                    // check name
-                    assertEquals(role.getName(), exp.getName());
-
-                    // check clusters
-                    assertArrayEquals("roles.clusters", exp.getCluster().toArray(), role.getCluster().toArray());
-
-                    // check indices
-                    assertEquals("roles.indices", exp.getIndices().toString(), role.getIndices().toString());
-                }
-            }
-        }
-        assertEquals("Was able to match " + found + " of " + expectedCount + " ACLs", expectedCount, found);
-    }
-
-    private List<Type> buildDefaultTypes() {
-        Type[] types = { new Type() };
-        types[0].setType("*");
-        types[0].setActions(Arrays.asList(new String[] { "ALL" }));
-
-        return Arrays.asList(types);
-    }
 }

@@ -16,10 +16,7 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.HashSet;
-import java.util.Map.Entry;
-import java.util.Set;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 /**
  * SearchGuard Roles Document sync strategy based on roles 
@@ -36,30 +33,23 @@ import java.util.Set;
  */
 public class UserRolesMappingSyncStrategy extends BaseRolesMappingSyncStrategy {
 
-    public UserRolesMappingSyncStrategy(SearchGuardRolesMapping mapping) {
-        super(mapping);
+    public UserRolesMappingSyncStrategy(SearchGuardRolesMapping mapping, long expiresInMillis) {
+        super(mapping, expiresInMillis);
     }
 
     @Override
-    protected void syncFromImpl(UserProjectCache cache, RolesMappingBuilder builder) {
-        Set<String> opsUsers = new HashSet<>();
-        for (Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects()
-                .entrySet()) {
-            String username = userProjects.getKey().getKey();
-            String token = userProjects.getKey().getValue();
-
-            if (cache.isOperationsUser(username, token)) {
-                opsUsers.add(username);
-            } else {
-                String kibanaRoleName = BaseRolesSyncStrategy.formatUserKibanaRoleName(username);
-                builder.addUser(kibanaRoleName, username);
-                String roleName = BaseRolesSyncStrategy.formatUserRoleName(username);
-                builder.addUser(roleName, username);
-            }
-        }
-        for (String user : opsUsers) {
+    protected void syncFromImpl(OpenshiftRequestContext context, RolesMappingBuilder builder) {
+        
+        final String user = context.getUser();
+        if (context.isOperationsUser()) {
             builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, user);
             builder.addUser(SearchGuardRolesMapping.KIBANA_SHARED_ROLE, user);
+            builder.expire(getExpires());
+        } else {
+            String kibanaRoleName = BaseRolesSyncStrategy.formatUserKibanaRoleName(user);
+            builder.addUser(kibanaRoleName, user).expire(getExpires());
+            String roleName = BaseRolesSyncStrategy.formatUserRoleName(user);
+            builder.addUser(roleName, user).expire(getExpires());
         }
     }
 

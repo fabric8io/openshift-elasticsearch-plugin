@@ -21,15 +21,15 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.Set;
 
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.elasticsearch.common.xcontent.XContentBuilder;
-import org.elasticsearch.common.xcontent.XContentFactory;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 
@@ -38,14 +38,25 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
     public static final String ADMIN_ROLE = "gen_project_operations";
     public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
     private static final String USER_HEADER = "users";
-    private List<RolesMapping> mappings = new ArrayList<>();
+    private Map<String, RolesMapping> mappings = new HashMap<>();
+    private Long version;
     
     public static class RolesMapping {
 
-        
+        private Boolean protect;
         private String name;
 
-        private List<String> users = new ArrayList<String>();
+        private Set<String> users = new HashSet<String>();
+
+        private String expire;
+
+        public Boolean getProtected() {
+            return this.protect;
+        }
+        
+        public void setProtected(boolean protect) {
+            this.protect = protect;
+        }
 
         public String getName() {
             return name;
@@ -55,23 +66,52 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
             this.name = name;
         }
 
-        public List<String> getUsers() {
+        public Collection<String> getUsers() {
             return users;
         }
 
-        public void setUsers(List<String> users) {
-            this.users = users;
+        public void setUsers(Collection<String> users) {
+            this.users = new HashSet<>(users);
         }
 
         @Override
         public String toString() {
-            return ToStringBuilder.reflectionToString(this, ToStringStyle.SHORT_PREFIX_STYLE);
+            return new StringBuilder()
+                    .append("name=").append(getName()).append("\n")
+                    .append("expire=").append(getExpire()).append("\n")
+                    .append("users=").append(getUsers().toArray()).append("\n")
+                    .toString();
         }
+
+        public void addAll(Collection<String> users) {
+            this.users.addAll(users);
+        }
+
+        public void setExpire(String expire) {
+            this.expire = expire;
+        }
+
+        public String getExpire() {
+            return this.expire;
+        }
+    }
+
+    public SearchGuardRolesMapping() {
+    }
+    
+    public SearchGuardRolesMapping(Long version) {
+        if(version != null && version.longValue() >= 0) {
+            this.version = version;
+        }
+    }
+    
+    public Long getVersion() {
+        return version;
     }
 
     @Override
     public Iterator<RolesMapping> iterator() {
-        return new ArrayList<>(mappings).iterator();
+        return new ArrayList<>(mappings.values()).iterator();
     }
 
     @Override
@@ -80,56 +120,58 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
     }
 
     public void removeRolesMapping(RolesMapping mapping) {
-        mappings.remove(mapping);
+        mappings.remove(mapping.getName());
     }
 
     @SuppressWarnings("unchecked")
     public SearchGuardRolesMapping load(Map<String, Object> source) {
-
-        RolesMappingBuilder builder = new RolesMappingBuilder();
-
+        if(source == null) {
+            return this;
+        }
         for (String key : source.keySet()) {
-            HashMap<String, List<String>> users = (HashMap<String, List<String>>) source.get(key);
-            builder.setUsers(key, users.get(USER_HEADER));
-        }
+            Map<String, Object> rawMappings = (Map<String, Object>) source.get(key);
 
-        mappings = builder.build();
+            RolesMapping mapping = new RolesMapping();
+            mapping.setName(key);
+            mapping.setUsers((List<String>)(rawMappings.get(USER_HEADER)));
+            if(rawMappings.containsKey(EXPIRES)) {
+                mapping.setExpire((String)rawMappings.get(EXPIRES));
+            }
+            mappings.put(mapping.getName(), mapping);
+        }
+        
         return this;
-    }
-
-    public Map<String, Object> toMap() {
-        Map<String, Object> output = new TreeMap<String, Object>();
-
-        // output keys are names of mapping
-        for (RolesMapping mapping : mappings) {
-            Map<String, List<String>> mappingObject = new TreeMap<String, List<String>>();
-
-            mappingObject.put(USER_HEADER, mapping.getUsers());
-
-            output.put(mapping.getName(), mappingObject);
-        }
-
-        return output;
     }
 
     @Override
     public String getType() {
         return ConfigurationSettings.SEARCHGUARD_MAPPING_TYPE;
     }
-
-    @Override
-    public XContentBuilder toXContentBuilder() {
+    
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException{
         try {
-            XContentBuilder builder = XContentFactory.jsonBuilder();
-            builder.map(toMap());
+            // output keys are names of mapping
+            for (RolesMapping mapping : mappings.values()) {
+                builder.startObject(mapping.getName());
+                if(mapping.getExpire() != null) {
+                    builder.field(EXPIRES, mapping.getExpire());
+                }
+                builder.array(USER_HEADER, mapping.getUsers().toArray());
+                builder.endObject();
+            }
             return builder;
         } catch (IOException e) {
             throw new RuntimeException("Unable to convert the SearchGuardRolesMapping to JSON", e);
         }
-
     }
 
     public void addAll(Collection<RolesMapping> mappings) {
-        this.mappings.addAll(mappings);
+        for (RolesMapping rolesMapping : mappings) {
+            if(this.mappings.containsKey(rolesMapping.getName())){
+                this.mappings.get(rolesMapping.getName()).addAll(rolesMapping.getUsers());
+            } else {
+                this.mappings.put(rolesMapping.getName(), rolesMapping);
+            }
+        }
     }
 }
