@@ -1,8 +1,10 @@
 gen_kibana_a1881c06eec96db9901c7bbfe41c42a3f08e9cb4:
+  expires: 10
   indices:
     ?kibana_non_ops:
       '*': [INDEX_KIBANA]
 gen_kibana_b3daa77b4c04a9551b8781d03191fe098f325e67:
+  expires: 10
   indices:
     ?kibana_non_ops:
       '*': [INDEX_KIBANA]

@@ -37,9 +37,13 @@ public class PluginSettings implements ConfigurationSettings {
     private final String kibanaVersion;
     private final String kbnVersionHeader;
     private final Boolean enabled;
+    private final long expireInMillis;
+
+    private final Settings settings;
     
     @Inject
     public PluginSettings(final Settings settings) {
+        this.settings = settings;
         this.kibanaIndexMode = settings.get(OPENSHIFT_KIBANA_INDEX_MODE, KibanaIndexMode.DEFAULT_MODE);
         if(!ArrayUtils.contains(new String [] {UNIQUE, SHARED_OPS, SHARED_NON_OPS}, kibanaIndexMode.toLowerCase())) {
             this.kibanaIndexMode = UNIQUE;
@@ -57,11 +61,20 @@ public class PluginSettings implements ConfigurationSettings {
         this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+        this.expireInMillis = settings.getAsLong(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, new Long(1000 * 60));
 
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
         LOGGER.debug("roleStrategy: {}", this.roleStrategy);
 
+    }
+    
+    public Settings getSettings() {
+        return this.settings;
+    }
+    
+    public long getACLExpiresInMillis() {
+        return expireInMillis;
     }
     
     public String getRoleStrategy() {

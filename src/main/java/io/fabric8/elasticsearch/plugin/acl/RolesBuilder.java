@@ -16,21 +16,76 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
+import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
 
 public class RolesBuilder {
 
-    private List<Roles> roles = new ArrayList<Roles>();
+    private Map<String, Roles> roles = new HashMap<>();
 
-    public List<Roles> build() {
-        return roles;
+    public Collection<Roles> build() {
+        return roles.values();
     }
 
     public RolesBuilder addRole(Roles role) {
-        roles.add(role);
+        roles.put(role.getName(), role);
         return this;
+    }
+    
+    public RoleBuilder newRoleBuilder(String name) {
+        return new RoleBuilder(name);
+    }
+    
+    public static class RoleBuilder {
+        private Roles role = new Roles();
+        
+        RoleBuilder(String name){
+            role.setName(name);
+        }
+        
+        public RoleBuilder name(String name) {
+            role.setName(name);
+            return this;
+        }
+
+        public RoleBuilder expires(Long expiresInMillies) {
+            role.setExpires(expiresInMillies);
+            return this;
+        }
+        
+        public RoleBuilder addClusterAction(String action) {
+            role.addClusterAction(action);
+            return this;
+        }
+        
+        public RoleBuilder setClusterActions(List<String> actions) {
+            role.setCluster(actions);
+            return this;
+        }
+        
+        public RoleBuilder addIndexAction(Indices action) {
+            role.addIndexAction(action);
+            return this;
+        }
+        
+        public RoleBuilder addIndexAction(String index, String type, String action) {
+            role.addIndexAction(index, type, action);
+            return this;
+        }
+        
+        public RoleBuilder setIndicesActions(List<Indices> actions) {
+            role.setIndices(actions);
+            return this;
+        }
+        
+        public Roles build() {
+            return role;
+        }
+        
     }
 }

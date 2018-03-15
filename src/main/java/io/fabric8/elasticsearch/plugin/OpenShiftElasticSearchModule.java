@@ -19,8 +19,6 @@ package io.fabric8.elasticsearch.plugin;
 import org.elasticsearch.common.inject.AbstractModule;
 
 import io.fabric8.elasticsearch.plugin.acl.DynamicACLFilter;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCacheMapAdapter;
 
 /**
  * The module controls loading and specific implementations we want to use
@@ -30,9 +28,6 @@ public class OpenShiftElasticSearchModule extends AbstractModule {
 
     @Override
     protected void configure() {
-
-        bind(UserProjectCache.class).to(UserProjectCacheMapAdapter.class).asEagerSingleton();
-
         bind(DynamicACLFilter.class).asEagerSingleton();
     }
 

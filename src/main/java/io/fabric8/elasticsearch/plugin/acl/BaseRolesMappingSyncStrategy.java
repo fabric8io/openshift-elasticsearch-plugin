@@ -16,41 +16,29 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.ROLE_PREFIX;
-
-import java.util.Iterator;
-
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 public abstract class BaseRolesMappingSyncStrategy implements RolesMappingSyncStrategy {
 
     protected final SearchGuardRolesMapping mappings;
+    private long expire;
     
-    protected BaseRolesMappingSyncStrategy(final SearchGuardRolesMapping mappings) {
+    protected BaseRolesMappingSyncStrategy(final SearchGuardRolesMapping mappings, long expiresInMillis) {
         this.mappings = mappings;
+        this.expire = expiresInMillis;
     }
 
-
-    // Remove roles that start with "gen_"
-    private void removeSyncAcls() {
-        for (Iterator<RolesMapping> i = mappings.iterator(); i.hasNext();) {
-            RolesMapping mapping = i.next();
-            if (mapping.getName() != null && mapping.getName().startsWith(ROLE_PREFIX)) {
-                mappings.removeRolesMapping(mapping);
-            }
-        }
-    }
-
-
-    protected abstract void syncFromImpl(UserProjectCache cache, RolesMappingBuilder builder);
+    protected abstract void syncFromImpl(OpenshiftRequestContext context, RolesMappingBuilder builder);
     
+    protected long getExpires() {
+        return expire;
+    }
+
     @Override
-    public void syncFrom(UserProjectCache cache) {
-        removeSyncAcls();
+    public void syncFrom(OpenshiftRequestContext context) {
         RolesMappingBuilder builder = new RolesMappingBuilder();
-        syncFromImpl(cache, builder);
+        syncFromImpl(context, builder);
         mappings.addAll(builder.build());
     }
 
-    
 }
