@@ -20,8 +20,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyString;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
@@ -37,7 +35,6 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.dsl.ClientNonNamespaceOperation;
@@ -56,7 +53,6 @@ public class OpenshiftRequestContextFactoryTest {
     private OpenshiftRequestContext context;
     private OpenshiftClientFactory clientFactory = mock(OpenshiftClientFactory.class);
     private RestRequest request;
-    private UserProjectCache cache = mock(UserProjectCache.class);
     private RequestUtils utils;
 
     @Before
@@ -64,11 +60,6 @@ public class OpenshiftRequestContextFactoryTest {
         request = mock(RestRequest.class);
         when(request.header(eq(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER))).thenReturn("fooUser");
         when(request.header(eq("Authorization"))).thenReturn("Bearer ABC123");
-        givenUserIsCashed(true);
-    }
-
-    private void givenUserIsCashed(boolean cached) {
-        when(cache.hasUser(anyString(), anyString())).thenReturn(cached);
     }
 
     private void givenUserContextFactory(boolean isOperationsUser) {
@@ -101,7 +92,7 @@ public class OpenshiftRequestContextFactoryTest {
 
     private OpenshiftRequestContext whenCreatingUserContext(String username) throws Exception {
         doReturn(username).when(utils).assertUser(any(RestRequest.class));
-        this.context = factory.create(request, cache);
+        this.context = factory.create(request);
         return this.context;
     }
 
@@ -194,7 +185,6 @@ public class OpenshiftRequestContextFactoryTest {
     public void testCreateUserContextWhenRequestHasUsernameAndPassword() throws Exception {
         givenUserContextFactory(true);
         givenUserHasProjects();
-        givenUserIsCashed(false);
         whenCreatingUserContext();
         assertTrue("Exp. the request context to have a users projects", !context.getProjects().isEmpty());
         assertTrue("Exp. the request context to identify an ops user", context.isOperationsUser());

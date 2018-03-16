@@ -19,8 +19,13 @@ package io.fabric8.elasticsearch.plugin.acl;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 
 public interface SearchGuardACLDocument {
+    
+    static final String EXPIRES = "expires";
 
     XContentBuilder toXContentBuilder();
 
     String getType();
+    
+    Long getVersion();
+
 }

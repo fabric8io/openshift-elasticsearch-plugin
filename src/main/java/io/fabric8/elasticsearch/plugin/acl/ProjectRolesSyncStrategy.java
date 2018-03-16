@@ -16,24 +16,20 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Map;
-import java.util.Set;
-
 import org.apache.commons.lang.StringUtils;
+
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 /**
  * SearchGuard Roles Document sync strategy based on roles 
  * derived from projects.  This should generate role mappings like:
  * 
- * gen_kibana_a1881c06eec96db9901c7bbfe41c42a3f08e9cb4:
- *   users: [user2]
- * gen_ocp_kibana_shared:
- *   users: [user1, user3]
- *  gen_project_foo_bar:
- *   users: [user2]
- * gen_project_operations:
- *   users: [user1, user3]
+  gen_project_foo_bar:
+    indices:
+      ?foo?bar?*:
+        '*': [INDEX_PROJECT]
+      project?foo?bar?*:
+        '*': [INDEX_PROJECT]
  * 
  */
 public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
@@ -41,21 +37,25 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
 
     private final String cdmProjectPrefix;
     private final String kibanaIndexMode;
+    private final long expires;
     
-    public ProjectRolesSyncStrategy(SearchGuardRoles roles, final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode) {
+    public ProjectRolesSyncStrategy(SearchGuardRoles roles, 
+            final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode, final long expiresInMillies) {
         super(roles, userProfilePrefix);
         this.roles = roles;
         this.cdmProjectPrefix = cdmProjectPrefix;
         this.kibanaIndexMode = kibanaIndexMode;
+        this.expires = expiresInMillies;
     }
 
     @Override
-    public void syncFromImpl(UserProjectCache cache, RolesBuilder builder) {
-        for (String project : cache.getAllProjects()) {
+    public void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder) {
+        for (String project : context.getProjects()) {
             String projectName = String.format("%s_%s", SearchGuardRoles.PROJECT_PREFIX, project.replace('.', '_'));
             String indexName = String.format("%s?*", project.replace('.', '?'));
             RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, ALL,
                     PROJECT_ROLE_ACTIONS);
+            role.expires(expires);
 
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
@@ -68,26 +68,23 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
             builder.addRole(role.build());
         }
         
-        boolean foundAnOpsUser = false;
-        //create roles for every user we know about to their kibana index
-        for (Map.Entry<SimpleImmutableEntry<String, String>, Set<String>> userToProjects : cache.getUserProjects()
-                .entrySet()) {
-            String username = userToProjects.getKey().getKey();
-            String token = userToProjects.getKey().getValue();
-            
-            String roleName = formatKibanaRoleName(cache, username, token);
-            String indexName = formatKibanaIndexName(cache, username, token, kibanaIndexMode);
-
-            RoleBuilder role = new RoleBuilder(roleName)
-                    .setActions(indexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
-            if (cache.isOperationsUser(username, token)) {
-                foundAnOpsUser = true;
-                role.setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
-                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
-            }
-            builder.addRole(role.build());
+        //create role to user's Kibana index
+        String kibanaRoleName = formatKibanaRoleName(context);
+        String kibanaIndexName = formatKibanaIndexName(context, kibanaIndexMode);
+        RoleBuilder kibanaRole = new RoleBuilder(kibanaRoleName)
+                .setActions(kibanaIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
+        if (context.isOperationsUser()) {
+            kibanaRole.setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
+                .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS);
+        }else {
+            kibanaRole.expires(expires);
         }
-        if (foundAnOpsUser) {
+        builder.addRole(kibanaRole.build());
+
+        //statically add to roles?
+        if (context.isOperationsUser()) {
+            
+            builder.addRole(kibanaRole.build());
             RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
                     .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
                     .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)

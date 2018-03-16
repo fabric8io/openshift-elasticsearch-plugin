@@ -1,4 +1,5 @@
 gen_kibana_a1881c06eec96db9901c7bbfe41c42a3f08e9cb4:
+  expires: 10
   indices:
     ?kibana_non_ops:
       '*': [INDEX_KIBANA]

@@ -36,7 +36,6 @@ import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
 
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -73,12 +72,12 @@ public class OpenshiftRequestContextFactory  {
     /**
      * Create a user context from the given request
      * 
-     * @param   cache - The cache of user projects to create ACLs
+     * @param   request - The RestRequest to create from
      * @return  an OpenshiftRequestContext 
      * @throws  All exceptions
      */
-    public OpenshiftRequestContext create(final RestRequest request, final UserProjectCache cache) throws Exception {
-        logRequest(request, cache);
+    public OpenshiftRequestContext create(final RestRequest request) throws Exception {
+        logRequest(request);
 
         Set<String> projects = new HashSet<>();
         boolean isClusterAdmin = false;
@@ -102,7 +101,7 @@ public class OpenshiftRequestContextFactory  {
         return OpenshiftRequestContext.EMPTY;
     }
     
-    private void logRequest(final RestRequest request, final UserProjectCache cache) {
+    private void logRequest(final RestRequest request) {
         if (LOGGER.isDebugEnabled()) {
             String user = utils.getUser(request);
             String token = utils.getBearerToken(request);
@@ -121,7 +120,6 @@ public class OpenshiftRequestContextFactory  {
             }
             LOGGER.debug("Evaluating request for user '{}' with a {} token", user,
                     (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-            LOGGER.debug("Cache has user: {}", cache.hasUser(user, token));
         }
     }
 
@@ -184,7 +182,7 @@ public class OpenshiftRequestContextFactory  {
         private final String kibanaIndex;
         private final String kibanaIndexMode;
 
-        protected OpenshiftRequestContext(final String user, final String token, boolean isClusterAdmin, 
+        public OpenshiftRequestContext(final String user, final String token, boolean isClusterAdmin, 
                 Set<String> projects, String kibanaIndex, final String kibanaIndexMode) {
             this.user = user;
             this.token = token;
