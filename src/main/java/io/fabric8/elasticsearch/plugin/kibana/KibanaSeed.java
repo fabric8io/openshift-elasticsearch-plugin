@@ -19,7 +19,6 @@ package io.fabric8.elasticsearch.plugin.kibana;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang.StringUtils;
-import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
@@ -54,7 +52,6 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
-import io.fabric8.elasticsearch.util.IndexUtil;
 
 public class KibanaSeed implements ConfigurationSettings {
 
@@ -72,14 +69,12 @@ public class KibanaSeed implements ConfigurationSettings {
     private final IndexMappingLoader mappingLoader;
     private final PluginClient pluginClient;
     private final String defaultKibanaIndex;
-    private final PluginSettings settings;
 
     @Inject
     public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient)  {
         this.mappingLoader = loader;
         this.pluginClient = pluginClient;
         this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
-        this.settings = settings;
     }
 
     public void setDashboards(final OpenshiftRequestContext context, Client client, String kibanaVersion, final String projectPrefix) {
@@ -107,8 +102,13 @@ public class KibanaSeed implements ConfigurationSettings {
         }
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
-
-        addAliasToAllProjects(context, filteredProjects);
+        
+        if (context.isOperationsUser()) {
+            filteredProjects.add(ADMIN_ALIAS_NAME);
+        }else if (filteredProjects.isEmpty()) {
+            filteredProjects.add(BLANK_PROJECT);
+        }
+        
         Collections.sort(filteredProjects);
         
         // If none have been set yet
@@ -159,18 +159,6 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if ( changed ) {
             refreshKibanaUser(context.getKibanaIndex(), client);
-        }
-    }
-    
-    private void addAliasToAllProjects(final OpenshiftRequestContext context, List<String> filteredProjects) {
-        String projectPrefix = settings.getCdmProjectPrefix();
-        if (context.isOperationsUser()) {
-            // Check roles here, if user is a cluster-admin we should add
-            LOGGER.debug("Adding indexes to alias '{}' for user '{}'", ADMIN_ALIAS_NAME, context.getUser());
-            buildAdminAlias(filteredProjects, projectPrefix);
-            filteredProjects.add(ADMIN_ALIAS_NAME);
-        } else if (filteredProjects.isEmpty()) {
-            filteredProjects.add(BLANK_PROJECT);
         }
     }
     
@@ -249,36 +237,6 @@ public class KibanaSeed implements ConfigurationSettings {
         String source = new DocumentBuilder().defaultIndex(getIndexPattern(project, projectPrefix)).build();
 
         executeUpdate(kibanaIndex, DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
-    }
-
-    /*
-     * Create admin alias for a list of projects which are known to one or more associated indexes
-     */
-    private void buildAdminAlias(List<String> projects, String projectPrefix) {
-        buildUserAlias(projects, projectPrefix, ADMIN_ALIAS_NAME);
-    }
-
-    private void buildUserAlias(List<String> projects, String projectPrefix, String alias) {
-        try {
-            if (projects.isEmpty()) {
-                return;
-            }
-            Set<String> aliasedIndicies = pluginClient.getIndicesForAlias(alias);
-            aliasedIndicies = new IndexUtil().replaceDateSuffix("*", aliasedIndicies);
-            Map<String, String> patternAlias = new HashMap<>(projects.size());
-            for (String project : projects) {
-                String indexPattern = getIndexPattern(project, projectPrefix);
-                if(!aliasedIndicies.contains(indexPattern)) {
-                    patternAlias.put(indexPattern, alias);
-                }
-            }
-            pluginClient.alias(patternAlias);
-            
-        } catch (ElasticsearchException e) {
-            // Avoid printing out any kibana specific information?
-            LOGGER.error("Error executing Alias request", e);
-        }
-        
     }
     
     private String getDefaultIndex(OpenshiftRequestContext context, Client esClient, String kibanaVersion, String projectPrefix) {
