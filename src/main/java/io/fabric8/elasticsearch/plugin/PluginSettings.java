@@ -19,6 +19,10 @@ package io.fabric8.elasticsearch.plugin;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory.PROJECT;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory.USER;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.apache.commons.lang.ArrayUtils;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
@@ -37,6 +41,7 @@ public class PluginSettings implements ConfigurationSettings {
     private final String kibanaVersion;
     private final String kbnVersionHeader;
     private final Boolean enabled;
+    private final Set<String> opsIndexPatterns;
     
     @Inject
     public PluginSettings(final Settings settings) {
@@ -57,6 +62,7 @@ public class PluginSettings implements ConfigurationSettings {
         this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
+        this.opsIndexPatterns = new HashSet<String>(Arrays.asList(settings.getAsArray(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, DEFAULT_KIBANA_OPS_INDEX_PATTERNS)));
 
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
@@ -98,5 +104,9 @@ public class PluginSettings implements ConfigurationSettings {
 
     public void setKibanaIndexMode(String kibanaIndexMode) {
         this.kibanaIndexMode = kibanaIndexMode;
+    }
+    
+    public Set<String> getKibanaOpsIndexPatterns() {
+        return opsIndexPatterns;
     }
 }

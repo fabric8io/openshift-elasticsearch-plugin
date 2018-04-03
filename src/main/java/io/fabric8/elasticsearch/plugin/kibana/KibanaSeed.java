@@ -26,22 +26,16 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang.StringUtils;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
-import org.elasticsearch.action.admin.indices.refresh.RefreshRequest;
-import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.transport.RemoteTransportException;
@@ -69,40 +63,75 @@ public class KibanaSeed implements ConfigurationSettings {
     private final IndexMappingLoader mappingLoader;
     private final PluginClient pluginClient;
     private final String defaultKibanaIndex;
+    private final PluginSettings settings;
 
     @Inject
     public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient)  {
         this.mappingLoader = loader;
         this.pluginClient = pluginClient;
         this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
+        this.settings = settings;
     }
-
+    
     public void setDashboards(final OpenshiftRequestContext context, Client client, String kibanaVersion, final String projectPrefix) {
 
         LOGGER.debug("Begin setDashboards:  projectPrefix '{}' for user '{}' projects '{}' kibanaIndex '{}'",
                 projectPrefix, context.getUser(), context.getProjects(), context.getKibanaIndex());
-
+        
         // We want to seed the Kibana user index initially
         // since the logic from Kibana has changed to create before this plugin
         // starts...
         boolean changed = initialSeedKibanaIndex(context, client);
+        
+        if (context.isOperationsUser()) {
+            changed = seedOperationsIndexPatterns(context, client, kibanaVersion, projectPrefix);
+        } else {
+            changed = seedUsersIndexPatterns(context, client, kibanaVersion, projectPrefix);
+        }
 
+        if ( changed ) {
+            pluginClient.refreshIndices(context.getKibanaIndex());
+        }
+    }
+
+    private boolean seedOperationsIndexPatterns(final OpenshiftRequestContext context, final  Client client, String kibanaVersion, final String projectPrefix) {
+        boolean changed = false;
+        boolean defaultSet = false;
+        for (String pattern : settings.getKibanaOpsIndexPatterns()) {
+            if(!pluginClient.documentExists(context.getKibanaIndex(), INDICIES_TYPE, pattern)) {
+                LOGGER.trace("Creating index-pattern '{}'", pattern);
+                String source = StringUtils.replace(mappingLoader.getOperationsMappingsTemplate(), "$TITLE$", pattern);
+                pluginClient.createDocument(context.getKibanaIndex(), INDICIES_TYPE, pattern, source);
+                if (!defaultSet) {
+                    try {
+                        String update = XContentFactory.jsonBuilder()
+                                .startObject()
+                                    .field(KibanaSeed.DEFAULT_INDEX_FIELD, pattern)
+                                 .endObject().string();
+                        pluginClient.update(context.getKibanaIndex(), DEFAULT_INDEX_TYPE, kibanaVersion, update);
+                        defaultSet = true;
+                    } catch (IOException e) {
+                        LOGGER.error("Unable to set default index-pattern", e);
+                    }
+                }
+                changed = true;
+            }
+        }
+        return changed;
+    }
+    
+    private boolean seedUsersIndexPatterns(final OpenshiftRequestContext context, final  Client client,  final String kibanaVersion, final String projectPrefix) {
+        boolean changed = false;
         // GET .../.kibana/index-pattern/_search?pretty=true&fields=
         // compare results to projects; handle any deltas (create, delete?)
-
         Set<String> indexPatterns = getProjectNamesFromIndexes(context, client, projectPrefix);
         LOGGER.debug("Found '{}' Index patterns for user", indexPatterns.size());
 
         Set<String> projects = new HashSet<>(context.getProjects());
-        if(context.isOperationsUser()) {
-            projects.add(OPERATIONS_PROJECT);
-        }
         List<String> filteredProjects = new ArrayList<String>(filterProjectsWithIndices(projectPrefix, projects));
         LOGGER.debug("projects for '{}' that have existing indexes: '{}'", context.getUser(), filteredProjects);
         
-        if (context.isOperationsUser()) {
-            filteredProjects.add(ADMIN_ALIAS_NAME);
-        }else if (filteredProjects.isEmpty()) {
+        if (filteredProjects.isEmpty()) {
             filteredProjects.add(BLANK_PROJECT);
         }
         
@@ -153,12 +182,9 @@ public class KibanaSeed implements ConfigurationSettings {
                 }
             }
         }
-
-        if ( changed ) {
-            refreshKibanaUser(context.getKibanaIndex(), client);
-        }
+        return changed;
     }
-    
+
     /*
      * Given a list of projects, filter out those which do not have any
      * index associated with it
@@ -174,16 +200,6 @@ public class KibanaSeed implements ConfigurationSettings {
         return result;
     }
 
-    private void refreshKibanaUser(String kibanaIndex, Client esClient) {
-
-        RefreshRequest request = new RefreshRequest().indices(kibanaIndex);
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-        RefreshResponse response = esClient.admin().indices().refresh(request).actionGet();
-
-        LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", kibanaIndex, response.getSuccessfulShards(),
-                response.getTotalShards());
-    }
-
     private boolean initialSeedKibanaIndex(final OpenshiftRequestContext context, Client esClient) {
 
         try {
@@ -194,29 +210,7 @@ public class KibanaSeed implements ConfigurationSettings {
             // copy the defaults if the userindex is not the kibanaindex
             if (!kibanaIndexExists && !defaultKibanaIndex.equals(userIndex)) {
                 LOGGER.debug("Copying '{}' to '{}'", defaultKibanaIndex, userIndex);
-
-                GetIndexRequest getRequest = new GetIndexRequest().indices(defaultKibanaIndex);
-                getRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-                GetIndexResponse getResponse = esClient.admin().indices().getIndex(getRequest).get();
-
-                CreateIndexRequest createRequest = new CreateIndexRequest().index(userIndex);
-                createRequest.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-
-                createRequest.settings(getResponse.settings().get(defaultKibanaIndex));
-
-                Map<String, Object> configMapping = getResponse.mappings().get(defaultKibanaIndex).get("config")
-                        .getSourceAsMap();
-
-                createRequest.mapping("config", configMapping);
-
-                esClient.admin().indices().create(createRequest).actionGet();
-
-                // Wait for health status of YELLOW
-                ClusterHealthRequest healthRequest = new ClusterHealthRequest().indices(new String[] { userIndex })
-                        .waitForYellowStatus();
-
-                esClient.admin().cluster().health(healthRequest).actionGet().getStatus();
-
+                pluginClient.copyIndex(defaultKibanaIndex, userIndex, DEFAULT_INDEX_TYPE);
                 return true;
             }
         } catch (ExecutionException | InterruptedException | IOException e) {
@@ -233,7 +227,7 @@ public class KibanaSeed implements ConfigurationSettings {
         // .kibana.username
         String source = new DocumentBuilder().defaultIndex(getIndexPattern(project, projectPrefix)).build();
 
-        executeUpdate(kibanaIndex, DEFAULT_INDEX_TYPE, kibanaVersion, source, esClient);
+        pluginClient.update(kibanaIndex, DEFAULT_INDEX_TYPE, kibanaVersion, source);
     }
     
     private String getDefaultIndex(OpenshiftRequestContext context, Client esClient, String kibanaVersion, String projectPrefix) {
@@ -339,9 +333,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
         final String indexPattern = getIndexPattern(project, projectPrefix);
         String source;
-        if (project.equalsIgnoreCase(OPERATIONS_PROJECT) || project.startsWith(ADMIN_ALIAS_NAME)) {
-            source = mappingLoader.getOperationsMappingsTemplate();
-        } else if (project.equalsIgnoreCase(BLANK_PROJECT)) {
+        if (project.equalsIgnoreCase(BLANK_PROJECT)) {
             source = mappingLoader.getEmptyProjectMappingsTemplate();
         } else {
             source = mappingLoader.getApplicationMappingsTemplate();
@@ -359,17 +351,6 @@ public class KibanaSeed implements ConfigurationSettings {
     private void deleteIndex(String kibanaIndex, String project, Client esClient, String projectPrefix) {
 
         executeDelete(kibanaIndex, INDICIES_TYPE, getIndexPattern(project, projectPrefix), esClient);
-    }
-
-    private void executeUpdate(String index, String type, String id, String source, Client esClient) {
-
-        LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
-
-        UpdateRequest request = esClient.prepareUpdate(index, type, id).setDoc(source).setDocAsUpsert(true).request();
-        request.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-
-
-        LOGGER.debug("Created with update? '{}'", esClient.update(request).actionGet().isCreated());
     }
 
     private void executeDelete(String index, String type, String id, Client esClient) {
