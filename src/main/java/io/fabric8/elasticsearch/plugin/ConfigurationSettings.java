@@ -77,7 +77,11 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String DEFAULT_USER_PROFILE_PREFIX = ".kibana";
     static final String[] DEFAULT_WHITELISTED_USERS = new String[] { "$logging.$infra.$fluentd",
         "$logging.$infra.$kibana", "$logging.$infra.$curator" };
-
+    
+    static final String [] DEFAULT_KIBANA_OPS_INDEX_PATTERNS = new String[] {
+        ".operations.*", ".orphaned.*", "project.*", ".all" 
+    };
+    
     /**
      * The configurations for enabling/disabling portions of this plugin
      * defaults to 'true' => enabled.
@@ -95,6 +99,11 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String DEFAULT_ACL_ROLE_STRATEGY = "user";
     
     static final String OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG = "openshift.kibana.rewrite.enabled";
+    
+    /**
+     * List of index patterns to create for operations users
+     */
+    static final String OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS = "openshift.kibana.ops_index_patterns";
 
     
     static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;

@@ -16,21 +16,32 @@
 
 package io.fabric8.elasticsearch.plugin;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
+import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.action.ActionRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequestBuilder;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
+import org.elasticsearch.action.admin.indices.get.GetIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.admin.indices.refresh.RefreshRequestBuilder;
+import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.update.UpdateRequestBuilder;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
@@ -53,11 +64,54 @@ public class PluginClient {
         this.client = client;
     }
     
+    public UpdateResponse update(String index, String type, String id, String source) {
+
+        LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
+
+        UpdateRequestBuilder builder = client.prepareUpdate(index, type, id).setDoc(source).setDocAsUpsert(true);
+        addCommonHeaders(builder);
+        UpdateResponse response = builder.get();
+
+        LOGGER.debug("Created with update? '{}'", response.isCreated());
+        return response;
+    }
+
     public IndexResponse createDocument(String index, String type, String id, String source) {
         LOGGER.trace("create document: '{}/{}/{}' source: '{}'", index, type, id, source);
         IndexRequestBuilder builder = client.prepareIndex(index, type, id).setSource(source);
         addCommonHeaders(builder);
         IndexResponse response = builder.get();
+        return response;
+    }
+    
+    public GetIndexResponse getIndices(String... indices) throws InterruptedException, ExecutionException {
+        if (LOGGER.isTraceEnabled()) {
+            LOGGER.trace("Getting indices '{}'", StringUtils.join(indices, ", "));
+        }
+        GetIndexRequestBuilder builder = client.admin().indices().prepareGetIndex().setIndices(indices);
+        addCommonHeaders(builder);
+        return builder.get();
+    }
+    
+    public CreateIndexResponse copyIndex(final String source, final String target, String... types) throws InterruptedException, ExecutionException, IOException {
+        LOGGER.trace("Copying {} index to {} for types {}", source, target, types);
+        GetIndexResponse response = getIndices(source);
+        CreateIndexRequestBuilder builder = client.admin().indices()
+                .prepareCreate(target)
+                .setSettings(response.getSettings().get(source));
+        for (String type : types) {
+            builder.addMapping(type, response.mappings().get(source).get(type).getSourceAsMap());
+        }
+        addCommonHeaders(builder);
+        return builder.get();
+    }
+    
+    public RefreshResponse refreshIndices(String... indices) {
+        RefreshRequestBuilder builder = client.admin().indices().prepareRefresh(indices);
+        addCommonHeaders(builder);
+        RefreshResponse response = builder.get();
+        LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", indices, response.getSuccessfulShards(),
+                response.getTotalShards());
         return response;
     }
 
