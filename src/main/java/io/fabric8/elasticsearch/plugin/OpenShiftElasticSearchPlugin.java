@@ -95,7 +95,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final OpenshiftRequestContextFactory contextFactory = new OpenshiftRequestContextFactory(settings, requestUtils,
                 clientFactory);
         final SearchGuardSyncStrategyFactory documentFactory = new SearchGuardSyncStrategyFactory(pluginSettings);
-        final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient, threadPool);
+        final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient);
 
         this.aclFilter = new DynamicACLFilter(cache, pluginSettings, seed, client, contextFactory, documentFactory,
                 threadPool, requestUtils, new ConfigurationLoader(client, threadPool, settings));
