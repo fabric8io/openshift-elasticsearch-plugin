@@ -16,31 +16,43 @@
 
 package io.fabric8.elasticsearch.plugin;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchException;
+
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequestBuilder;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
+import org.elasticsearch.action.admin.indices.get.GetIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
+import org.elasticsearch.action.admin.indices.refresh.RefreshRequestBuilder;
+import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
+import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequestBuilder;
+import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsResponse;
 import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.update.UpdateRequestBuilder;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.elasticsearch.common.xcontent.XContentType;
@@ -75,10 +87,10 @@ public class PluginClient {
                 }
                 return null;
             }
-            
+
         });
     }
-    
+
     public void updateDocument(String index, String type, String id, String source) {
         execute(new Callable<Object>() {
 
@@ -88,11 +100,9 @@ public class PluginClient {
                     LOGGER.debug("Updating Document: '{}/{}/{}' source: '{}'", index, type, id, source);
                 }
                 addCommonHeaders();
-                UpdateResponse response = client.prepareUpdate(index, type, id)
-                        .setDoc(source, XContentType.JSON)
-                        .setDocAsUpsert(true)
-                        .get();
-                
+                UpdateResponse response = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
+                        .setDocAsUpsert(true).get();
+
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Document Updated: '{}'", response.status());
                 }
@@ -100,12 +110,12 @@ public class PluginClient {
             }
         });
     }
-    
+
     public SearchResponse search(String index, String type) {
-        return search(new String []{index}, new String [] {type}); 
+        return search(new String[] { index }, new String[] { type });
     }
-    
-    public SearchResponse search(String [] indicies, String [] types) {
+
+    public SearchResponse search(String[] indicies, String[] types) {
         return execute(new Callable<SearchResponse>() {
 
             @Override
@@ -113,10 +123,10 @@ public class PluginClient {
                 addCommonHeaders();
                 return client.prepareSearch(indicies).setTypes(types).get();
             }
-            
+
         });
     }
-    
+
     public GetIndexResponse getIndex(String... indicies) {
         return execute(new Callable<GetIndexResponse>() {
             @Override
@@ -126,20 +136,31 @@ public class PluginClient {
             }
         });
     }
-    
+
     public GetResponse getDocument(String index, String type, String id) {
         return execute(new Callable<GetResponse>() {
 
             @Override
             public GetResponse call() throws Exception {
                 addCommonHeaders();
-                return client
-                        .prepareGet(index, type, id)
-                        .get();
+                return client.prepareGet(index, type, id).get();
             }
         });
     }
-    
+
+    public UpdateResponse update(String index, String type, String id, String source) {
+
+        LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
+
+        UpdateRequestBuilder builder = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
+                .setDocAsUpsert(true);
+        addCommonHeaders();
+        UpdateResponse response = builder.get();
+
+        LOGGER.debug("Created with update? '{}'", response.status());
+        return response;
+    }
+
     public IndexResponse createDocument(String index, String type, String id, String source) {
         return execute(new Callable<IndexResponse>() {
 
@@ -152,6 +173,46 @@ public class PluginClient {
                 return response;
             }
         });
+    }
+
+    public GetIndexResponse getIndices(String... indices) throws InterruptedException, ExecutionException {
+        if (LOGGER.isTraceEnabled()) {
+            LOGGER.trace("Getting indices '{}'", StringUtils.join(indices, ", "));
+        }
+        GetIndexRequestBuilder builder = client.admin().indices().prepareGetIndex().setIndices(indices);
+        addCommonHeaders();
+        return builder.get();
+    }
+
+    public CreateIndexResponse copyIndex(final String index, final String target, Settings settings, String... types)
+            throws InterruptedException, ExecutionException, IOException {
+        LOGGER.trace("Copying {} index to {} for types {}", index, target, types);
+        GetIndexResponse response = getIndices(index);
+        CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(target);
+        if(settings != null) {
+            builder.setSettings(settings);
+        }
+        for (String type : types) {
+            builder.addMapping(type, response.mappings().get(index).get(type).getSourceAsMap());
+        }
+        addCommonHeaders();
+        return builder.get();
+    }
+
+    public UpdateSettingsResponse updateSettings(final String index, Settings settings) {
+        UpdateSettingsRequestBuilder builder = client.admin().indices().prepareUpdateSettings(index)
+                .setSettings(settings);
+        addCommonHeaders();
+        return builder.get();
+    }
+
+    public RefreshResponse refreshIndices(String... indices) {
+        RefreshRequestBuilder builder = client.admin().indices().prepareRefresh(indices);
+        addCommonHeaders();
+        RefreshResponse response = builder.get();
+        LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", indices, response.getSuccessfulShards(),
+                response.getTotalShards());
+        return response;
     }
 
     public boolean indexExists(final String index) {
@@ -168,16 +229,13 @@ public class PluginClient {
             }
         });
     }
-    
+
     public boolean documentExists(final String index, final String type, final String id) {
         return execute(new Callable<Boolean>() {
             @Override
             public Boolean call() throws Exception {
                 LOGGER.trace("Checking for existence of document: '{}/{}/{}'", index, type, id);
-                GetRequestBuilder builder = client.prepareGet()
-                        .setIndex(index)
-                        .setType(type)
-                        .setId(id);
+                GetRequestBuilder builder = client.prepareGet().setIndex(index).setType(type).setId(id);
                 addCommonHeaders();
                 GetResponse response = builder.get();
                 final boolean exists = response.isExists();
@@ -186,14 +244,15 @@ public class PluginClient {
             }
         });
     }
-    
+
     /**
      * Retrieve the set of indices for a given alias
      * 
-     * @param alias The alias to lookup
+     * @param alias
+     *            The alias to lookup
      * @return The set of indices to the given alias
      */
-    public Set<String> getIndicesForAlias(String alias){
+    public Set<String> getIndicesForAlias(String alias) {
         return execute(new Callable<Set<String>>() {
 
             @Override
@@ -221,7 +280,7 @@ public class PluginClient {
      * @return true if the request was acknowledged
      */
     public boolean alias(Map<String, String> aliases) {
-        return execute(new Callable<Boolean>(){
+        return execute(new Callable<Boolean>() {
 
             @Override
             public Boolean call() throws Exception {
@@ -245,11 +304,11 @@ public class PluginClient {
     }
 
     private void addCommonHeaders() {
-        if(StringUtils.isBlank(threadContext.getTransient(ConfigConstants.SG_CHANNEL_TYPE))) {
+        if (StringUtils.isBlank(threadContext.getTransient(ConfigConstants.SG_CHANNEL_TYPE))) {
             threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
         }
     }
-    
+
     private <T> T execute(Callable<T> callable) {
         try (StoredContext context = threadContext.stashContext()) {
             threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
@@ -258,5 +317,4 @@ public class PluginClient {
             throw new ElasticsearchException(e);
         }
     }
-    
 }

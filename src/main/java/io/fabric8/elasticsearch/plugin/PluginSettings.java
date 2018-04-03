@@ -19,6 +19,10 @@ package io.fabric8.elasticsearch.plugin;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory.PROJECT;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory.USER;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.logging.Loggers;
@@ -38,7 +42,8 @@ public class PluginSettings implements ConfigurationSettings {
     private final Boolean enabled;
     private final Boolean reWriteEnabled;
     private final Settings settings;
-
+    private final Set<String> opsIndexPatterns;
+    
     public PluginSettings(final Settings settings) {
         this.settings = settings;
         this.kibanaIndexMode = settings.get(OPENSHIFT_KIBANA_INDEX_MODE, KibanaIndexMode.DEFAULT_MODE);
@@ -60,6 +65,7 @@ public class PluginSettings implements ConfigurationSettings {
         this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
         this.reWriteEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG,
                 OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
+        this.opsIndexPatterns = new HashSet<String>(Arrays.asList(settings.getAsArray(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, DEFAULT_KIBANA_OPS_INDEX_PATTERNS)));
 
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
@@ -109,5 +115,9 @@ public class PluginSettings implements ConfigurationSettings {
 
     public void setKibanaIndexMode(String kibanaIndexMode) {
         this.kibanaIndexMode = kibanaIndexMode;
+    }
+    
+    public Set<String> getKibanaOpsIndexPatterns() {
+        return opsIndexPatterns;
     }
 }
