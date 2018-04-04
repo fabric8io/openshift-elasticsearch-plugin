@@ -83,6 +83,7 @@ public class KibanaSeedTest {
     }
     
     private void givenCopyKibanaIndexIsSuccessful() throws InterruptedException, ExecutionException, IOException {
+        when(pluginClient.indexExists(".kibana")).thenReturn(true);
         CreateIndexResponse response = mock(CreateIndexResponse.class);
         when(pluginClient.copyIndex(anyString(), anyString(), Matchers.<String>anyVararg())).thenReturn(response );
     }
