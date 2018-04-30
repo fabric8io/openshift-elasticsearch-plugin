@@ -202,7 +202,7 @@ public class OpenshiftRequestContextFactory {
         private final String kibanaIndex;
         private final String kibanaIndexMode;
 
-        protected OpenshiftRequestContext(final String user, final String token, boolean isClusterAdmin,
+        public OpenshiftRequestContext(final String user, final String token, boolean isClusterAdmin,
                 Set<String> projects, String kibanaIndex, final String kibanaIndexMode) {
             this.user = user;
             this.token = token;

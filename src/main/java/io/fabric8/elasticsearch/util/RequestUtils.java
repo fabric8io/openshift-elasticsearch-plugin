@@ -186,6 +186,9 @@ public class RequestUtils implements ConfigurationSettings  {
             final Map<String, List<String>> modifiedHeaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
             modifiedHeaders.putAll(request.getHeaders());
             modifiedHeaders.put(proxyUserHeader, Arrays.asList(context.getUser()));
+            if(request.header("Content-Type") != null && request.header("Content-Type").toLowerCase().endsWith("json")){
+                modifiedHeaders.put("Content-Type", Arrays.asList("application/json"));
+            }
             RestRequest modified = new RestRequest(request.getXContentRegistry(), uri, modifiedHeaders) {
 
                 @Override
@@ -235,6 +238,7 @@ public class RequestUtils implements ConfigurationSettings  {
             if (uri.contains(defaultKibanaIndex)) {
                 modified.params().put("index", context.getKibanaIndex());
             }
+
             return modified;
         }
         return request;

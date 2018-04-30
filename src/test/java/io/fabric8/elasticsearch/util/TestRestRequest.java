@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.rest.RestRequest;
@@ -50,7 +51,7 @@ public class TestRestRequest extends RestRequest {
 
     @Override
     public BytesReference content() {
-        return null;
+        return new BytesArray("");
     }
 
 }
