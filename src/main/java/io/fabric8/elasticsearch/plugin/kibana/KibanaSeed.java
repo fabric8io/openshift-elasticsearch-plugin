@@ -354,7 +354,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if (source != null) {
             LOGGER.trace("Creating index-pattern for project '{}'", project);
-            source = source.replaceAll("$TITLE$", indexPattern);
+            source = source.replaceAll("\\$TITLE\\$", indexPattern);
             pluginClient.createDocument(kibanaIndex, INDICIES_TYPE, indexPattern, source);
         } else {
             LOGGER.debug("The source for the index mapping is null.  Skipping trying to create index pattern {}", indexPattern);
