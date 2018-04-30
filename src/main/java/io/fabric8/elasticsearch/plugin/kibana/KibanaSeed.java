@@ -223,7 +223,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
                 return true;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOGGER.error("Unable to create initial Kibana index", e);
         }
 

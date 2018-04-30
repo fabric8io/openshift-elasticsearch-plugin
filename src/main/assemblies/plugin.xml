@@ -45,6 +45,9 @@
       <outputDirectory>elasticsearch</outputDirectory>
       <useProjectArtifact>true</useProjectArtifact>
       <useTransitiveFiltering>true</useTransitiveFiltering>
+      <excludes>
+          <exclude>log4j:log4j</exclude>
+      </excludes>
     </dependencySet>
   </dependencySets>
 </assembly>

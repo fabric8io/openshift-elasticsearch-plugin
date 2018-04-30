@@ -68,13 +68,14 @@ The following additional parameters can be set in set in `elasticsearch.yml`:
 may be found in the `samples` folder.
 
 ## Development
+
 Manually install custom version of SearchGuard
 
-* `$ mvn install:install-file -Dfile=lib/search-guard-5-5.5.2-15-rh.jar  -Dpackaging=jar`
+* `$ mvn install:install-file -Dfile=lib/search-guard-5-5.6.9-19-rh.jar  -Dpackaging=jar`
 
 Following are the dependencies
 
-* [ElasticSearch] (https://github.com/elastic/elasticsearch/tree/5.5.2)
+* [ElasticSearch] (https://github.com/elastic/elasticsearch/tree/5.6.9)
 * [Search-Guard] (https://github.com/floragunncom/search-guard/tree)
 * [Search-Guard-SSL] (https://github.com/floragunncom/search-guard-ssl/tree)
 
