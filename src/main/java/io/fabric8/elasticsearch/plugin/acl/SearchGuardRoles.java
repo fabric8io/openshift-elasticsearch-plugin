@@ -44,6 +44,7 @@ public class SearchGuardRoles
     public static final String ROLE_PREFIX = "gen";
     public static final String PROJECT_PREFIX = ROLE_PREFIX + "_project";
     public static final String USER_PREFIX = ROLE_PREFIX + "_user";
+    public static final String USER_KIBANA_PREFIX = ROLE_PREFIX + "_kibana";
 
     private static final String CLUSTER_HEADER = "cluster";
     private static final String INDICES_HEADER = "indices";

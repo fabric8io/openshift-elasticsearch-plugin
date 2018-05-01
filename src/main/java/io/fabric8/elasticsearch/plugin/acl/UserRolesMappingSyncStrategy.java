@@ -31,6 +31,8 @@ import java.util.Set;
  *   users: [user1, user3]
  * gen_user_user2:
  *   users: [user2]
+ * gen_kibana_user2:
+ *   users: [user2]
  */
 public class UserRolesMappingSyncStrategy extends BaseRolesMappingSyncStrategy {
 
@@ -49,6 +51,8 @@ public class UserRolesMappingSyncStrategy extends BaseRolesMappingSyncStrategy {
             if (cache.isOperationsUser(username, token)) {
                 opsUsers.add(username);
             } else {
+                String kibanaRoleName = BaseRolesSyncStrategy.formatUserKibanaRoleName(username);
+                builder.addUser(kibanaRoleName, username);
                 String roleName = BaseRolesSyncStrategy.formatUserRoleName(username);
                 builder.addUser(roleName, username);
             }

@@ -71,7 +71,6 @@ public class FieldStatsResponseFilter implements ActionFilter {
                             ElasticsearchException err = new ElasticsearchException("The index returned an empty result. "
                                     + "You can use the Time Picker to change the time filter or select a higher time interval",
                                     RestStatus.NO_CONTENT);
-                            
                             listener.onFailure(err);
                             return;
                         }
