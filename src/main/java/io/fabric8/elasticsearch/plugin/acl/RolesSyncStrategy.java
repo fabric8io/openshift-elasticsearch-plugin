@@ -19,7 +19,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 /**
- * Strategy to sync between SearchGuard Documents and memory cache  
+ * Strategy to sync between SearchGuard Documents and request context  
  *
  */
 public interface RolesSyncStrategy {

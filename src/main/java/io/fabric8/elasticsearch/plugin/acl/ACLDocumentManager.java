@@ -209,7 +209,7 @@ public class ACLDocumentManager implements ConfigurationSettings {
 
             return isSuccessfulWrite(writeAcl(operation, docs));
         } catch (Exception e) {
-            LOGGER.error("Exception while syncing ACL with cache", e);
+            LOGGER.error("Exception while syncing ACL to Elasticsearch", e);
         } finally {
             lock.unlock();
         }
