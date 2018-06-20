@@ -14,7 +14,7 @@ recommended that operations teams establish agreements and naming conventions so
 overwrite each others work.
 
 ## Configuring your initial ACLs
-With the update to use Searchguard-2 and Searchguard-SSL for ES 2.4.x, the
+With the update to use Searchguard-5 and Searchguard-SSL for ES 5.x, the
 OpenShift-Elasticsearch-Plugin assumes the initial ACLs are seeded when the cluster is started.
 
 ### Action Groups
