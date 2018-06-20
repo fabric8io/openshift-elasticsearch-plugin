@@ -24,10 +24,9 @@ import javax.xml.bind.DatatypeConverter;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchSecurityException;
-import org.elasticsearch.common.bytes.BytesArray;
-import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.settings.loader.YamlSettingsLoader;
+import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestRequest;
 
@@ -98,7 +97,7 @@ public class FileAuthenticationBackend implements AuthenticationBackend, HTTPAut
     }
     
     @Override
-    public AuthCredentials extractCredentials(RestRequest request) throws ElasticsearchSecurityException {
+    public AuthCredentials extractCredentials(RestRequest request, ThreadContext context) throws ElasticsearchSecurityException {
         final String authorizationHeader = request.header("Authorization");
         if (authorizationHeader != null) {
             if (authorizationHeader.trim().toLowerCase().startsWith("basic ")) {
@@ -176,8 +175,8 @@ public class FileAuthenticationBackend implements AuthenticationBackend, HTTPAut
         long now = auth.lastModified();
         if (now > lastModified) {
             try {
-                BytesReference ref = new BytesArray(FileUtils.readFileToByteArray(auth));
-                mappings = Settings.builder().put(new YamlSettingsLoader().load(ref.toBytes())).build();
+                final String ref = FileUtils.readFileToString(auth);
+                mappings = Settings.builder().put(new YamlSettingsLoader(true).load(ref)).build();
                 lastModified = now;
             } catch (final Exception e) {
                 throw new OpenShiftElasticSearchConfigurationException("Unable to parse " + auth.getAbsolutePath(), e);

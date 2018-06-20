@@ -23,10 +23,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.logging.ESLogger;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
 
 import io.netty.util.internal.ConcurrentSet;
 
@@ -38,17 +36,12 @@ import io.netty.util.internal.ConcurrentSet;
  */
 public class UserProjectCacheMapAdapter implements UserProjectCache {
 
-    private final ESLogger logger;
+    private static final Logger logger = Loggers.getLogger(UserProjectCacheMapAdapter.class);
     private final Map<SimpleImmutableEntry<String, String>, Set<String>> cache = new ConcurrentHashMap<>();
     private final Map<SimpleImmutableEntry<String, String>, Long> createTimes = new ConcurrentHashMap<>();
     private final Map<SimpleImmutableEntry<String, String>, Boolean> operationsUsers = new ConcurrentHashMap<>();
     private final Set<String> projects = new ConcurrentSet<>();
     private static final long EXPIRE = 1000 * 60; // 1 MIN
-
-    @Inject
-    public UserProjectCacheMapAdapter(final Settings settings) {
-        this.logger = Loggers.getLogger(getClass(), settings);
-    }
 
     @Override
     public Map<SimpleImmutableEntry<String, String>, Set<String>> getUserProjects() {

@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.elasticsearch.common.settings.Settings;
 import org.junit.Test;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
@@ -45,7 +44,7 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
 public class SearchGuardRoleACLTest {
 
-    private UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+    private UserProjectCache cache = new UserProjectCacheMapAdapter();
 
     @Test
     public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
@@ -76,7 +75,7 @@ public class SearchGuardRoleACLTest {
     
     @Test
     public void testGeneratingKibanaOpsRole() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        UserProjectCache cache = new UserProjectCacheMapAdapter();
         cache.update("user1", "user2token", new HashSet<String>(), true);
         cache.update("user2", "user2token", new HashSet<String>(), true);
         
@@ -89,7 +88,7 @@ public class SearchGuardRoleACLTest {
 
     @Test
     public void testGeneratingKibanaOpsShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        UserProjectCache cache = new UserProjectCacheMapAdapter();
         cache.update("user1", "user2token", new HashSet<String>(), true);
         cache.update("user2", "user2token", new HashSet<String>(), true);
         
@@ -102,7 +101,7 @@ public class SearchGuardRoleACLTest {
     
     @Test
     public void testGeneratingKibanaNonOpsShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        UserProjectCache cache = new UserProjectCacheMapAdapter();
         cache.update("user1", "user2token", new HashSet<String>(), false);
         cache.update("user2", "user2token", new HashSet<String>(), false);
         
@@ -115,7 +114,7 @@ public class SearchGuardRoleACLTest {
     
     @Test
     public void testGeneratingKibanaShared() throws Exception {
-        UserProjectCache cache = new UserProjectCacheMapAdapter(Settings.EMPTY);
+        UserProjectCache cache = new UserProjectCacheMapAdapter();
         cache.update("user1", "user2token", new HashSet<String>(), true);
         cache.update("user2", "user2token", new HashSet<String>(), false);
         

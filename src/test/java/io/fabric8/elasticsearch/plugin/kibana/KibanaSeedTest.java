@@ -16,6 +16,7 @@
 
 package io.fabric8.elasticsearch.plugin.kibana;
 
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -64,7 +65,7 @@ public class KibanaSeedTest {
     public void setUp() {
         seeder = new KibanaSeed(settings, loader, pluginClient);
         context = new OpenshiftRequestContextFactory.OpenshiftRequestContext(USER, TOKEN, true, 
-                new HashSet<String>(), ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX, KibanaIndexMode.SHARED_OPS);
+                new HashSet<String>(), ".kibana_123", KibanaIndexMode.SHARED_OPS);
         when(loader.getOperationsMappingsTemplate()).thenReturn("{\"foo\":\"bar\"");
         when(pluginClient.update(anyString(), anyString(), anyString(), anyString())).thenReturn(mock(UpdateResponse.class));
     }
@@ -74,8 +75,12 @@ public class KibanaSeedTest {
         reset(pluginClient);
     }
     
+    private void givenDefaultKibanaIndexExist(boolean exists) {
+        when(pluginClient.indexExists(eq(ConfigurationSettings.DEFAULT_USER_PROFILE_PREFIX))).thenReturn(exists);
+    }
+
     private void givenKibanaIndexExist(boolean exists) {
-        when(pluginClient.indexExists(anyString())).thenReturn(exists);
+        when(pluginClient.indexExists(eq(context.getKibanaIndex()))).thenReturn(exists);
     }
     
     private void givenDocumentExistFor(String index, String type, String id, boolean exists) {
@@ -83,20 +88,41 @@ public class KibanaSeedTest {
     }
     
     private void givenCopyKibanaIndexIsSuccessful() throws InterruptedException, ExecutionException, IOException {
-        when(pluginClient.indexExists(".kibana")).thenReturn(true);
         CreateIndexResponse response = mock(CreateIndexResponse.class);
-        when(pluginClient.copyIndex(anyString(), anyString(), Matchers.<String>anyVararg())).thenReturn(response );
+        when(pluginClient.copyIndex(anyString(), anyString(), any(Settings.class), Matchers.<String>anyVararg())).thenReturn(null);
     }
     
     private void whenSettingTheDashboards() {
         seeder.setDashboards(context, client, ConfigurationSettings.DEFAULT_KIBANA_VERSION, ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
     }
     
+    /*
+     * This is the case where Kibana is not deployed but maybe we are servicing
+     * a request directly to Elasticsearch
+     */
     @Test
-    public void testSeedOperationsIndexPatternsWhenNeverSeeded() throws Exception {
+    public void testSeedDoesNothingWhenTheDefaultKibanaDoesNotExist() throws Exception {
 
+        givenDefaultKibanaIndexExist(false);
         //given index-patterns do not exist
         givenKibanaIndexExist(false);
+       
+        whenSettingTheDashboards();
+        
+        //thenOperationsIndexPatternsShouldBeCreated();
+        for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
+            verify(pluginClient, never()).createDocument(eq(context.getKibanaIndex()), eq("index-pattern"), eq(pattern), anyString());
+        }
+        // thenKibanaIndexShouldBeRefreshed
+        verify(pluginClient, never()).refreshIndices(eq(context.getKibanaIndex()));
+    }
+    
+    @Test
+    public void testSeedOperationsIndexPatternsWhenNeverSeeded() throws Exception {
+        
+        givenDefaultKibanaIndexExist(true);
+        //given index-patterns do not exist
+        givenKibanaIndexExist(true);
         for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
             givenDocumentExistFor(context.getKibanaIndex(), "index-pattern", pattern, false);
         }
@@ -117,6 +143,7 @@ public class KibanaSeedTest {
     @Test
     public void testSeedOperationsIndexPatternsWhenSeededPreviously() throws Exception {
         
+        givenDefaultKibanaIndexExist(true);
         //given index-patterns do not exist
         givenKibanaIndexExist(true);
         for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {

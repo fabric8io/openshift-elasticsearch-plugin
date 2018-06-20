@@ -50,6 +50,10 @@ public class RoleBuilder {
         return setClusters(Arrays.asList(clusters));
     }
 
+    public RoleBuilder setClusterActions(String [] clusterActions) {
+        return setClusters(clusterActions);
+    }
+
     public RoleBuilder addIndex(String index) {
         indices.put(index, new HashMap<String, HashSet<String>>());
         return this;

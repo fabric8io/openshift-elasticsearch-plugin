@@ -16,32 +16,35 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import static io.fabric8.elasticsearch.plugin.KibanaUserReindexFilter.getUsernameHash;
+import static io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.getUsernameHash;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentType;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles.Indices.Type;
 
-public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, ConfigurationSettings, SearchGuardACLDocument {
+public class SearchGuardRoles
+        implements Iterable<SearchGuardRoles.Roles>, ConfigurationSettings, SearchGuardACLDocument<SearchGuardRoles> {
 
     public static final String ROLE_PREFIX = "gen";
     public static final String PROJECT_PREFIX = ROLE_PREFIX + "_project";
     public static final String USER_PREFIX = ROLE_PREFIX + "_user";
+    public static final String USER_KIBANA_PREFIX = ROLE_PREFIX + "_kibana";
 
     private static final String CLUSTER_HEADER = "cluster";
     private static final String INDICES_HEADER = "indices";
@@ -156,12 +159,11 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
     public void removeRole(Roles role) {
         roles.remove(role);
     }
-    
 
     public void addAll(Collection<Roles> roles) {
         this.roles.addAll(roles);
     }
-    
+
     public static String formatUniqueKibanaRoleName(String username) {
         return String.format("%s_%s_%s", ROLE_PREFIX, "kibana", getUsernameHash(username));
     }
@@ -175,13 +177,14 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
             RoleBuilder roleBuilder = new RoleBuilder(key);
 
             // get out cluster and indices
-            HashMap<String, Object> role = (HashMap<String, Object>) source.get(key);
+            Map<String, Object> role = (Map<String, Object>) source.get(key);
 
-            List<String> cluster = (ArrayList<String>) role.get(CLUSTER_HEADER);
+            List<String> cluster = (List<String>) ObjectUtils.defaultIfNull(role.get(CLUSTER_HEADER), Collections.EMPTY_LIST);
             roleBuilder.setClusters(cluster);
 
-            HashMap<String, HashMap<String, ArrayList<String>>> indices = (HashMap<String, HashMap<String, ArrayList<String>>>) role
-                    .get(INDICES_HEADER);
+            Map<String, Map<String, List<String>>> indices = (Map<String, Map<String, List<String>>>) ObjectUtils
+                    .defaultIfNull(role.get(INDICES_HEADER), new HashMap<>());
+
             for (String index : indices.keySet()) {
                 for (String type : indices.get(index).keySet()) {
                     List<String> actions = indices.get(index).get(type);
@@ -214,7 +217,7 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
                 indexObject.put(index.getIndex(), typeObject);
             }
 
-            if (!indexObject.isEmpty()) { 
+            if (!indexObject.isEmpty()) {
                 roleObject.put(INDICES_HEADER, indexObject);
             }
             if (!role.getCluster().isEmpty()) {
@@ -226,7 +229,7 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
 
         return output;
     }
-    
+
     @Override
     public String getType() {
         return ConfigurationSettings.SEARCHGUARD_ROLE_TYPE;
@@ -234,7 +237,7 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
 
     public XContentBuilder toXContentBuilder() {
         try {
-            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+            XContentBuilder builder = XContentFactory.jsonBuilder();
             builder.map(toMap());
             return builder;
         } catch (IOException e) {

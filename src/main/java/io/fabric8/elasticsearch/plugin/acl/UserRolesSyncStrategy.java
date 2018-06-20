@@ -45,10 +45,18 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
             if (cache.isOperationsUser(user, token)) {
                 foundAnOpsUser = true;
             } else {
-                String roleName = formatUserRoleName(user);
+                
+                String kibIndexName = formatKibanaIndexName(cache, user, token, kibanaIndexMode);
+
+                //specific permissions for kibana index
+                RoleBuilder kibRole = new RoleBuilder(formatUserKibanaRoleName(user))
+                        .setClusterActions(USER_KIBANA_ROLE_CLUSTER_ACTIONS)
+                        .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
+                        .setActions(ALL, ALL, USER_ALL_INDEX_ACTIONS);
+                builder.addRole(kibRole.build());
                 
                 //permissions for kibana Index
-                String kibIndexName = formatKibanaIndexName(cache, user, token, kibanaIndexMode);
+                String roleName = formatUserRoleName(user);
                 RoleBuilder role = new RoleBuilder(roleName)
                         .setClusters(USER_ROLE_CLUSTER_ACTIONS)
                         .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);

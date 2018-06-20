@@ -20,17 +20,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.commons.io.FileUtils;
 import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.rest.RestRequest;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,6 +44,7 @@ import com.floragunn.searchguard.user.User;
 
 import io.fabric8.elasticsearch.plugin.OpenShiftElasticSearchConfigurationException;
 import io.fabric8.elasticsearch.plugin.Samples;
+import io.fabric8.elasticsearch.util.TestRestRequest;
 
 public class FileAuthenticationBackendTest {
 
@@ -50,6 +54,7 @@ public class FileAuthenticationBackendTest {
     private Settings settings;
     private File tmp;
     private TransportConfigUpdateAction tcua = mock(TransportConfigUpdateAction.class);
+    private ThreadContext context = new ThreadContext(Settings.EMPTY);
     
     @Before
     public void setup() throws IOException {
@@ -65,6 +70,12 @@ public class FileAuthenticationBackendTest {
     
     private void givenAuthenticationBackend() {
         auth = new FileAuthenticationBackend(settings, tcua);
+    }
+    
+    private RestRequest givenRequestWithAuth(String value) {
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(AUTHORIZATION, Arrays.asList(value));
+        return new TestRestRequest(headers);
     }
     
     private User whenAuthenticating(String username, String passwd) {
@@ -84,31 +95,27 @@ public class FileAuthenticationBackendTest {
     
     @Test
     public void testExtractCredentialsWithNoAuthHeader() {
-        RestRequest request = mock(RestRequest.class);
-        when(request.header(eq(AUTHORIZATION))).thenReturn(null);
-        assertNull(auth.extractCredentials(request));
+        RestRequest request = givenRequestWithAuth(null);
+        assertNull(auth.extractCredentials(request, context));
     }
 
     @Test
     public void testExtractCredentialsWithAuthHeaderNotBasic() {
-        RestRequest request = mock(RestRequest.class);
-        when(request.header(eq(AUTHORIZATION))).thenReturn("foo bar");
-        assertNull(auth.extractCredentials(request));
+        RestRequest request = givenRequestWithAuth("foo bar");
+        assertNull(auth.extractCredentials(request, context));
     }
     
     @Test
     public void testExtractCredentialsWithAuthHeaderNoPassword() {
-        RestRequest request = mock(RestRequest.class);
-        when(request.header(eq(AUTHORIZATION))).thenReturn("basic Zm9vOgo="); //basic foo:
-        assertNull("Exp a password to be required to auth", auth.extractCredentials(request));
+        RestRequest request = givenRequestWithAuth("basic Zm9vOgo="); //basic foo:
+        assertNull("Exp a password to be required to auth", auth.extractCredentials(request, context));
     }
     
     @Test
     public void testExtractCredentialsWithAuthHeaderAndPassword() {
-        RestRequest request = mock(RestRequest.class);
-        when(request.header(eq(AUTHORIZATION))).thenReturn("Basic Zm9vOmJhcgo="); //Basic foo:bar
+        RestRequest request = givenRequestWithAuth("Basic Zm9vOmJhcgo="); //Basic foo:bar
         AuthCredentials exp = new AuthCredentials("foo","bar".getBytes());
-        AuthCredentials act = auth.extractCredentials(request);
+        AuthCredentials act = auth.extractCredentials(request, context);
         assertEquals("Exp. the AuthCredentials to match", exp, act);
     }
     
