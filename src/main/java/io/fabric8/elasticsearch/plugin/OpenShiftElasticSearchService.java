@@ -23,82 +23,93 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.LocalNodeMasterListener;
 import org.elasticsearch.common.component.AbstractLifecycleComponent;
 import org.elasticsearch.common.logging.Loggers;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.EsExecutors;
 import org.elasticsearch.common.util.concurrent.FutureUtils;
 
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
+import org.elasticsearch.threadpool.ThreadPool;
+
+import io.fabric8.elasticsearch.plugin.acl.ACLDocumentManager;
 
 /**
- * Service to handle spawning threads, lifecycles
+ * Service to handle spawning threads, lifecycles, and REST filter registrations
+ * 
  */
 public class OpenShiftElasticSearchService extends AbstractLifecycleComponent
-        implements ConfigurationSettings {
+        implements ConfigurationSettings, LocalNodeMasterListener {
 
-    private final Logger logger;
-    private final UserProjectCache cache;
-    private final Settings settings;
+    private static final Logger LOGGER = Loggers.getLogger(OpenShiftElasticSearchService.class);
+    
+    private final PluginSettings settings;
+    private final ACLDocumentManager aclManager;
     private ScheduledThreadPoolExecutor scheduler;
 
     @SuppressWarnings("rawtypes")
     private ScheduledFuture scheduledFuture;
 
-    // @TODO - Determine if we should be using the Threadpool provided by Elastic
-    public OpenShiftElasticSearchService(final Settings settings, final Client esClient, final UserProjectCache cache) {
-        super(settings);
-        this.settings = settings;
-        this.logger = Loggers.getLogger(getClass(), settings);
-        this.cache = cache;
+    public OpenShiftElasticSearchService( 
+            final ACLDocumentManager aclManager, 
+            final PluginSettings pluginSettings) {
+        super(pluginSettings.getSettings());
+        this.settings = pluginSettings;
+        this.aclManager = aclManager;
+    }
+    
+    @Override
+    protected void doStart() throws ElasticsearchException {
+        LOGGER.debug("Started");
     }
 
     @Override
-    protected void doStart() throws ElasticsearchException {
-
-        boolean dynamicEnabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG,
-                OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-        logger.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
-
+    public void onMaster() {
+        boolean dynamicEnabled = settings.isEnabled();
+        LOGGER.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
         if (dynamicEnabled) {
             // expiration thread
-            logger.debug("Starting the expiration thread...");
+            LOGGER.info("Starting the ACL expiration thread...");
             this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
-                    EsExecutors.daemonThreadFactory(settings, "openshift_elasticsearch_service"));
+                    EsExecutors.daemonThreadFactory(settings.getSettings(), "openshift_elasticsearch_service"));
             this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
             this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
 
             Runnable expire = new Runnable() {
                 @Override
                 public void run() {
-                    cache.expire();
+                    aclManager.expire();
                 }
             };
-            this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 5, 60, TimeUnit.SECONDS);
+            this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 1000 * 60, settings.getACLExpiresInMillis(), TimeUnit.MILLISECONDS);
         }
-
-        logger.debug("Started");
-
     }
 
     @Override
-    protected void doStop() throws ElasticsearchException {
+    public void offMaster() {
         // cleanup expire thread
+        LOGGER.info("Stopping the ACL expiration thread...");
         FutureUtils.cancel(this.scheduledFuture);
         if (scheduler != null) {
             this.scheduler.shutdown();
         }
-        logger.debug("Stopped");
+    }
+    
+    @Override
+    public String executorName() {
+        return ThreadPool.Names.GENERIC;
+    }
+
+    @Override
+    protected void doStop() throws ElasticsearchException {
+        offMaster();
+        LOGGER.debug("Stopped");
     }
 
     @Override
     protected void doClose() throws ElasticsearchException {
-        FutureUtils.cancel(this.scheduledFuture);
-        if (this.scheduler != null) {
-            this.scheduler.shutdown();
-        }
-        logger.debug("Closed");
+        offMaster();
+        LOGGER.debug("Closed");
     }
+
 
 }

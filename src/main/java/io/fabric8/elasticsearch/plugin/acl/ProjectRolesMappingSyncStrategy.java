@@ -18,37 +18,31 @@ package io.fabric8.elasticsearch.plugin.acl;
 
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.PROJECT_PREFIX;
 
-import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Map.Entry;
-import java.util.Set;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 public class ProjectRolesMappingSyncStrategy extends BaseRolesMappingSyncStrategy {
 
-    public ProjectRolesMappingSyncStrategy(SearchGuardRolesMapping rolesMapping) {
-        super(rolesMapping);
+    public ProjectRolesMappingSyncStrategy(SearchGuardRolesMapping rolesMapping, long expiresInMillis) {
+        super(rolesMapping, expiresInMillis);
     }
     
     @Override
-    protected  void syncFromImpl(UserProjectCache cache, RolesMappingBuilder builder) {
-        for (Entry<SimpleImmutableEntry<String, String>, Set<String>> userProjects : cache.getUserProjects()
-                .entrySet()) {
-            String username = userProjects.getKey().getKey();
-            String token = userProjects.getKey().getValue();
+    protected  void syncFromImpl(OpenshiftRequestContext context, RolesMappingBuilder builder) {
+        
+        final String username = context.getUser();
+        for (String project : context.getProjects()) {
+            String projectRoleName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
 
-            for (String project : userProjects.getValue()) {
-                String projectRoleName = String.format("%s_%s", PROJECT_PREFIX, project.replace('.', '_'));
+            builder.addUser(projectRoleName, username);
+        }
 
-                builder.addUser(projectRoleName, username);
-            }
-
-            if (cache.isOperationsUser(username, token)) {
-                builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, username);
-                builder.addUser(SearchGuardRolesMapping.KIBANA_SHARED_ROLE, username);
-            } else {
-                //role mapping for user's kibana index
-                String kibanaRoleName = SearchGuardRoles.formatUniqueKibanaRoleName(username);
-                builder.addUser(kibanaRoleName, username);
-            }
+        if (context.isOperationsUser()) {
+            builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, username);
+            builder.addUser(SearchGuardRolesMapping.KIBANA_SHARED_ROLE, username);
+        } else {
+            //role mapping for user's kibana index
+            String kibanaRoleName = SearchGuardRoles.formatUniqueKibanaRoleName(username);
+            builder.addUser(kibanaRoleName, username).expire(getExpires());
         }
     }
 }

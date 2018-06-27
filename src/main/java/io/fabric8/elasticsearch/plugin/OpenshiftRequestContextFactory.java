@@ -39,7 +39,6 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
 import org.elasticsearch.rest.RestStatus;
 
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
@@ -60,7 +59,9 @@ public class OpenshiftRequestContextFactory {
     private final String kibanaPrefix;
     private String kibanaIndexMode;
 
-    public OpenshiftRequestContextFactory(final Settings settings, final RequestUtils utils,
+    public OpenshiftRequestContextFactory(
+            final Settings settings, 
+            final RequestUtils utils,
             final OpenshiftClientFactory clientFactory) {
         this.clientFactory = clientFactory;
         this.utils = utils;
@@ -78,14 +79,13 @@ public class OpenshiftRequestContextFactory {
     /**
      * Create a user context from the given request
      * 
-     * @param cache
-     *            - The cache of user projects to create ACLs
-     * @return an OpenshiftRequestContext
-     * @throws All
-     *             exceptions
+     * @param   request - The RestRequest to create from
+     * @return  an OpenshiftRequestContext 
+     * @throws  All exceptions
      */
-    public OpenshiftRequestContext create(final RestRequest request, final UserProjectCache cache) throws Exception {
-        logRequest(request, cache);
+    public OpenshiftRequestContext create(final RestRequest request) throws Exception {
+        logRequest(request);
+
         Set<String> projects = new HashSet<>();
         boolean isClusterAdmin = false;
         String user = utils.getUser(request);
@@ -106,7 +106,7 @@ public class OpenshiftRequestContextFactory {
         return OpenshiftRequestContext.EMPTY;
     }
     
-    private void logRequest(final RestRequest request, final UserProjectCache cache) {
+    private void logRequest(final RestRequest request) {
         if (LOGGER.isDebugEnabled()) {
             String user = utils.getUser(request);
             String token = utils.getBearerToken(request);
@@ -124,7 +124,6 @@ public class OpenshiftRequestContextFactory {
             }
             LOGGER.debug("Evaluating request for user '{}' with a {} token", user,
                     (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
-            LOGGER.debug("Cache has user: {}", cache.hasUser(user, token));
         }
     }
 

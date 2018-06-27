@@ -19,10 +19,8 @@ package io.fabric8.elasticsearch.plugin.acl;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.USER_KIBANA_PREFIX;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.USER_PREFIX;
 
-import java.util.Iterator;
-
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
-import io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.Roles;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
 public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
 
@@ -35,39 +33,27 @@ public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
 
     }
     
-    protected abstract void syncFromImpl(UserProjectCache cache, RolesBuilder builder);
+    protected abstract void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder);
     
     @Override
-    public void syncFrom(UserProjectCache cache) {
-        removeSyncAcls();
+    public void syncFrom(OpenshiftRequestContext context) {
         RolesBuilder builder = new RolesBuilder();
-        syncFromImpl(cache, builder);
+        syncFromImpl(context, builder);
         roles.addAll(builder.build());
     }
-
-    // Remove roles that start with "gen_"
-    private void removeSyncAcls() {
-        for (Iterator<Roles> i = roles.iterator(); i.hasNext();) {
-            Roles role = i.next();
-            if (role.getName() != null && role.getName().startsWith(SearchGuardRoles.ROLE_PREFIX)) {
-                roles.removeRole(role);
-            }
-        }
-    }
     
-    protected String formatKibanaIndexName(UserProjectCache cache, String username, String token, String kibanaIndexMode) {
+    protected String formatKibanaIndexName(OpenshiftRequestContext context, String kibanaIndexMode) {
         String kibanaIndex = OpenshiftRequestContextFactory.getKibanaIndex(userProfilePrefix, 
-                kibanaIndexMode, username, cache.isOperationsUser(username, token));
+                kibanaIndexMode, context.getUser(), context.isOperationsUser());
         return kibanaIndex.replace('.','?');
     }
     
     
-    protected String formatKibanaRoleName(UserProjectCache cache, String username, String token) {
-        boolean isOperationsUser = cache.isOperationsUser(username, token);
-        if (isOperationsUser) {
+    protected String formatKibanaRoleName(OpenshiftRequestContext context) {
+        if (context.isOperationsUser()) {
             return SearchGuardRolesMapping.KIBANA_SHARED_ROLE;
         } else {
-            return SearchGuardRoles.formatUniqueKibanaRoleName(username);
+            return SearchGuardRoles.formatUniqueKibanaRoleName(context.getUser());
         }
     }
     

@@ -1,5 +1,6 @@
 gen_kibana_4c54bf89fe913f39fc22d76309f80cdc6192928f:
   cluster: [USER_KIBANA_CLUSTER_OPERATIONS]
+  expires: '15'
   indices:
     '*':
       '*': [USER_ALL_INDEX_OPS]
@@ -7,6 +8,7 @@ gen_kibana_4c54bf89fe913f39fc22d76309f80cdc6192928f:
       '*': [INDEX_KIBANA]
 gen_kibana_994a33f6a157ba4a286395f81a4333db1e6cefb6:
   cluster: [USER_KIBANA_CLUSTER_OPERATIONS]
+  expires: '15'
   indices:
     '*':
       '*': [USER_ALL_INDEX_OPS]
@@ -14,11 +16,13 @@ gen_kibana_994a33f6a157ba4a286395f81a4333db1e6cefb6:
       '*': [INDEX_KIBANA]
 gen_ocp_kibana_shared:
   cluster: [CLUSTER_MONITOR_KIBANA]
+  expires: '15'
   indices:
     '*':
       '*': [INDEX_ANY_KIBANA]
 gen_project_operations:
   cluster: [CLUSTER_OPERATIONS]
+  expires: '15'
   indices:
     '*?*?*':
       '*': [INDEX_ANY_OPERATIONS]
@@ -26,6 +30,7 @@ gen_project_operations:
       '*': [INDEX_OPERATIONS]
 gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
   cluster: [USER_CLUSTER_OPERATIONS]
+  expires: '15'
   indices:
     ?kibana?4c54bf89fe913f39fc22d76309f80cdc6192928f:
       '*': [INDEX_KIBANA]
@@ -35,6 +40,7 @@ gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
       '*': [INDEX_PROJECT]
 gen_user_994a33f6a157ba4a286395f81a4333db1e6cefb6:
   cluster: [USER_CLUSTER_OPERATIONS]
+  expires: '15'
   indices:
     ?kibana?994a33f6a157ba4a286395f81a4333db1e6cefb6:
       '*': [INDEX_KIBANA]

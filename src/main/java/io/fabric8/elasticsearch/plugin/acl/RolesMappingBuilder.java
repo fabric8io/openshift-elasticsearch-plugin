@@ -28,12 +28,13 @@ public class RolesMappingBuilder {
 
     private Map<String, HashSet<String>> roles = new HashMap<>();
     private List<RolesMapping> rolesMappings = new ArrayList<RolesMapping>();
+    private String expire;
 
     public List<RolesMapping> build() {
 
         for (String role : roles.keySet()) {
             RolesMapping mapping = new RolesMapping();
-
+            mapping.setExpire(expire);
             mapping.setName(role);
             mapping.setUsers(new ArrayList<String>(roles.get(role)));
 
@@ -61,4 +62,10 @@ public class RolesMappingBuilder {
         roles.get(role).add(user);
         return this;
     }
+
+    public RolesMappingBuilder expire(String expire) {
+        this.expire = expire;
+        return this;
+    }
+    
 }

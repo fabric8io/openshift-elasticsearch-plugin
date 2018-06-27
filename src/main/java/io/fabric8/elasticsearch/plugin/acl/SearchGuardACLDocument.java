@@ -18,13 +18,15 @@ package io.fabric8.elasticsearch.plugin.acl;
 
 import java.util.Map;
 
-import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.ToXContentObject;
 
-public interface SearchGuardACLDocument<T> {
-
-    XContentBuilder toXContentBuilder();
+public interface SearchGuardACLDocument<T> extends ToXContentObject {
+    
+    static final String EXPIRES = "expires";
 
     String getType();
 
     T load(Map<String, Object> sourceAsMap);
+    
+    Long getVersion();
 }

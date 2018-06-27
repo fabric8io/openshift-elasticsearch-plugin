@@ -73,6 +73,10 @@ public class PluginClient {
         this.client = client;
         this.threadContext = threadContext;
     }
+    
+    public Client getClient() {
+        return client;
+    }
 
     public void deleteDocument(String index, String type, String id) {
         execute(new Callable<Object>() {
@@ -147,7 +151,7 @@ public class PluginClient {
             }
         });
     }
-
+    
     public UpdateResponse update(String index, String type, String id, String source) {
 
         LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
@@ -303,7 +307,7 @@ public class PluginClient {
         });
     }
 
-    private void addCommonHeaders() {
+    public void addCommonHeaders() {
         if (StringUtils.isBlank(threadContext.getTransient(ConfigConstants.SG_CHANNEL_TYPE))) {
             threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
         }

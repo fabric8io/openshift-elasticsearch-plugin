@@ -20,7 +20,13 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.StringReader;
 import java.util.Map;
+import java.util.TreeMap;
 
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentHelper;
+import org.elasticsearch.common.xcontent.XContentType;
 import org.yaml.snakeyaml.Yaml;
 
 public class TestUtils {
@@ -31,9 +37,13 @@ public class TestUtils {
         return (Map<String, Object>) new Yaml().load(reader);
     }
     
-    
-    public static void assertJson(String message, String exp, Map<String, Object> act) throws Exception {
-        assertEquals(message, exp, new Yaml().dump(act));
+    public static void assertYaml(String message, String exp, ToXContent content) throws Exception {
+        XContentBuilder builder = XContentFactory.yamlBuilder();
+        builder.startObject();
+        content.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.endObject();
+        Map<String, Object> act = XContentHelper.convertToMap(builder.bytes(), true, XContentType.YAML).v2();
+        assertEquals(message, exp, new Yaml().dump(new TreeMap<>(act)));
     }
 
 }

@@ -20,13 +20,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -39,7 +39,6 @@ import org.junit.Test;
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
-import io.fabric8.elasticsearch.plugin.acl.UserProjectCache;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.elasticsearch.util.TestRestRequest;
 import io.fabric8.kubernetes.client.Config;
@@ -59,20 +58,14 @@ public class OpenshiftRequestContextFactoryTest {
     private OpenshiftRequestContext context;
     private OpenshiftClientFactory clientFactory = mock(OpenshiftClientFactory.class);
     private RestRequest request;
-    private UserProjectCache cache = mock(UserProjectCache.class);
     private RequestUtils utils;
 
     @Before
     public void setUp() throws Exception {
-        Map<String, List<String>> headers = new TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
+        Map<String, List<String>> headers = new HashMap<String, List<String>>();
         headers.put(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER, Arrays.asList("fooUser"));
         headers.put("Authorization", Arrays.asList("Bearer ABC123"));
         request = new TestRestRequest(headers);
-        givenUserIsCached(true);
-    }
-
-    private void givenUserIsCached(boolean cached) {
-        when(cache.hasUser(anyString(), anyString())).thenReturn(cached);
     }
 
     private void givenUserContextFactory(boolean isOperationsUser) {
@@ -105,7 +98,7 @@ public class OpenshiftRequestContextFactoryTest {
 
     private OpenshiftRequestContext whenCreatingUserContext(String username) throws Exception {
         doReturn(username).when(utils).assertUser(any(RestRequest.class));
-        this.context = factory.create(request, cache);
+        this.context = factory.create(request);
         return this.context;
     }
 
@@ -208,7 +201,6 @@ public class OpenshiftRequestContextFactoryTest {
     public void testCreateUserContextWhenRequestHasUsernameAndPassword() throws Exception {
         givenUserContextFactory(true);
         givenUserHasProjects();
-        givenUserIsCached(false);
         whenCreatingUserContext();
         assertTrue("Exp. the request context to have a users projects", !context.getProjects().isEmpty());
         assertTrue("Exp. the request context to identify an ops user", context.isOperationsUser());
