@@ -82,14 +82,6 @@ public interface ConfigurationSettings extends KibanaIndexMode{
         ".operations.*", ".orphaned.*", "project.*", ".all" 
     };
     
-    /**
-     * The configurations for enabling/disabling portions of this plugin
-     * defaults to 'true' => enabled.
-     *
-     * This need came from integrating with APIMan -- we needed to seed our
-     * initial ACL but didn't need to dynamically update the ACL or rewrite our
-     * Kibana index.
-     */
     static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
     
     /**

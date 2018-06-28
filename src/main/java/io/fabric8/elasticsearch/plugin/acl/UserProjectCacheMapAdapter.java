@@ -31,9 +31,7 @@ import org.elasticsearch.common.settings.Settings;
 import io.netty.util.internal.ConcurrentSet;
 
 /**
- * A simple cache implementation for users->projects
- * 
- * @author jeff.cantrill
+ * A simple cache implementation for users to projects
  *
  */
 public class UserProjectCacheMapAdapter implements UserProjectCache {
