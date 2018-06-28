@@ -1,3 +1,4 @@
+# THIS BRANCH IS NO LONGER UNDER ACTIVE DEVELOPMENT
 # OpenShift ElasticSearch plugin
 This is an OpenShift plugin to ElasticSearch to:
 
