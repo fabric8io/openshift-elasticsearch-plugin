@@ -81,7 +81,7 @@ public class OpenshiftRequestContextFactory {
      * 
      * @param   request - The RestRequest to create from
      * @return  an OpenshiftRequestContext 
-     * @throws  All exceptions
+     * @throws  Exception All exceptions
      */
     public OpenshiftRequestContext create(final RestRequest request) throws Exception {
         logRequest(request);

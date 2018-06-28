@@ -31,7 +31,6 @@ import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.common.xcontent.XContentFactory;
@@ -63,7 +62,6 @@ public class RequestUtils implements ConfigurationSettings  {
     private final OpenshiftClientFactory k8ClientFactory;
     private final String defaultKibanaIndex;
 
-    @Inject
     public RequestUtils(final PluginSettings pluginSettings, OpenshiftClientFactory clientFactory) {
         this.defaultKibanaIndex = pluginSettings.getDefaultKibanaIndex();
         this.proxyUserHeader = pluginSettings.getSettings().get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
@@ -175,7 +173,10 @@ public class RequestUtils implements ConfigurationSettings  {
     /**
      * Modify the request of needed
      * @param request the original request
-     * @param context the Openshift context 
+     * @param context the Openshift context
+     * @param channel the channel that is processing the request
+     * 
+     * @return The modified request
      */
     public RestRequest modifyRequest(final RestRequest request, OpenshiftRequestContext context, RestChannel channel) {
         
