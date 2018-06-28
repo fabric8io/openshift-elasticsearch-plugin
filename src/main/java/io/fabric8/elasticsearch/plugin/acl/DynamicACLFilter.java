@@ -21,14 +21,14 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.elasticsearch.ElasticsearchSecurityException;
-import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.get.MultiGetItemResponse;
 import org.elasticsearch.action.get.MultiGetRequest;
 import org.elasticsearch.action.get.MultiGetResponse;
-import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.logging.ESLogger;
@@ -212,12 +212,12 @@ public class DynamicACLFilter extends RestFilter implements ConfigurationSetting
         BulkRequestBuilder builder = this.client.prepareBulk().setRefresh(true);
 
         for (SearchGuardACLDocument doc : documents) {
-            UpdateRequest update = this.client
-                    .prepareUpdate(searchGuardIndex, doc.getType(), SEARCHGUARD_CONFIG_ID)
-                    .setConsistencyLevel(WriteConsistencyLevel.DEFAULT)
-                    .setDoc(doc.toXContentBuilder())
-                    .request();
-            builder.add(update);
+            IndexRequest index = this.client
+                .prepareIndex(searchGuardIndex, doc.getType(), SEARCHGUARD_CONFIG_ID)
+                .setSource(doc.toXContentBuilder())
+                .setOpType(OpType.INDEX)
+                .request();
+            builder.add(index);
             if(LOGGER.isDebugEnabled()) {
                 LOGGER.debug("Built {} update request: {}", doc.getType(), XContentHelper.convertToJson(doc.toXContentBuilder().bytes(),true, true));
             }

@@ -177,15 +177,21 @@ public class SearchGuardRoles implements Iterable<SearchGuardRoles.Roles>, Confi
             // get out cluster and indices
             HashMap<String, Object> role = (HashMap<String, Object>) source.get(key);
 
-            List<String> cluster = (ArrayList<String>) role.get(CLUSTER_HEADER);
-            roleBuilder.setClusters(cluster);
+            
+            if (role.containsKey(CLUSTER_HEADER)) {
+                List<String> cluster = (ArrayList<String>) role.get(CLUSTER_HEADER);
+                roleBuilder.setClusters(cluster);
+            }
 
-            HashMap<String, HashMap<String, ArrayList<String>>> indices = (HashMap<String, HashMap<String, ArrayList<String>>>) role
-                    .get(INDICES_HEADER);
-            for (String index : indices.keySet()) {
-                for (String type : indices.get(index).keySet()) {
-                    List<String> actions = indices.get(index).get(type);
-                    roleBuilder.setActions(index, type, actions);
+            if (role.containsKey(INDICES_HEADER)) {
+                HashMap<String, HashMap<String, ArrayList<String>>> indices = (HashMap<String, HashMap<String, ArrayList<String>>>) role
+                        .get(INDICES_HEADER);
+                
+                for (String index : indices.keySet()) {
+                    for (String type : indices.get(index).keySet()) {
+                        List<String> actions = indices.get(index).get(type);
+                        roleBuilder.setActions(index, type, actions);
+                    }
                 }
             }
 
