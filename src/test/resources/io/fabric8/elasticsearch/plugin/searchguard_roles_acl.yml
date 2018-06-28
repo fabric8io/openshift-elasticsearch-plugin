@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+sg_unrecognized_child:
+  foo: [bar]
+  
 sg_role_kibana:
   cluster:
       - cluster:monitor/nodes/info
