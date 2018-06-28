@@ -70,13 +70,6 @@ public class OpenshiftRequestContextFactory  {
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
     }
 
-    /**
-     * Create a user context from the given request
-     * 
-     * @param   cache - The cache of user projects to create ACLs
-     * @return  an OpenshiftRequestContext 
-     * @throws  All exceptions
-     */
     public OpenshiftRequestContext create(final RestRequest request, final UserProjectCache cache) throws Exception {
         logRequest(request, cache);
 
