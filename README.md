@@ -71,7 +71,7 @@ may be found in the `samples` folder.
 
 Manually install custom version of SearchGuard
 
-* `$ mvn install:install-file -Dfile=lib/search-guard-5-5.6.9-19-rh.jar  -Dpackaging=jar`
+* `$ mvn install:install-file -Dfile=lib/search-guard-5-5.6.10-19.2-rh.jar  -Dpackaging=jar`
 
 Following are the dependencies
 
