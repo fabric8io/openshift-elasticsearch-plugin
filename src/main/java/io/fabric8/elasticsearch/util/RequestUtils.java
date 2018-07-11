@@ -57,6 +57,7 @@ public class RequestUtils implements ConfigurationSettings  {
     
     private static final Logger LOGGER = Loggers.getLogger(RequestUtils.class);
     public static final String AUTHORIZATION_HEADER = "Authorization";
+    public static final String X_FORWARDED_ACCESS_TOKEN = "x-forwarded-access-token";
 
     private final String proxyUserHeader;
     private final OpenshiftClientFactory k8ClientFactory;
@@ -77,11 +78,16 @@ public class RequestUtils implements ConfigurationSettings  {
     }
     
     public String getBearerToken(RestRequest request) {
-        final String[] auth = StringUtils.defaultIfEmpty(request.header(AUTHORIZATION_HEADER), "").split(" ");
-        if (auth.length >= 2 && "Bearer".equals(auth[0])) {
-            return auth[1];
+        String token = "";
+        if (request.header(AUTHORIZATION_HEADER) != null) {
+            final String[] auth = StringUtils.defaultIfEmpty(request.header(AUTHORIZATION_HEADER), "").split(" ");
+            if (auth.length >= 2 && "Bearer".equals(auth[0])) {
+                token = auth[1];
+            }
+        } else if (request.header(X_FORWARDED_ACCESS_TOKEN) != null) {
+            token = StringUtils.defaultIfEmpty(request.header(X_FORWARDED_ACCESS_TOKEN), "");
         }
-        return "";
+        return token;
     }
     
     public boolean isClientCertAuth(final ThreadContext threadContext) {
