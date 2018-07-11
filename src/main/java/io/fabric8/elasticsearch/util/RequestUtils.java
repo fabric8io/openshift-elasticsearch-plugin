@@ -79,12 +79,12 @@ public class RequestUtils implements ConfigurationSettings  {
     
     public String getBearerToken(RestRequest request) {
         String token = "";
-        if (request.getHeaders().keySet().contains(AUTHORIZATION_HEADER)) {
+        if (request.header(AUTHORIZATION_HEADER) != null) {
             final String[] auth = StringUtils.defaultIfEmpty(request.header(AUTHORIZATION_HEADER), "").split(" ");
             if (auth.length >= 2 && "Bearer".equals(auth[0])) {
                 token = auth[1];
             }
-        } else if (request.getHeaders().keySet().contains(X_FORWARDED_ACCESS_TOKEN)) {
+        } else if (request.header(X_FORWARDED_ACCESS_TOKEN) != null) {
             token = StringUtils.defaultIfEmpty(request.header(X_FORWARDED_ACCESS_TOKEN), "");
         }
         return token;
