@@ -56,7 +56,7 @@ import io.netty.channel.Channel;
 public class RequestUtils implements ConfigurationSettings  {
     
     private static final Logger LOGGER = Loggers.getLogger(RequestUtils.class);
-    public static final String AUTHORIZATION_HEADER = "Authorization";
+    public static final String AUTHORIZATION_HEADER = "authorization";
     public static final String X_FORWARDED_ACCESS_TOKEN = "x-forwarded-access-token";
 
     private final String proxyUserHeader;
@@ -78,16 +78,16 @@ public class RequestUtils implements ConfigurationSettings  {
     }
     
     public String getBearerToken(RestRequest request) {
-        String token = "";
-        if (request.header(AUTHORIZATION_HEADER) != null) {
-            final String[] auth = StringUtils.defaultIfEmpty(request.header(AUTHORIZATION_HEADER), "").split(" ");
-            if (auth.length >= 2 && "Bearer".equals(auth[0])) {
-                token = auth[1];
+        String token = request.header(X_FORWARDED_ACCESS_TOKEN);
+        if(token == null) {
+            if (request.header(AUTHORIZATION_HEADER) != null) {
+                final String[] auth = StringUtils.defaultIfEmpty(request.header(AUTHORIZATION_HEADER), "").split(" ");
+                if (auth.length >= 2 && "Bearer".equals(auth[0])) {
+                    token = auth[1];
+                }
             }
-        } else if (request.header(X_FORWARDED_ACCESS_TOKEN) != null) {
-            token = StringUtils.defaultIfEmpty(request.header(X_FORWARDED_ACCESS_TOKEN), "");
         }
-        return token;
+        return  StringUtils.defaultIfEmpty(token, "");
     }
     
     public boolean isClientCertAuth(final ThreadContext threadContext) {
