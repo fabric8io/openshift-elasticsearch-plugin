@@ -114,7 +114,7 @@ public class OpenshiftRequestContextFactory {
             if(LOGGER.isTraceEnabled()) {
                 List<String> headers = new ArrayList<>();
                 for (Entry<String, List<String>> entry : request.getHeaders().entrySet()) {
-                    if(RequestUtils.AUTHORIZATION_HEADER.equals(entry.getKey())){
+                    if(RequestUtils.AUTHORIZATION_HEADER.equals(entry.getKey().toLowerCase())){
                         headers.add(entry.getKey() + "=Bearer <REDACTED>");
                     }else {
                         headers.add(entry.getKey() + "=" + entry.getValue());

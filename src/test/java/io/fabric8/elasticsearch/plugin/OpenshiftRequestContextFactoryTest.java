@@ -79,7 +79,7 @@ public class OpenshiftRequestContextFactoryTest {
     @Parameters()
     public static Collection<Object[]> data() {
         return Arrays.asList(new Object[][]{
-          {"Authorization", "Bearer ABC123"},
+          {"authorization", "Bearer ABC123"},
           {"x-forwarded-access-token", "ABC123"}
         });
     }
@@ -143,7 +143,7 @@ public class OpenshiftRequestContextFactoryTest {
     public void testCreatingUserContextWhenUserHasBackSlash() throws Exception {
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER, Arrays.asList("test\\user"));
-        headers.put("Authorization", Arrays.asList("Bearer ABC123"));
+        headers.put("authorization", Arrays.asList("Bearer ABC123"));
         request = new TestRestRequest(headers);
         givenUserContextFactory(false);
         givenUserHasProjects();
