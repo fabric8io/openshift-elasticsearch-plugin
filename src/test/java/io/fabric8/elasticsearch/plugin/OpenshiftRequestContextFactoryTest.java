@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -28,8 +29,10 @@ import static org.mockito.Mockito.when;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
@@ -43,15 +46,6 @@ import org.junit.runners.Parameterized.Parameters;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.elasticsearch.util.TestRestRequest;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.dsl.ClientNonNamespaceOperation;
-import io.fabric8.kubernetes.client.dsl.ClientResource;
-import io.fabric8.openshift.api.model.DoneableProject;
-import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.api.model.ProjectBuilder;
-import io.fabric8.openshift.api.model.ProjectList;
-import io.fabric8.openshift.api.model.ProjectListBuilder;
-import io.fabric8.openshift.client.OpenShiftClient;
 
 @RunWith(value = Parameterized.class)
 public class OpenshiftRequestContextFactoryTest {
@@ -64,7 +58,7 @@ public class OpenshiftRequestContextFactoryTest {
     private Settings.Builder settingsBuilder = Settings.builder();
     private OpenshiftRequestContextFactory factory;
     private OpenshiftRequestContext context;
-    private OpenshiftClientFactory clientFactory = mock(OpenshiftClientFactory.class);
+    private OpenshiftAPIService apiService = mock(OpenshiftAPIService.class);
     private RestRequest request;
     private RequestUtils utils;
 
@@ -86,22 +80,16 @@ public class OpenshiftRequestContextFactoryTest {
 
     private void givenUserContextFactory(boolean isOperationsUser) {
         Settings settings = settingsBuilder.build();
-        utils = spy(new RequestUtils(new PluginSettings(settings), clientFactory));
+        utils = spy(new RequestUtils(new PluginSettings(settings), apiService));
         doReturn(isOperationsUser).when(utils).isOperationsUser(any(TestRestRequest.class));
 
-        factory = new OpenshiftRequestContextFactory(settings, utils, clientFactory);
+        factory = new OpenshiftRequestContextFactory(settings, utils, apiService);
     }
 
-    @SuppressWarnings("unchecked")
     private void givenUserHasProjects() {
-        OpenShiftClient client = mock(OpenShiftClient.class);
-        ClientNonNamespaceOperation<Project, ProjectList, DoneableProject, ClientResource<Project, DoneableProject>> projects = mock(
-                ClientNonNamespaceOperation.class);
-        ProjectList projectList = new ProjectListBuilder(false)
-                .addToItems(new ProjectBuilder(false).withNewMetadata().withName("foo").withUid("someuuid").endMetadata().build()).build();
-        when(projects.list()).thenReturn(projectList);
-        when(client.projects()).thenReturn(projects);
-        when(clientFactory.create(any(Config.class))).thenReturn(client);
+        Set<String> projects = new HashSet<>();
+        projects.add("foo");
+        when(apiService.projectNames(anyString())).thenReturn(projects);
     }
 
     private void givenKibanaIndexMode(String value) {

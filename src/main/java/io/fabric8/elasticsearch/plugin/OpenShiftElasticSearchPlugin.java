@@ -87,10 +87,10 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final PluginSettings pluginSettings = new PluginSettings(settings);
         final IndexMappingLoader indexMappingLoader = new IndexMappingLoader(settings);
         final PluginClient pluginClient = new PluginClient(client, threadPool.getThreadContext());
-        final OpenshiftClientFactory clientFactory = new OpenshiftClientFactory();
-        final RequestUtils requestUtils = new RequestUtils(pluginSettings, clientFactory);
+        final OpenshiftAPIService apiService = new OpenshiftAPIService();
+        final RequestUtils requestUtils = new RequestUtils(pluginSettings, apiService);
         final OpenshiftRequestContextFactory contextFactory = new OpenshiftRequestContextFactory(settings, requestUtils,
-                clientFactory);
+                apiService);
         final SearchGuardSyncStrategyFactory documentFactory = new SearchGuardSyncStrategyFactory(pluginSettings);
         final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient);
         final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
@@ -105,7 +105,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         list.add(indexMappingLoader);
         list.add(pluginClient);
         list.add(requestUtils);
-        list.add(clientFactory);
+        list.add(apiService);
         list.add(contextFactory);
         list.add(documentFactory);
         list.add(seed);

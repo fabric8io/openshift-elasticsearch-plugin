@@ -24,6 +24,7 @@ import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -32,19 +33,12 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
-import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestStatus;
 
 import io.fabric8.elasticsearch.util.RequestUtils;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.ConfigBuilder;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.openshift.api.model.Project;
-import io.fabric8.openshift.client.OpenShiftClient;
 
 /**
  * Context of information regarding a use
@@ -53,7 +47,7 @@ public class OpenshiftRequestContextFactory {
 
     private static final Logger LOGGER = Loggers.getLogger(OpenshiftRequestContextFactory.class);
 
-    private final OpenshiftClientFactory clientFactory;
+    private final OpenshiftAPIService apiService;
     private final RequestUtils utils;
     private final String[] operationsProjects;
     private final String kibanaPrefix;
@@ -62,8 +56,8 @@ public class OpenshiftRequestContextFactory {
     public OpenshiftRequestContextFactory(
             final Settings settings, 
             final RequestUtils utils,
-            final OpenshiftClientFactory clientFactory) {
-        this.clientFactory = clientFactory;
+            final OpenshiftAPIService apiService) {
+        this.apiService = apiService;
         this.utils = utils;
         this.operationsProjects = settings.getAsArray(ConfigurationSettings.OPENSHIFT_CONFIG_OPS_PROJECTS,
                 ConfigurationSettings.DEFAULT_OPENSHIFT_OPS_PROJECTS);
@@ -90,9 +84,6 @@ public class OpenshiftRequestContextFactory {
         boolean isClusterAdmin = false;
         String user = utils.getUser(request);
         String token = utils.getBearerToken(request);
-        if(utils.hasUserHeader(request) && StringUtils.isBlank(token)) {
-            throw new ElasticsearchSecurityException("", RestStatus.UNAUTHORIZED);
-        }
         if (StringUtils.isNotBlank(token)){
             user = utils.assertUser(request);
             isClusterAdmin = utils.isOperationsUser(request);
@@ -141,24 +132,14 @@ public class OpenshiftRequestContextFactory {
 
             @Override
             public Set<String> run() {
-                Set<String> names = new HashSet<>();
-                Config config = new ConfigBuilder().withOauthToken(token).build();
-                try (OpenShiftClient client = clientFactory.create(config)) {
-                    List<Project> projects = client.projects().list().getItems();
-                    for (Project project : projects) {
-                        if (!isBlacklistProject(project.getMetadata().getName())) {
-                            names.add(project.getMetadata().getName() + "." + project.getMetadata().getUid());
-                        }
+                Set<String> projects = apiService.projectNames(token);
+                for (Iterator<String> it = projects.iterator(); it.hasNext();) {
+                    if (isBlacklistProject(it.next())) {
+                        it.remove();
                     }
-                } catch (KubernetesClientException e) {
-                    LOGGER.error("Error retrieving project list for '{}': {}", user, e);
-                    throw new ElasticsearchSecurityException(e.getMessage());
-                } catch (Exception e) {
-                    LOGGER.error("Error retrieving project list for '{}': {}", user, e);
                 }
-                return names;
-            }
-            
+                return projects;
+            }   
         });
     }
 
