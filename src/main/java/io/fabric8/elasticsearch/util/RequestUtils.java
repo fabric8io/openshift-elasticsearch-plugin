@@ -24,33 +24,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 
-import org.elasticsearch.ElasticsearchSecurityException;
 import org.elasticsearch.SpecialPermission;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
-import org.elasticsearch.common.xcontent.XContentFactory;
-import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestRequest;
-import org.elasticsearch.rest.RestStatus;
-
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.Response;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
-import io.fabric8.elasticsearch.plugin.OpenshiftClientFactory;
+import io.fabric8.elasticsearch.plugin.OpenshiftAPIService;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.ConfigBuilder;
-import io.fabric8.openshift.api.model.SubjectAccessReviewResponse;
-import io.fabric8.openshift.client.DefaultOpenShiftClient;
-import io.fabric8.openshift.client.NamespacedOpenShiftClient;
 import io.netty.channel.Channel;
 
 public class RequestUtils implements ConfigurationSettings  {
@@ -60,13 +49,13 @@ public class RequestUtils implements ConfigurationSettings  {
     public static final String X_FORWARDED_ACCESS_TOKEN = "x-forwarded-access-token";
 
     private final String proxyUserHeader;
-    private final OpenshiftClientFactory k8ClientFactory;
     private final String defaultKibanaIndex;
+    private final OpenshiftAPIService apiService;
 
-    public RequestUtils(final PluginSettings pluginSettings, OpenshiftClientFactory clientFactory) {
+    public RequestUtils(final PluginSettings pluginSettings, final OpenshiftAPIService apiService) {
         this.defaultKibanaIndex = pluginSettings.getDefaultKibanaIndex();
         this.proxyUserHeader = pluginSettings.getSettings().get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
-        this.k8ClientFactory = clientFactory;
+        this.apiService = apiService;
     }
     
     public boolean hasUserHeader(RestRequest request) {
@@ -102,12 +91,8 @@ public class RequestUtils implements ConfigurationSettings  {
                 final String user = StringUtils.defaultIfEmpty(getUser(request), "<UNKNOWN>");
                 final String token = getBearerToken(request);
                 boolean allowed = false;
-                Config config = new ConfigBuilder().withOauthToken(token).build();
-                try (NamespacedOpenShiftClient osClient = (NamespacedOpenShiftClient) k8ClientFactory.create(config)) {
-                    LOGGER.debug("Submitting a SAR to see if '{}' is able to retrieve logs across the cluster", user);
-                    SubjectAccessReviewResponse response = osClient.inAnyNamespace().subjectAccessReviews().createNew()
-                            .withVerb("get").withResource("pods/log").done();
-                    allowed = response.getAllowed();
+                try {
+                    allowed = apiService.localSubjectAccessReview(token, "default", "view", "pods/log","", ArrayUtils.EMPTY_STRING_ARRAY);
                 } catch (Exception e) {
                     LOGGER.error("Exception determining user's '{}' role: {}", user, e);
                 } finally {
@@ -127,50 +112,13 @@ public class RequestUtils implements ConfigurationSettings  {
         return AccessController.doPrivileged(action);
     }
         
-
-    @SuppressWarnings("rawtypes")
     public String assertUser(RestRequest request){
         return executePrivilegedAction(new PrivilegedAction<String>() {
 
             @Override
             public String run() {
-                String username = null;
-                final String user = getUser(request);
                 final String token = getBearerToken(request);
-                ConfigBuilder builder = new ConfigBuilder().withOauthToken(token);
-                try (DefaultOpenShiftClient osClient = new DefaultOpenShiftClient(builder.build())) {
-                    LOGGER.debug("Verifying user {} matches the given token.", user);
-                    Request okRequest = new Request.Builder()
-                            .addHeader(AUTHORIZATION_HEADER, "Bearer " + token)
-                            .url(osClient.getMasterUrl() + "oapi/v1/users/~")
-                            .build();
-                    Response response = null;
-                    try {
-                        response = osClient.getHttpClient().newCall(okRequest).execute();
-                        final String body = response.body().string();
-                        if (LOGGER.isDebugEnabled()) {
-                            LOGGER.debug("Response: code '{}' {}", response.code(), body);
-                        }
-                        if(response.code() != RestStatus.OK.getStatus()) {
-                            throw new ElasticsearchSecurityException("", RestStatus.UNAUTHORIZED);
-                        }
-                        Map<String, Object> userResponse = XContentHelper.convertToMap(XContentFactory.xContent(body), body, false);
-                        if(userResponse.containsKey("metadata") && ((Map)userResponse.get("metadata")).containsKey("name")) {
-                            username = (String) ((Map)userResponse.get("metadata")).get("name");
-                        }
-                    }catch (Exception e) {
-                        LOGGER.error("Exception trying to assertUser '{}'", e, user);
-                    }
-                    if(StringUtils.isNotBlank(username) && StringUtils.isNotBlank(user) && !user.equals(username)) {
-                        String message = String.format("The given username '%s' does not match the username '%s' associated with the token provided with the request.",
-                                user, username);
-                        LOGGER.debug(message);
-                    }
-                }
-                if (null == username) {
-                    throw new ElasticsearchSecurityException("", RestStatus.UNAUTHORIZED);
-                }
-                return username;
+                return apiService.userName(token);
             }
             
         });
