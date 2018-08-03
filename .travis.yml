@@ -1,0 +1,10 @@
+language: java
+
+sudo: false
+
+jdk:
+  - oraclejdk8
+
+script:
+  # run both the unit tests and integration tests
+  - mvn verify

@@ -40,6 +40,7 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftAPIService;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
+
 import io.netty.channel.Channel;
 
 public class RequestUtils implements ConfigurationSettings  {

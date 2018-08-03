@@ -95,7 +95,7 @@ public class OpenshiftRequestContextFactoryTest {
     private void givenKibanaIndexMode(String value) {
         settingsBuilder.put(ConfigurationSettings.OPENSHIFT_KIBANA_INDEX_MODE, value);
     }
-    
+
     private OpenshiftRequestContext whenCreatingUserContext() throws Exception {
         return whenCreatingUserContext("someusername");
     }
