@@ -27,15 +27,22 @@ public enum Samples {
     ROLESMAPPING_ACL("searchguard_rolesmapping_acl.yml"), 
     OPENSHIFT_ROLES_ACL("searchguard_roles_acl_with_openshift_projects.yml"), 
     OPENSHIFT_ROLESMAPPING_ACL("searchguard_rolesmapping_acl_with_openshift_projects.yml"),
-    ROLES_OPS_SHARED_KIBANA_INDEX("roles_ops_shared_kibana_index.yml"),
     PASSWORDS("passwords.yml"),
-    ROLES_SHARED_KIBANA_INDEX("roles_shared_kibana_index.yml"),
-    ROLES_SHARED_OPS_KIBANA_INDEX("roles_shared_ops_kibana_index.yml"),
-    ROLES_SHARED_NON_OPS_KIBANA_INDEX("roles_shared_non_ops_kibana_index.yml"),
-    ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("roles_ops_shared_kibana_index_with_unique.yml"),
-    ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE("rolesmapping_ops_shared_kibana_index.yml"),
-    USER_ROLESMAPPING_STRATEGY("user_rolesmapping_shared_ops_kibana_index_with_unique.yml"),
-    USER_ROLES_STRATEGY("user_role_with_shared_kibana_index_with_unique.yml");
+    PROJECT_STRATEGY_ROLES_SHARED_OPS_KIBANA_MODE("project_strategy_roles_shared_ops_kibana_mode.yml"),
+    PROJECT_STRATEGY_ROLES_SHARED_NON_OPS_KIBANA_MODE("project_strategy_roles_shared_non_ops_kibana_mode.yml"),
+    PROJECT_STRATEGY_ROLES_UNIQUE_KIBANA_MODE("project_strategy_roles_unique_kibana_mode.yml"),
+    
+    PROJECT_STRATEGY_ROLESMAPPING_UNIQUE_KIBANA_MODE("project_strategy_rolesmapping_unique_kibana_mode.yml"),
+    PROJECT_STRATEGY_ROLESMAPPING_SHARED_OPS_KIBANA_MODE("project_strategy_rolesmapping_shared_ops_kibana_mode.yml"),
+    PROJECT_STRATEGY_ROLESMAPPING_SHARED_NON_OPS_KIBANA_MODE("project_strategy_rolesmapping_shared_non_ops_kibana_mode.yml"),
+
+    USER_STRATEGY_ROLESMAPPING_SHARED_OPS_KIBANA_MODE("user_strategy_rolesmapping_shared_ops_kibana_mode.yml"),
+    USER_STRATEGY_ROLESMAPPING_SHARED_NON_OPS_KIBANA_MODE("user_strategy_rolesmapping_shared_non_ops_kibana_mode.yml"),
+    USER_STRATEGY_ROLESMAPPING_UNIQUE_KIBANA_MODE("user_strategy_rolesmapping_unique_kibana_mode.yml"),
+
+    USER_STRATEGY_ROLES_SHARED_OPS_KIBANA_MODE("user_strategy_roles_shared_ops_kibana_mode.yml"),
+    USER_STRATEGY_ROLES_SHARED_NON_OPS_KIBANA_MODE("user_strategy_roles_shared_non_ops_kibana_mode.yml"),
+    USER_STRATEGY_ROLES_UNIQUE_KIBANA_MODE("user_strategy_roles_unique_kibana_mode.yml");
 
     private String path;
 

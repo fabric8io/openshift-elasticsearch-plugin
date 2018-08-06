@@ -20,7 +20,6 @@ import org.apache.commons.lang.StringUtils;
 
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
-
 public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements RolesSyncStrategy {
 
     private final String cdmProjectPrefix;
@@ -35,40 +34,29 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
     }
 
     protected void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder) {
+        String kibIndexName = formatKibanaIndexName(context, kibanaIndexMode);
+        String kibRoleName = formatKibanaRoleName(context);
+        RoleBuilder kibRole = new RoleBuilder(kibRoleName)
+                .setClusterActions(KIBANA_ROLE_CLUSTER_ACTIONS)
+                .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
+                .expires(expire);
+        builder.addRole(kibRole.build());
+
         //think this can be statically added to roles doc
         if (context.isOperationsUser()) {
             RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
                     .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
-                    .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)
-                    .setActions("*?*?*", ALL, OPERATIONS_ROLE_ANY_ACTIONS)
+                    .setActions(ALL, ALL, OPERATIONS_ROLE_ANY_ACTIONS)
                     .expires(expire);
             builder.addRole(opsRole.build());
-            RoleBuilder kibanaOpsRole = new RoleBuilder(SearchGuardRolesMapping.KIBANA_SHARED_ROLE)
-                    .setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
-                    .setActions(ALL, ALL, KIBANA_ROLE_ALL_INDEX_ACTIONS)
-                    .expires(expire);
-            builder.addRole(kibanaOpsRole.build());
             return;
         }        
-        
-        String kibIndexName = formatKibanaIndexName(context, kibanaIndexMode);
-
-        //specific permissions to kibana index for unique kibana role 
-        RoleBuilder kibRole = new RoleBuilder(formatUserKibanaRoleName(context.getUser()))
-                .setClusterActions(USER_KIBANA_ROLE_CLUSTER_ACTIONS)
-                .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
-                .setActions(ALL, ALL, USER_ALL_INDEX_ACTIONS)
-                .expires(expire);
-        builder.addRole(kibRole.build());
 
         String roleName = formatUserRoleName(context.getUser());
-        
-        //permissions for kibana Index in user's role
         RoleBuilder role = new RoleBuilder(roleName)
                 .setClusters(USER_ROLE_CLUSTER_ACTIONS)
-                .setActions(kibIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS)
                 .expires(expire);
-        
+
         //permissions for projects
         for (String project : context.getProjects()) {
             String indexName = String.format("%s?*", project.replace('.', '?'));

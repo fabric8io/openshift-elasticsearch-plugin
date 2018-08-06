@@ -106,6 +106,6 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
 
     static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";
-    static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "";
+    static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "project";
 
 }

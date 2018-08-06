@@ -173,7 +173,7 @@ public class OpenshiftRequestContextFactory {
     public static class OpenshiftRequestContext {
 
         public static final OpenshiftRequestContext EMPTY = new OpenshiftRequestContext("", "", false,
-                new HashSet<String>(), "", UNIQUE);
+                new HashSet<String>(), "", "");
 
         private final String user;
         private final String token;

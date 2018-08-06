@@ -37,6 +37,7 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
 
     public static final String ADMIN_ROLE = "gen_project_operations";
     public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
+    public static final String KIBANA_SHARED_NON_OPS_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared_non_ops";
     private static final String USER_HEADER = "users";
     private Map<String, RolesMapping> mappings = new HashMap<>();
     private Long version;

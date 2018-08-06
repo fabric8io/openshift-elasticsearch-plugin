@@ -28,6 +28,7 @@ import org.elasticsearch.rest.RestRequest;
 public class TestRestRequest extends RestRequest {
 
     private static final String URI = "test/restrequest";
+    private BytesArray content = new BytesArray("");
 
     @SuppressWarnings("unchecked")
     public TestRestRequest(Map<String, List<String>> headers) {
@@ -51,7 +52,7 @@ public class TestRestRequest extends RestRequest {
 
     @Override
     public BytesReference content() {
-        return new BytesArray("");
+        return content;
     }
 
 }

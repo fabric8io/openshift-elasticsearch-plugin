@@ -1,0 +1,15 @@
+gen_kibana_0b7f849446d3383546d15a480966084442cd2193:
+  expires: '10'
+  users: [user3]
+gen_kibana_a1881c06eec96db9901c7bbfe41c42a3f08e9cb4:
+  expires: '10'
+  users: [user2]
+gen_kibana_b3daa77b4c04a9551b8781d03191fe098f325e67:
+  expires: '10'
+  users: [user1]
+gen_project_foo_bar:
+  expires: '10'
+  users: [user2]
+gen_project_operations:
+  expires: '10'
+  users: [user1, user3]

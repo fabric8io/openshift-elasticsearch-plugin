@@ -31,13 +31,16 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.KeyStore;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
@@ -52,11 +55,17 @@ import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.WriteRequest.RefreshPolicy;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.node.NodeClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.collect.ImmutableOpenMap;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
@@ -78,11 +87,15 @@ import org.junit.rules.TestName;
 import org.junit.rules.TestWatcher;
 import org.junit.runner.Description;
 
+import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
+import com.floragunn.searchguard.action.configupdate.ConfigUpdateAction;
+import com.floragunn.searchguard.action.configupdate.ConfigUpdateRequest;
 import com.floragunn.searchguard.ssl.util.SSLConfigConstants;
 import com.floragunn.searchguard.support.ConfigConstants;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenShiftElasticSearchPlugin;
+import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.openshift.api.model.ProjectBuilder;
 import io.fabric8.openshift.api.model.ProjectListBuilder;
@@ -101,7 +114,7 @@ public abstract class ElasticsearchIntegrationTest {
     protected static final Logger log = Loggers.getLogger(ElasticsearchIntegrationTest.class);
     private static final String CLUSTER_NAME = "openshift_elastic_test_cluster";
     private static final String USERNAME = "username";
-    private static final String RESPONSE = "response";
+    protected static final String RESPONSE = "response";
     private static final String URI = "uri";
     private static String basedir;
     private static String password = "changeit";
@@ -119,7 +132,7 @@ public abstract class ElasticsearchIntegrationTest {
     protected int nodePort;
     private String httpHost = null;
     private int httpPort = -1;
-    private final Map<String, Object> testContext = new HashMap<>();
+    protected Map<String, Object> testContext;
 
     @BeforeClass
     public static void setupOnce() throws Exception {
@@ -177,6 +190,10 @@ public abstract class ElasticsearchIntegrationTest {
 
         return false;
     }
+
+    protected String getKibanaIndex(String mode, String user, boolean isAdmin) {
+        return OpenshiftRequestContextFactory.getKibanaIndex(".kibana",  mode, user, isAdmin);
+    }
     
     protected void seedSearchGuardAcls() throws Exception {
         ThreadContext threadContext = esNode1.client().threadPool().getThreadContext();
@@ -188,8 +205,18 @@ public abstract class ElasticsearchIntegrationTest {
             for (String config : new String [] {"actiongroups", "config", "internalusers", "rolesmapping", "roles"}) {
                 uploadFile(client, String.format("%s/%s.yml", configdir,config), ".searchguard", config);
             }
+            ((NodeClient)client()).execute(ConfigUpdateAction.INSTANCE, 
+                    new ConfigUpdateRequest(new String[]{"config","roles","rolesmapping","internalusers","actiongroups"})).actionGet();
             log.info("Completed seeding SearchGuard ACL");
         }
+    }
+    
+    /**
+     * Provide additional settings or override the defaults
+     * @return Settings
+     */
+    protected Settings additionalNodeSettings() {
+        return Settings.EMPTY;
     }
 
     protected Settings nodeSettings() throws Exception {
@@ -235,6 +262,7 @@ public abstract class ElasticsearchIntegrationTest {
                 .put(ConfigurationSettings.OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY,
                         basedir + "/src/test/resources/index-pattern.json")
                 .put("searchguard.ssl.http.enable_openssl_if_available", false)
+                .put(additionalNodeSettings())
                 .build();
         return settings;
     }
@@ -256,6 +284,7 @@ public abstract class ElasticsearchIntegrationTest {
     
     @Before
     public void startES() throws Exception {
+        testContext = new HashMap<>();
         startES(nodeSettings(), 30, 1);
     }
     
@@ -283,12 +312,15 @@ public abstract class ElasticsearchIntegrationTest {
 
         seedSearchGuardAcls();
         // seed kibana index like kibana
-        XContentBuilder content = XContentFactory.jsonBuilder().startObject().field("key", "value").endObject();
-        givenDocumentIsIndexed(".kibana", "config", "0", content);
+        givenDocumentIsIndexed(".kibana", "config", "0", "defaultKibanaIndex");
 
         // create ops user to avoid issue:
         // https://github.com/fabric8io/openshift-elasticsearch-plugin/issues/106
-        givenDocumentIsIndexed(".operations.1970.01.01", "data", "0", content);
+        givenDocumentIsIndexed(".operations.1970.01.01", "test", "0", "operation0");
+    }
+
+    protected void givenDocumentIsIndexed(String index, String type, String id, String message) throws Exception{
+        givenDocumentIsIndexed(index, type, id, createSimpleDocument(message));
     }
 
     protected void givenDocumentIsIndexed(String index, String type, String id, XContentBuilder content)
@@ -300,36 +332,130 @@ public abstract class ElasticsearchIntegrationTest {
             .setSource(content).execute().get();
         }
     }
+    
+    protected void dumpIndices() throws Exception {
+        ThreadContext threadContext = esNode1.client().threadPool().getThreadContext();
+        try (StoredContext cxt = threadContext.stashContext()) {
+            threadContext.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+            ClusterStateResponse response = esNode1.client().admin().cluster().prepareState().get();
+            Iterator<ObjectObjectCursor<String, IndexMetaData>> iterator = response.getState().getMetaData().indices().iterator();
+            while (iterator.hasNext()) {
+                ObjectObjectCursor<String, IndexMetaData> c = (ObjectObjectCursor<String, IndexMetaData>) iterator.next();
+                IndexMetaData meta = c.value;
+                ImmutableOpenMap<String, MappingMetaData> mappings = meta.getMappings();
+                Iterator<String> it = mappings.keysIt();
+                while (it.hasNext()) {
+                    String key = it.next();
+                    System.out.println(String.format("%s %s %s", c.key, key,  mappings.get(key).type()));
+                }
+            }
+        }
+    }
+
+    protected void dumpDocument(String index, String type, String id) throws Exception {
+        ThreadContext threadContext = client().threadPool().getThreadContext();
+        try (StoredContext cxt = threadContext.stashContext()) {
+            threadContext.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+            GetResponse response = client().prepareGet(index, type, id).get();
+            System.out.println(response.getSourceAsString());
+        }
+    }
+    
+    protected XContentBuilder createSimpleDocument(String value) throws IOException {
+        return XContentFactory.jsonBuilder()
+            .startObject()
+                .field("@timestamp", "1970.01.01")
+                .field("msg", value)
+            .endObject();
+    }
 
     protected void givenUserIsClusterAdmin(String user) {
-        expSubjectAcccessReviewToBe(Boolean.TRUE, user);
+        expSubjectAccessReviewToBe(Boolean.TRUE, user);
     }
 
     protected void givenUserIsNotClusterAdmin(String user) {
-        expSubjectAcccessReviewToBe(Boolean.FALSE, user);
+        expSubjectAccessReviewToBe(Boolean.FALSE, user);
     }
 
-    private void expSubjectAcccessReviewToBe(boolean value, String user) {
+    private void expSubjectAccessReviewToBe(boolean value, String user) {
         testContext.put(USERNAME, user);
-        SubjectAccessReviewResponse response = new SubjectAccessReviewResponse(Boolean.FALSE, "v1", null, null, null,
+        SubjectAccessReviewResponse response = new SubjectAccessReviewResponse(value, "v1", null, null, null,
                 "");
-        apiServer.expect().post()
-                .withPath("/apis/authorization.openshift.io/v1/namespaces/default/localsubjectaccessreviews")
-                .andReturn(201, response).once();
-
-        apiServer.expect().get().withPath("/apis/user.openshift.io/v1/users/~")
-                .andReturn(200, "{ \"metadata\": { \"name\": \"" + user.replace("\\", "\\\\") + "\" } }").once();
+        apiServer.expect()
+            .post()
+            .withPath("/apis/authorization.openshift.io/v1/namespaces/default/localsubjectaccessreviews")
+            .andReturn(201, response)
+            .withHeader("Authorization", "Bearer " + user + "-token")
+            .always();
+        apiServer.expect()
+            .get()
+            .withPath("/apis/user.openshift.io/v1/users/~")
+            .andReturn(200, "{ \"metadata\": { \"name\": \"" + user.replace("\\", "\\\\") + "\" } }")
+            .withHeader("Authorization", "Bearer " + user + "-token")
+            .always();
     }
 
+    protected void givenUserHasBadToken() {
+        givenUserHasBadToken("");
+    }
+    
+    protected void givenUserHasBadToken(String token) {
+        apiServer.expect()
+            .get()
+            .withPath("/apis/user.openshift.io/v1/users/~")
+            .andReturn(401, "")
+            .withHeader("Authorization", "Bearer bogusToken")
+            .always();
+    }
+    
+    protected String formatProjectIndexPattern(String project) {
+        return String.format("project.%s.*", project);
+    }
+
+    protected void whenContextIsForUser(String user) {
+        testContext.put(USERNAME, user);
+    }
+    
     protected void givenUserIsAdminForProjects(String... projects) throws Exception {
+        String user = (String) testContext.get(USERNAME);
         ProjectListBuilder builder = new ProjectListBuilder(false);
         for (String project : projects) {
             builder.addToItems(new ProjectBuilder(false).withNewMetadata().withName(project).endMetadata().build());
         }
-        apiServer.expect().withPath("/apis/project.openshift.io/v1/projects").andReturn(200, builder.build()).once();
+        apiServer.expect()
+            .withPath("/apis/project.openshift.io/v1/projects")
+            .andReturn(200, builder.build())
+            .withHeader("Authorization", "Bearer " + user + "-token")
+            .always();
     }
 
+    protected void whenSearchingProjects(String... projects) throws Exception {
+        testContext.put(URI, "_msearch");
+        String indicies = Arrays.asList(projects).stream()
+                .map(p -> formatProjectIndexPattern(p))
+                .collect(Collectors.joining("\",\""));
+        String body = new StringBuilder()
+            .append(String.format("{\"index\": [\"%s\"]}\r\n", indicies))
+            .append("{\"size\":0,\"query\":{\"match_all\":{}}}\r\n")
+            .toString();
+        RequestRunner runner = new RequestRunner.Builder()
+            .server(getHttpServerUri())
+            .keyStore(keyStore)
+            .keyStorePswd(password)
+            .username((String) testContext.get(USERNAME))
+            .method("POST")
+            .header("Content-Type", "application/x-ndjson")
+            .body(body)
+            .build();
+        Response response = runner.run("_msearch");
+        testContext.put(RESPONSE, response);
+    }
+    
     protected void whenGettingDocument(String uri) throws Exception {
+        whenGettingDocument(uri, null);
+    }
+    
+    protected void whenGettingDocument(String uri, Headers headers) throws Exception {
         testContext.put(URI, uri);
         RequestRunner runner = new RequestRunner.Builder()
                 .server(getHttpServerUri())
@@ -337,7 +463,7 @@ public abstract class ElasticsearchIntegrationTest {
                 .keyStorePswd(password)
                 .username((String) testContext.get(USERNAME))
                 .build();
-        testContext.put(RESPONSE, runner.run(uri));
+        testContext.put(RESPONSE, headers == null ? runner.run(uri) : runner.run(uri, headers));
     }
 
     protected void whenCheckingIndexExists(String uri) throws Exception {
@@ -362,9 +488,16 @@ public abstract class ElasticsearchIntegrationTest {
         String username = (String) testContext.get(USERNAME);
         Response response = (Response) testContext.get(RESPONSE);
         String uri = (String) testContext.get(URI);
-        assertEquals(String.format("Exp. %s to be unauthorized for %s", username, uri), 403, response.code());
+        assertEquals(String.format("Exp. %s to be forbidden for %s", username, uri), 403, response.code());
     }
 
+    protected void assertThatResponseIsUnauthorized() {
+        String username = (String) testContext.get(USERNAME);
+        Response response = (Response) testContext.get(RESPONSE);
+        String uri = (String) testContext.get(URI);
+        assertEquals(String.format("Exp. %s to be unauthorized for %s", username, uri), 401, response.code());
+    }
+    
     protected Client client() {
         return esNode1.client();
     }

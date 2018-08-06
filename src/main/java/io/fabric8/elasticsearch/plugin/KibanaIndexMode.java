@@ -23,8 +23,8 @@ public interface KibanaIndexMode {
      *   * unique (Default) - Each user gets a unique index for kibana visualizations (e.g. .kibana.USER_UUID)
      *   * shared_ops       - Users who are in an ops role will share an index (e.g. kibana_ops) while non ops users will 
      *                        have a unique index (e.g. .kibana.USER_UUID)
-     *   * shared_non_ops   - Users who are in an ops role will share an index (e.g. kibana) while non ops users will 
-     *                        share the default index (e.g. .kibana_non_ops)                      
+     *   * shared_non_ops   - Users who are in an ops role will share an index (e.g. kibana) while non-ops users will 
+     *                        share an index (e.g. .kibana_non_ops)                      
      */
     static final String OPENSHIFT_KIBANA_INDEX_MODE = "openshift.kibana.index.mode";
     

@@ -19,6 +19,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.USER_KIBANA_PREFIX;
 import static io.fabric8.elasticsearch.plugin.acl.SearchGuardRoles.USER_PREFIX;
 
+import io.fabric8.elasticsearch.plugin.KibanaIndexMode;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 
@@ -26,13 +27,13 @@ public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
 
     protected SearchGuardRoles roles;
     private final String userProfilePrefix;
-   
+
     protected BaseRolesSyncStrategy(SearchGuardRoles roles, String userProfilePrefix) {
         this.roles = roles;
         this.userProfilePrefix = userProfilePrefix;
 
     }
-    
+
     protected abstract void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder);
     
     @Override
@@ -41,22 +42,31 @@ public abstract class BaseRolesSyncStrategy implements RolesSyncStrategy {
         syncFromImpl(context, builder);
         roles.addAll(builder.build());
     }
-    
+
     protected String formatKibanaIndexName(OpenshiftRequestContext context, String kibanaIndexMode) {
         String kibanaIndex = OpenshiftRequestContextFactory.getKibanaIndex(userProfilePrefix, 
                 kibanaIndexMode, context.getUser(), context.isOperationsUser());
         return kibanaIndex.replace('.','?');
     }
-    
-    
-    protected String formatKibanaRoleName(OpenshiftRequestContext context) {
-        if (context.isOperationsUser()) {
-            return SearchGuardRolesMapping.KIBANA_SHARED_ROLE;
-        } else {
+
+    public static String formatKibanaRoleName(OpenshiftRequestContext context) {
+        final String kibanaIndexMode = context.getKibanaIndexMode();
+        if (context.isOperationsUser() ) {
+            switch (kibanaIndexMode) {
+            case KibanaIndexMode.UNIQUE:
+                return SearchGuardRoles.formatUniqueKibanaRoleName(context.getUser());
+            default:
+                return SearchGuardRolesMapping.KIBANA_SHARED_ROLE;
+            }
+        }
+        switch (kibanaIndexMode) {
+        case KibanaIndexMode.SHARED_NON_OPS:
+            return SearchGuardRolesMapping.KIBANA_SHARED_NON_OPS_ROLE;
+        default:
             return SearchGuardRoles.formatUniqueKibanaRoleName(context.getUser());
         }
     }
-    
+
     public static String formatUserRoleName(String username) {
         return String.format("%s_%s", USER_PREFIX, OpenshiftRequestContextFactory.getUsernameHash(username));
     }

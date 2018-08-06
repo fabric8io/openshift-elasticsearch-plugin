@@ -27,24 +27,24 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.logging.Loggers;
 
-import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
+import io.fabric8.elasticsearch.util.RequestUtils;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import okhttp3.Headers;
-import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okio.Buffer;
 
 public class RequestRunner {
     
     private static final Logger log = Loggers.getLogger(RequestRunner.class);
     private String username;
-    private String token;
     private Map<String, String> headers;
     private String method;
     private String body;
@@ -52,12 +52,11 @@ public class RequestRunner {
     private String keyStore;
     private String server;
 
-    public RequestRunner(String server, String keystore, String keystorePswd, String method, String username, String token, Map<String, String> headers, String body) {
+    public RequestRunner(String server, String keystore, String keystorePswd, String method, String username, Map<String, String> headers, String body) {
         this.server = server;
         this.keyStore = keystore;
         this.password = keystorePswd;
         this.username = username;
-        this.token = token;
         this.headers = headers;
         this.method = method;
         this.body = body;
@@ -76,11 +75,15 @@ public class RequestRunner {
         Headers.Builder builder = new Headers.Builder()
                 .add("connection","close")
                 .add("x-proxy-remote-user", this.username)
-                .add(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER, "Bearer " + this.token);
+                .add("x-forwarded-for", "127.0.0.1")
+                .add(RequestUtils.AUTHORIZATION_HEADER, "Bearer " + username + "-token");
         for (Map.Entry<String, String> pair : this.headers.entrySet()) {
             builder.add(pair.getKey(), pair.getValue());
         }
-        Headers headers = builder.build();
+        return run(query, builder.build());
+    }
+    
+    public Response run(final String query,  Headers headers) throws Exception {
         switch (StringUtils.defaultIfBlank(method, "get").toLowerCase()) {
         case "head":
             return executeHeadRequest(query, headers);
@@ -104,12 +107,12 @@ public class RequestRunner {
     }
 
     protected Response executePutRequest(final String uri, String body, Headers headers) throws Exception {
-        RequestBody requestBody = RequestBody.create(MediaType.parse("application/json"), body);
+        RequestBody requestBody = RequestBody.create(null, body);
         return executeRequest(uri, headers, "PUT", requestBody);
     }
 
     protected Response executePostRequest(final String uri, String body, Headers headers) throws Exception {
-        RequestBody requestBody = RequestBody.create(MediaType.parse("application/json"), body);
+        RequestBody requestBody = RequestBody.create(null, body);
         return executeRequest(uri, headers, "POST", requestBody);
     }
 
@@ -124,9 +127,20 @@ public class RequestRunner {
             .url(server + "/" + uri)
             .method(method, body)
             .build();
+        if(log.isTraceEnabled()) {
+            log.info(request);
+            if (body != null) {
+                Buffer sink = new Buffer();
+                body.writeTo(sink);
+                log.info(IOUtils.toString(sink.inputStream()));
+            }
+        }
         Response response = client.newCall(request).execute();
         if(log.isTraceEnabled()) {
-            log.trace(response.body().string());
+            log.trace(response);
+            if(response.body() != null) {
+                log.trace(IOUtils.toString(response.body().byteStream()));
+            }
         }
         return response;
     }
@@ -150,8 +164,7 @@ public class RequestRunner {
     }
     
     static class Builder {
-        private String token = "developeroauthtoken";
-        private String username = "developer";
+        private String username;
         private Map<String, String> headers = new HashMap<>();
         private String method;
         private String body;
@@ -163,8 +176,6 @@ public class RequestRunner {
             headers.put("X-Forwarded-By", "127.0.0.1");
             headers.put("x-forwarded-for", "127.0.0.1");
             
-            headers.put("X-Proxy-Remote-User", username);
-            headers.put("Authorization", "Bearer " + token);
         }
         
         Builder method(String method) {
@@ -179,11 +190,6 @@ public class RequestRunner {
         
         Builder header(String key, String value) {
             headers.put(key, value);
-            return this;
-        }
-        
-        Builder token(String token) {
-            this.token = token;
             return this;
         }
         
@@ -208,7 +214,10 @@ public class RequestRunner {
         }
         
         RequestRunner build() throws Exception {
-            return new RequestRunner(server, keyStore, keyStorePswd, method, username, token, headers, body);
+            headers.put("X-Proxy-Remote-User", username);
+            headers.put("Authorization", "Bearer " + username + "-token");
+
+            return new RequestRunner(server, keyStore, keyStorePswd, method, username, headers, body);
         }
     }
 }
