@@ -40,7 +40,7 @@ public class SearchGuardRoleACLTest {
     private SearchGuardRoles roles = new SearchGuardRoles();
     
     private OpenshiftRequestContext givenContextFor(String user, boolean isOperations, String mode, String...projects) {
-        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "abc", mode);
+        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "someKibanaIndexValue", mode);
     }
     
     private ProjectRolesSyncStrategy givenProjectRolesSyncStrategyFor(String mode) {
@@ -52,17 +52,34 @@ public class SearchGuardRoleACLTest {
     }
     
     @Test
-    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
-        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
-        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_OPS, "foo.bar"));
+    public void testProjectStrategyForRolesWithUniqueKibanaIndexMode() throws Exception {
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.UNIQUE);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.UNIQUE, "foo.bar"));
+        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.UNIQUE, "foo.bar"));
         
-        assertYaml("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), roles);
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLES_UNIQUE_KIBANA_MODE.getContent(), roles);
     }
 
+    @Test
+    public void testProjectStrategyForRolesWithSharedOpsKibanaIndexMode() throws Exception {
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS, "foo.bar"));
+        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_OPS, "foo.bar"));
+        
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLES_SHARED_OPS_KIBANA_MODE.getContent(), roles);
+    }
     
     @Test
-    public void testGeneratingKibanaUniqueRoleWithOpsUsersSyncedToUserRoles() throws Exception {
+    public void testProjectStrategyForRolesWithSharedNonOpsKibanaIndexMode() throws Exception {
+        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
+        strat.syncFrom(givenContextFor("user1", false, KibanaIndexMode.SHARED_NON_OPS, "foo.bar"));
+        strat.syncFrom(givenContextFor("user2", true, KibanaIndexMode.SHARED_NON_OPS, "foo.bar"));
+        
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLES_SHARED_NON_OPS_KIBANA_MODE.getContent(), roles);
+    }
+
+    @Test
+    public void testUserStrategyForRolesWithUniqueKibanaIndexMode() throws Exception {
         RolesSyncStrategy strat = givenUserRolesSyncStrategyFor(KibanaIndexMode.UNIQUE);
         
         strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.UNIQUE, "user2-proj"));
@@ -70,44 +87,34 @@ public class SearchGuardRoleACLTest {
         strat.syncFrom(givenContextFor("user2.bar@email.com", false, KibanaIndexMode.UNIQUE, "xyz", "foo.bar"));
         strat.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", false, KibanaIndexMode.UNIQUE, "distinguishedproj"));
         
-        assertYaml("", Samples.USER_ROLES_STRATEGY.getContent(), roles);
-    }
-    
-    @Test
-    public void testGeneratingKibanaOpsRole() throws Exception {
-        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
-        strat.syncFrom(givenContextFor("user2", true, KibanaIndexMode.SHARED_OPS));
-        
-        assertYaml("", Samples.ROLES_OPS_SHARED_KIBANA_INDEX.getContent(), roles);
+        assertYaml("", Samples.USER_STRATEGY_ROLES_UNIQUE_KIBANA_MODE.getContent(), roles);
     }
 
     @Test
-    public void testGeneratingKibanaOpsShared() throws Exception {
-        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
-        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS));
-        strat.syncFrom(givenContextFor("user2", true, KibanaIndexMode.SHARED_OPS));
+    public void testUserStrategyForRolesWithSharedOpsKibanaIndexMode() throws Exception {
+        RolesSyncStrategy strat = givenUserRolesSyncStrategyFor(KibanaIndexMode.SHARED_OPS);
         
-        assertYaml("", Samples.ROLES_SHARED_OPS_KIBANA_INDEX.getContent(), roles);
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_OPS, "user2-proj"));
+        strat.syncFrom(givenContextFor("user3", true, KibanaIndexMode.SHARED_OPS, "user3-proj"));
+        strat.syncFrom(givenContextFor("user2.bar@email.com", false, KibanaIndexMode.SHARED_OPS, "xyz", "foo.bar"));
+        strat.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", false, KibanaIndexMode.SHARED_OPS, "distinguishedproj"));
+        
+        assertYaml("", Samples.USER_STRATEGY_ROLES_SHARED_OPS_KIBANA_MODE.getContent(), roles);
+    }
+
+    @Test
+    public void testUserStrategyForRolesWithSharedNonOpsKibanaIndexMode() throws Exception {
+        RolesSyncStrategy strat = givenUserRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
+        
+        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_NON_OPS, "user2-proj"));
+        strat.syncFrom(givenContextFor("user3", true, KibanaIndexMode.SHARED_NON_OPS, "user3-proj"));
+        strat.syncFrom(givenContextFor("user2.bar@email.com", false, KibanaIndexMode.SHARED_NON_OPS, "xyz", "foo.bar"));
+        strat.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", false, KibanaIndexMode.SHARED_NON_OPS, "distinguishedproj"));
+        
+        assertYaml("", Samples.USER_STRATEGY_ROLES_SHARED_NON_OPS_KIBANA_MODE.getContent(), roles);
     }
     
-    @Test
-    public void testGeneratingKibanaNonOpsShared() throws Exception {
-        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
-        strat.syncFrom(givenContextFor("user1", false, KibanaIndexMode.SHARED_NON_OPS));
-        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_NON_OPS));
-        
-        assertYaml("", Samples.ROLES_SHARED_NON_OPS_KIBANA_INDEX.getContent(), roles);
-    }
-    
-    @Test
-    public void testGeneratingKibanaShared() throws Exception {
-        ProjectRolesSyncStrategy strat = givenProjectRolesSyncStrategyFor(KibanaIndexMode.SHARED_NON_OPS);
-        strat.syncFrom(givenContextFor("user1", true, KibanaIndexMode.SHARED_NON_OPS));
-        strat.syncFrom(givenContextFor("user2", false, KibanaIndexMode.SHARED_NON_OPS));
-        
-        assertYaml("", Samples.ROLES_SHARED_KIBANA_INDEX.getContent(), roles);
-    }
+
     
     @Test
     public void testSerialization() throws Exception {

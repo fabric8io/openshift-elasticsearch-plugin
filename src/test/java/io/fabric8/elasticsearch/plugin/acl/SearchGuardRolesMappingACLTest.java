@@ -41,8 +41,8 @@ public class SearchGuardRolesMappingACLTest {
     private SearchGuardRolesMapping rolesMapping = new SearchGuardRolesMapping();
     
     
-    private OpenshiftRequestContext givenContextFor(String user, boolean isOperations, String...projects) {
-        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "abc", KibanaIndexMode.UNIQUE);
+    private OpenshiftRequestContext givenContextFor(String user, String kibIndexMode, boolean isOperations, String...projects) {
+        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "abc", kibIndexMode);
     }
     
     private ProjectRolesMappingSyncStrategy givenProjectRolesSyncStrategy() {
@@ -54,24 +54,66 @@ public class SearchGuardRolesMappingACLTest {
     }
 
     @Test
-    public void testGeneratingKibanaUniqueRoleWithOpsUsers() throws Exception {
+    public void testProjectStrategyForRolesWithUniqueKibanaIndexMode() throws Exception {
         RolesMappingSyncStrategy sync = givenProjectRolesSyncStrategy();
-        sync.syncFrom(givenContextFor("user1", true));
-        sync.syncFrom(givenContextFor("user3", true));
-        sync.syncFrom(givenContextFor("user2", false, "foo.bar"));
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.UNIQUE, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.UNIQUE, true));
+        sync.syncFrom(givenContextFor("user2", KibanaIndexMode.UNIQUE, false, "foo.bar"));
         
-        assertYaml("", Samples.ROLESMAPPING_OPS_SHARED_KIBANA_INDEX_WITH_UNIQUE.getContent(), rolesMapping);
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLESMAPPING_UNIQUE_KIBANA_MODE.getContent(), rolesMapping);
     }
 
     @Test
-    public void testGeneratingKibanaUniqueRoleWithOpsUsersSyncdToUserRolesMappings() throws Exception {
-        RolesMappingSyncStrategy sync = givenUserRolesMappingSyncStrategy();
-        sync.syncFrom(givenContextFor("user1", true));
-        sync.syncFrom(givenContextFor("user3", true));
-        sync.syncFrom(givenContextFor("user2.bar@email.com", false, "foo.bar"));
-        sync.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", false, "distinguishedproj"));
+    public void testProjectStrategyForRolesWithSharedOpsKibanaIndexMode() throws Exception {
+        RolesMappingSyncStrategy sync = givenProjectRolesSyncStrategy();
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.SHARED_OPS, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.SHARED_OPS, true));
+        sync.syncFrom(givenContextFor("user2", KibanaIndexMode.SHARED_OPS, false, "foo.bar"));
         
-        assertYaml("", Samples.USER_ROLESMAPPING_STRATEGY.getContent(), rolesMapping);
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLESMAPPING_SHARED_OPS_KIBANA_MODE.getContent(), rolesMapping);
+    }
+    
+    @Test
+    public void testProjectStrategyForRolesWithSharedNonOpsKibanaIndexMode() throws Exception {
+        RolesMappingSyncStrategy sync = givenProjectRolesSyncStrategy();
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.SHARED_NON_OPS, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.SHARED_NON_OPS, true));
+        sync.syncFrom(givenContextFor("user2", KibanaIndexMode.SHARED_NON_OPS, false, "foo.bar"));
+        
+        assertYaml("", Samples.PROJECT_STRATEGY_ROLESMAPPING_SHARED_NON_OPS_KIBANA_MODE.getContent(), rolesMapping);
+    }
+    
+    @Test
+    public void testUserStrategyForRolesWithUniqueKibanaIndexMode() throws Exception {
+        RolesMappingSyncStrategy sync = givenUserRolesMappingSyncStrategy();
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.UNIQUE, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.UNIQUE, true));
+        sync.syncFrom(givenContextFor("user2.bar@email.com", KibanaIndexMode.UNIQUE, false));
+        sync.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", KibanaIndexMode.UNIQUE, false));
+        
+        assertYaml("", Samples.USER_STRATEGY_ROLESMAPPING_UNIQUE_KIBANA_MODE.getContent(), rolesMapping);
+    }
+    
+    @Test
+    public void testUserStrategyForRolesWithSharedOpsKibanaIndexMode() throws Exception {
+        RolesMappingSyncStrategy sync = givenUserRolesMappingSyncStrategy();
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.SHARED_OPS, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.SHARED_OPS, true));
+        sync.syncFrom(givenContextFor("user2.bar@email.com", KibanaIndexMode.SHARED_OPS, false));
+        sync.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", KibanaIndexMode.SHARED_OPS, false));
+        
+        assertYaml("", Samples.USER_STRATEGY_ROLESMAPPING_SHARED_OPS_KIBANA_MODE.getContent(), rolesMapping);
+    }
+    
+    @Test
+    public void testUserStrategyForRolesWithSharedNonOpsKibanaIndexMode() throws Exception {
+        RolesMappingSyncStrategy sync = givenUserRolesMappingSyncStrategy();
+        sync.syncFrom(givenContextFor("user1", KibanaIndexMode.SHARED_NON_OPS, true));
+        sync.syncFrom(givenContextFor("user3", KibanaIndexMode.SHARED_NON_OPS, true));
+        sync.syncFrom(givenContextFor("user2.bar@email.com", KibanaIndexMode.SHARED_NON_OPS, false));
+        sync.syncFrom(givenContextFor("CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com", KibanaIndexMode.SHARED_NON_OPS, false));
+        
+        assertYaml("", Samples.USER_STRATEGY_ROLESMAPPING_SHARED_NON_OPS_KIBANA_MODE.getContent(), rolesMapping);
     }
     
     @Test

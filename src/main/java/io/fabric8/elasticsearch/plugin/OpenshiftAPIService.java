@@ -59,11 +59,11 @@ public class OpenshiftAPIService {
                 LOGGER.debug("Response: code '{}' {}", response.code(), body);
             }
             if(response.code() != RestStatus.OK.getStatus()) {
-                throw new ElasticsearchSecurityException("", RestStatus.fromCode(response.code()));
+                throw new ElasticsearchSecurityException("Unable to determine username from the token provided", RestStatus.fromCode(response.code()));
             }
             return JsonPath.read(body,"$.metadata.name");
         } catch (IOException e) {
-            LOGGER.error("Error retrieving project list", e);
+            LOGGER.error("Error retrieving username from token", e);
             throw new ElasticsearchException(e);
         }        
     }

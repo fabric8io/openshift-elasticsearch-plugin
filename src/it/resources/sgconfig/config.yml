@@ -33,3 +33,12 @@ searchguard:
             user_header: 'x-proxy-remote-user'
         authentication_backend:
           type: noop
+      authentication_domain_basic_internal:
+        enabled: true
+        order: 1
+        http_authenticator:
+          type: clientcert
+          challenge: false
+        authentication_backend:
+          type: noop
+

@@ -53,9 +53,9 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
         for (String project : context.getProjects()) {
             String projectName = String.format("%s_%s", SearchGuardRoles.PROJECT_PREFIX, project.replace('.', '_'));
             String indexName = String.format("%s?*", project.replace('.', '?'));
-            RoleBuilder role = new RoleBuilder(projectName).setActions(indexName, ALL,
-                    PROJECT_ROLE_ACTIONS);
-            role.expires(expires);
+            RoleBuilder role = new RoleBuilder(projectName)
+                .setActions(indexName, ALL,PROJECT_ROLE_ACTIONS)
+                .expires(expires);
 
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
@@ -83,8 +83,11 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
 
         //statically add to roles?
         if (context.isOperationsUser()) {
+            RoleBuilder opsKibanaRole = new RoleBuilder(kibanaRoleName)
+                .setClusters(KIBANA_ROLE_CLUSTER_ACTIONS)
+                .setActions(kibanaIndexName, ALL, KIBANA_ROLE_INDEX_ACTIONS);
             
-            builder.addRole(kibanaRole.build());
+            builder.addRole(opsKibanaRole.build());
             RoleBuilder opsRole = new RoleBuilder(SearchGuardRolesMapping.ADMIN_ROLE)
                     .setClusters(OPERATIONS_ROLE_CLUSTER_ACTIONS)
                     .setActions("?operations?", ALL, OPERATIONS_ROLE_OPERATIONS_ACTIONS)

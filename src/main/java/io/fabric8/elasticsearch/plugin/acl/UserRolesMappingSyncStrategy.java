@@ -39,15 +39,15 @@ public class UserRolesMappingSyncStrategy extends BaseRolesMappingSyncStrategy {
 
     @Override
     protected void syncFromImpl(OpenshiftRequestContext context, RolesMappingBuilder builder) {
-        
+
         final String user = context.getUser();
+        String kibanaRoleName = BaseRolesSyncStrategy.formatKibanaRoleName(context);
+        builder.addUser(kibanaRoleName, user)
+            .expire(getExpires());
         if (context.isOperationsUser()) {
-            builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, user);
-            builder.addUser(SearchGuardRolesMapping.KIBANA_SHARED_ROLE, user);
-            builder.expire(getExpires());
+            builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, user)
+                .expire(getExpires());
         } else {
-            String kibanaRoleName = BaseRolesSyncStrategy.formatUserKibanaRoleName(user);
-            builder.addUser(kibanaRoleName, user).expire(getExpires());
             String roleName = BaseRolesSyncStrategy.formatUserRoleName(user);
             builder.addUser(roleName, user).expire(getExpires());
         }

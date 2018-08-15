@@ -67,5 +67,15 @@ public class RequestUtilsTest {
         RestRequest modifyRequest = util.modifyRequest(request, context , null);
         assertEquals("application/json", modifyRequest.header(CONTENT_TYPE));
     }
+
+    @Test
+    public void testModifyContentTypeWhenContextIsEmpty() {
+        Map<String, List<String>> headers = new TreeMap<String, List<String>>(String.CASE_INSENSITIVE_ORDER);
+        headers.put(CONTENT_TYPE, Arrays.asList("application/x-ndjson"));
+        RestRequest request = new TestRestRequest(headers);
+        
+        RestRequest modifyRequest = util.modifyRequest(request, OpenshiftRequestContext.EMPTY , null);
+        assertEquals("", request, modifyRequest);
+    }
     
 }

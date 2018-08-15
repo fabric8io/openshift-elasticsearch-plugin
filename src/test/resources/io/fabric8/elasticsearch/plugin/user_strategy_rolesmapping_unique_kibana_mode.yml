@@ -1,0 +1,21 @@
+gen_kibana_0b7f849446d3383546d15a480966084442cd2193:
+  expires: '15'
+  users: [user3]
+gen_kibana_4c54bf89fe913f39fc22d76309f80cdc6192928f:
+  expires: '15'
+  users: ['CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com']
+gen_kibana_994a33f6a157ba4a286395f81a4333db1e6cefb6:
+  expires: '15'
+  users: [user2.bar@email.com]
+gen_kibana_b3daa77b4c04a9551b8781d03191fe098f325e67:
+  expires: '15'
+  users: [user1]
+gen_project_operations:
+  expires: '15'
+  users: [user1, user3]
+gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
+  expires: '15'
+  users: ['CN=jdoe,OU=DL IT,OU=User Accounts,DC=example,DC=com']
+gen_user_994a33f6a157ba4a286395f81a4333db1e6cefb6:
+  expires: '15'
+  users: [user2.bar@email.com]

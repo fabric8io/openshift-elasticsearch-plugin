@@ -107,8 +107,8 @@ public class DynamicACLFilter implements ConfigurationSettings {
                     // if create throws an exception, it means there was an issue with the token
                     // and username and the request failed authentication
                     requestContext = contextFactory.create(request);
+                    request = utils.modifyRequest(request, requestContext, channel);
                     if (requestContext != OpenshiftRequestContext.EMPTY) {
-                        request = utils.modifyRequest(request, requestContext, channel);
                         logRequest(request);
                         final String kbnVersion = getKibanaVersion(request);
                         kibanaSeed.setDashboards(requestContext, client, kbnVersion, cdmProjectPrefix);

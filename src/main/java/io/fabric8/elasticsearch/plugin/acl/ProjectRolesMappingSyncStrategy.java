@@ -37,12 +37,11 @@ public class ProjectRolesMappingSyncStrategy extends BaseRolesMappingSyncStrateg
         }
 
         if (context.isOperationsUser()) {
-            builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, username);
-            builder.addUser(SearchGuardRolesMapping.KIBANA_SHARED_ROLE, username);
-        } else {
-            //role mapping for user's kibana index
-            String kibanaRoleName = SearchGuardRoles.formatUniqueKibanaRoleName(username);
-            builder.addUser(kibanaRoleName, username).expire(getExpires());
-        }
+            builder.addUser(SearchGuardRolesMapping.ADMIN_ROLE, username)
+                .expire(getExpires());
+        } 
+        String kibanaRoleName = BaseRolesSyncStrategy.formatKibanaRoleName(context);
+        builder.addUser(kibanaRoleName, username)
+            .expire(getExpires());
     }
 }

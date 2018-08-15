@@ -202,7 +202,7 @@ public class RequestUtils implements ConfigurationSettings  {
     
     private BytesReference getContent(final RestRequest request, final OpenshiftRequestContext context) {
         String content = request.content().utf8ToString();
-        if(content.contains("_index\":\"" + defaultKibanaIndex)) {
+        if(OpenshiftRequestContext.EMPTY != context && content.contains("_index\":\"" + defaultKibanaIndex)) {
             LOGGER.debug("Replacing the content that references the default kibana index");
             String replaced = content.replaceAll("_index\":\"" + defaultKibanaIndex + "\"", "_index\":\"" + context.getKibanaIndex() + "\"");
             return new BytesArray(replaced);
@@ -211,7 +211,7 @@ public class RequestUtils implements ConfigurationSettings  {
     }
     
     private String getUri(final RestRequest request, final OpenshiftRequestContext context) {
-        if(request.uri().contains(defaultKibanaIndex) && !context.getKibanaIndex().equals(defaultKibanaIndex)) {
+        if(OpenshiftRequestContext.EMPTY != context && request.uri().contains(defaultKibanaIndex) && !context.getKibanaIndex().equals(defaultKibanaIndex)) {
             String uri = request.uri().replaceAll(defaultKibanaIndex, context.getKibanaIndex());
             LOGGER.debug("Modifying uri to be '{}'", uri);
             return uri;
