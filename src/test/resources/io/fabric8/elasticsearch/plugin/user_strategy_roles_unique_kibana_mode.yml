@@ -32,19 +32,19 @@ gen_user_4c54bf89fe913f39fc22d76309f80cdc6192928f:
   cluster: [USER_CLUSTER_OPERATIONS]
   expires: '15'
   indices:
-    ?project?distinguishedproj?*:
+    ?project?distinguishedproj?123abc?*:
       '*': [INDEX_PROJECT]
-    distinguishedproj?*:
+    distinguishedproj?123abc?*:
       '*': [INDEX_PROJECT]
 gen_user_994a33f6a157ba4a286395f81a4333db1e6cefb6:
   cluster: [USER_CLUSTER_OPERATIONS]
   expires: '15'
   indices:
-    ?project?foo?bar?*:
+    ?project?foo?bar?123abc?*:
       '*': [INDEX_PROJECT]
-    ?project?xyz?*:
+    ?project?xyz?123abc?*:
       '*': [INDEX_PROJECT]
-    foo?bar?*:
+    foo?bar?123abc?*:
       '*': [INDEX_PROJECT]
-    xyz?*:
+    xyz?123abc?*:
       '*': [INDEX_PROJECT]

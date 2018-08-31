@@ -66,6 +66,7 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardSyncStrategyFactory;
 import io.fabric8.elasticsearch.plugin.filter.FieldStatsResponseFilter;
 import io.fabric8.elasticsearch.plugin.kibana.IndexMappingLoader;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
+import io.fabric8.elasticsearch.plugin.kibana.KibanaUtils;
 import io.fabric8.elasticsearch.util.RequestUtils;
 
 public class OpenShiftElasticSearchPlugin extends Plugin implements ConfigurationSettings, ActionPlugin, NetworkPlugin {
@@ -92,7 +93,8 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final OpenshiftRequestContextFactory contextFactory = new OpenshiftRequestContextFactory(settings, requestUtils,
                 apiService);
         final SearchGuardSyncStrategyFactory documentFactory = new SearchGuardSyncStrategyFactory(pluginSettings);
-        final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient);
+        final KibanaUtils kUtils = new KibanaUtils(pluginSettings, pluginClient);
+        final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient, kUtils);
         final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
         this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, contextFactory, threadPool, requestUtils, aclDocumentManager);
         this.kibanaReindexAction = new KibanaUserReindexAction(pluginSettings, client, threadPool.getThreadContext());
@@ -108,6 +110,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         list.add(apiService);
         list.add(contextFactory);
         list.add(documentFactory);
+        list.add(kUtils);
         list.add(seed);
         list.add(aclFilter);
         list.add(kibanaReindexAction);

@@ -19,6 +19,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 import org.apache.commons.lang.StringUtils;
 
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
+import io.fabric8.elasticsearch.plugin.model.Project;
 
 public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements RolesSyncStrategy {
 
@@ -58,14 +59,14 @@ public class UserRolesSyncStrategy extends BaseRolesSyncStrategy implements Role
                 .expires(expire);
 
         //permissions for projects
-        for (String project : context.getProjects()) {
-            String indexName = String.format("%s?*", project.replace('.', '?'));
+        for (Project project : context.getProjects()) {
+            String indexName = String.format("%s?%s?*", project.getName().replace('.', '?'), project.getUID());
             role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
             // the project.$projname.$uuid.* indices for backwards compatibility
             if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
-                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
+                indexName = String.format("%s?%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'), project.getUID());
                 role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
             }
         }

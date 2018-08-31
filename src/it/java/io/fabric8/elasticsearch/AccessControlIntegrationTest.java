@@ -28,14 +28,34 @@ import okhttp3.Headers;
  */
 public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
 
-    
+
     @Before
     public void setup() throws Exception {
         givenDocumentIsIndexed("project.multi-tenancy-1.uuid.1970.01.01", "test", "0", "multi-tenancy-1-doc0");
         givenDocumentIsIndexed("project.multi-tenancy-2.uuid.1970.01.01", "test", "0", "multi-tenancy-2-doc0");
         givenDocumentIsIndexed("project.multi-tenancy-3.uuid.1970.01.01", "test", "0", "multi-tenancy-3-doc0");
     }
-    
+
+    @Test
+    public void testUserAccessDeletedAndRecreatedNamespace() throws Exception {
+        final String userName = "nonadminuser";
+        //artificially seed user's kibanaIndex
+        String kibanaIndex = getKibanaIndex(KibanaIndexMode.UNIQUE, userName, false);
+        givenDocumentIsIndexed(kibanaIndex, "config", "0", "myKibanaIndex");
+        givenDocumentIsIndexed("project.test.uuid1.1970.01.01", "test", "0", "test.uuid1-doc0");
+        givenDocumentIsIndexed("project.test.uuid2.1970.01.01", "test", "0", "test.uuid2-doc0");
+
+        givenUserIsNotClusterAdmin(userName);
+        givenUserIsAdminForProject("test","uuid2");
+
+        whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern("test", "*")));
+        assertThatResponseIsForbidden();
+
+        whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern("test", "uuid2")));
+        assertThatResponseIsSuccessful();
+
+    }
+
     @Test
     public void testUsersAccessWithTokenFollowedByWithout() throws Exception {
         final String [] projects = {"multi-tenancy-1", "multi-tenancy-2"};
@@ -46,7 +66,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
         givenUserIsNotClusterAdmin(userName);
         givenUserIsAdminForProjects(projects);
         
-        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1"));
+        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1","uuid"));
         
         //no username or token
         whenGettingDocument(uri);
@@ -73,7 +93,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
         givenUserIsNotClusterAdmin(userName);
         givenUserIsAdminForProjects(projects);
         
-        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1"));
+        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1","uuid"));
         
         Headers.Builder builder = new Headers.Builder()
                 .add("connection","close")
@@ -92,7 +112,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
     
     @Test
     public void testUsersAccessWithInvalidToken() throws Exception {
-        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1"));
+        final String uri = String.format("%s/_count", formatProjectIndexPattern("multi-tenancy-1","uuid"));
         final String userName = "nonadminuser";
         
         Headers.Builder builder = new Headers.Builder()

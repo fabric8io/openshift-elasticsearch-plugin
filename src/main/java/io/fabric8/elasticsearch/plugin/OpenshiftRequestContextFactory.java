@@ -38,6 +38,7 @@ import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.RestRequest;
 
+import io.fabric8.elasticsearch.plugin.model.Project;
 import io.fabric8.elasticsearch.util.RequestUtils;
 
 /**
@@ -80,17 +81,17 @@ public class OpenshiftRequestContextFactory {
     public OpenshiftRequestContext create(final RestRequest request) throws Exception {
         logRequest(request);
 
-        Set<String> projects = new HashSet<>();
+        Set<Project> projects = new HashSet<>();
         boolean isClusterAdmin = false;
         String user = utils.getUser(request);
         String token = utils.getBearerToken(request);
         if (StringUtils.isNotBlank(token)){
             user = utils.assertUser(request);
             isClusterAdmin = utils.isOperationsUser(request);
-            projects = listProjectsFor(user, token);
             if(user.contains("\\")){
                 user = user.replace("\\", "/");
             }
+            projects = listProjectsFor(user, token);
             return new OpenshiftRequestContext(user, token, isClusterAdmin, projects, getKibanaIndex(user, isClusterAdmin), this.kibanaIndexMode);
         }
         LOGGER.debug("Returning EMPTY request context; either was provided client cert or empty token.");
@@ -123,18 +124,18 @@ public class OpenshiftRequestContextFactory {
     // is the only authentication performed in this plugin. This function must
     // throw
     // an exception if the token is invalid.
-    private Set<String> listProjectsFor(final String user, final String token) throws Exception {
+    private Set<Project> listProjectsFor(final String user, final String token) throws Exception {
         final SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
             sm.checkPermission(new SpecialPermission());
         }
-        return AccessController.doPrivileged(new PrivilegedAction<Set<String>>(){
+        return AccessController.doPrivileged(new PrivilegedAction<Set<Project>>(){
 
             @Override
-            public Set<String> run() {
-                Set<String> projects = apiService.projectNames(token);
-                for (Iterator<String> it = projects.iterator(); it.hasNext();) {
-                    if (isBlacklistProject(it.next())) {
+            public Set<Project> run() {
+                Set<Project> projects = apiService.projectNames(token);
+                for (Iterator<Project> it = projects.iterator(); it.hasNext();) {
+                    if (isBlacklistProject(it.next().getName())) {
                         it.remove();
                     }
                 }
@@ -173,17 +174,17 @@ public class OpenshiftRequestContextFactory {
     public static class OpenshiftRequestContext {
 
         public static final OpenshiftRequestContext EMPTY = new OpenshiftRequestContext("", "", false,
-                new HashSet<String>(), "", "");
+                new HashSet<Project>(), "", "");
 
         private final String user;
         private final String token;
         private final boolean isClusterAdmin;
-        private final Set<String> projects;
+        private final Set<Project> projects;
         private final String kibanaIndex;
         private final String kibanaIndexMode;
 
         public OpenshiftRequestContext(final String user, final String token, boolean isClusterAdmin, 
-                Set<String> projects, String kibanaIndex, final String kibanaIndexMode) {
+                Set<Project> projects, String kibanaIndex, final String kibanaIndexMode) {
             this.user = user;
             this.token = token;
             this.isClusterAdmin = isClusterAdmin;
@@ -214,12 +215,11 @@ public class OpenshiftRequestContextFactory {
         }
 
         /**
-         * The Set of projects with UUID
+         * The Set of projects
          * 
-         * @return the set of project names formatted with their UUID (e.g.
-         *         project.UUID)
+         * @return the set of projects
          */
-        public Set<String> getProjects() {
+        public Set<Project> getProjects() {
             return projects;
         }
 
