@@ -18,6 +18,8 @@ package io.fabric8.elasticsearch.plugin;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.logging.log4j.Logger;
@@ -30,6 +32,7 @@ import org.elasticsearch.rest.RestStatus;
 
 import com.jayway.jsonpath.JsonPath;
 
+import io.fabric8.elasticsearch.plugin.model.Project;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -68,7 +71,7 @@ public class OpenshiftAPIService {
         }        
     }
     
-    public Set<String> projectNames(final String token){
+    public Set<Project> projectNames(final String token){
         try (DefaultOpenShiftClient client = buildClient(token)) {
             Request request = new Request.Builder()
                 .url(client.getMasterUrl() + "apis/project.openshift.io/v1/projects")
@@ -78,7 +81,12 @@ public class OpenshiftAPIService {
             if(response.code() != RestStatus.OK.getStatus()) {
                 throw new ElasticsearchSecurityException("Unable to retrieve users's project list", RestStatus.fromCode(response.code()));
             }
-            return new HashSet<String>(JsonPath.read(response.body().byteStream(),"$.items[*].metadata.name"));
+            Set<Project> projects = new HashSet<>();
+            List<Map<String, String>> raw = JsonPath.read(response.body().byteStream(), "$.items[*].metadata");
+            for (Map<String, String> map : raw) {
+                projects.add(new Project(map.get("name"), map.get("uid")));
+            }
+            return projects;
         } catch (KubernetesClientException e) {
             LOGGER.error("Error retrieving project list", e);
             throw new ElasticsearchSecurityException(e.getMessage());

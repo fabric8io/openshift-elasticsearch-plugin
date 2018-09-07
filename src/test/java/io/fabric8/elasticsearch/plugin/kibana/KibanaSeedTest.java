@@ -47,6 +47,7 @@ import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
+import io.fabric8.elasticsearch.plugin.model.Project;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KibanaSeedTest {
@@ -63,9 +64,10 @@ public class KibanaSeedTest {
     
     @Before
     public void setUp() {
-        seeder = new KibanaSeed(settings, loader, pluginClient);
+        KibanaUtils utils = new KibanaUtils(settings, pluginClient);
+        seeder = new KibanaSeed(settings, loader, pluginClient, utils);
         context = new OpenshiftRequestContextFactory.OpenshiftRequestContext(USER, TOKEN, true, 
-                new HashSet<String>(), ".kibana_123", KibanaIndexMode.SHARED_OPS);
+                new HashSet<Project>(), ".kibana_123", KibanaIndexMode.SHARED_OPS);
         when(loader.getOperationsMappingsTemplate()).thenReturn("{\"foo\":\"bar\"");
         when(pluginClient.update(anyString(), anyString(), anyString(), anyString())).thenReturn(mock(UpdateResponse.class));
     }
@@ -89,7 +91,7 @@ public class KibanaSeedTest {
     
     private void givenCopyKibanaIndexIsSuccessful() throws InterruptedException, ExecutionException, IOException {
         CreateIndexResponse response = mock(CreateIndexResponse.class);
-        when(pluginClient.copyIndex(anyString(), anyString(), any(Settings.class), Matchers.<String>anyVararg())).thenReturn(null);
+        when(pluginClient.copyIndex(anyString(), anyString(), any(Settings.class), Matchers.<String>anyVararg())).thenReturn(response);
     }
     
     private void whenSettingTheDashboards() {

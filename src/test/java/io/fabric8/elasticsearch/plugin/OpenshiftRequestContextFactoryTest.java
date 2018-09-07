@@ -44,6 +44,7 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
+import io.fabric8.elasticsearch.plugin.model.Project;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.elasticsearch.util.TestRestRequest;
 
@@ -87,8 +88,8 @@ public class OpenshiftRequestContextFactoryTest {
     }
 
     private void givenUserHasProjects() {
-        Set<String> projects = new HashSet<>();
-        projects.add("foo");
+        Set<Project> projects = new HashSet<>();
+        projects.add(new Project("foo","foo"));
         when(apiService.projectNames(anyString())).thenReturn(projects);
     }
 

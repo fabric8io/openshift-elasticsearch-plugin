@@ -11,9 +11,9 @@ gen_kibana_b3daa77b4c04a9551b8781d03191fe098f325e67:
 gen_project_foo_bar:
   expires: '10'
   indices:
-    ?project?foo?bar?*:
+    ?project?foo?bar?123abc?*:
       '*': [INDEX_PROJECT]
-    foo?bar?*:
+    foo?bar?123abc?*:
       '*': [INDEX_PROJECT]
 gen_project_operations:
   cluster: [CLUSTER_OPERATIONS]

@@ -19,6 +19,7 @@ package io.fabric8.elasticsearch.plugin.acl;
 import org.apache.commons.lang.StringUtils;
 
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
+import io.fabric8.elasticsearch.plugin.model.Project;
 
 /**
  * SearchGuard Roles Document sync strategy based on roles 
@@ -50,9 +51,9 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
 
     @Override
     public void syncFromImpl(OpenshiftRequestContext context, RolesBuilder builder) {
-        for (String project : context.getProjects()) {
-            String projectName = String.format("%s_%s", SearchGuardRoles.PROJECT_PREFIX, project.replace('.', '_'));
-            String indexName = String.format("%s?*", project.replace('.', '?'));
+        for (Project project : context.getProjects()) {
+            String projectName = String.format("%s_%s", SearchGuardRoles.PROJECT_PREFIX, project.getName().replace('.', '_'));
+            String indexName = String.format("%s?%s?*", project.getName().replace('.', '?'), project.getUID());
             RoleBuilder role = new RoleBuilder(projectName)
                 .setActions(indexName, ALL,PROJECT_ROLE_ACTIONS)
                 .expires(expires);
@@ -61,7 +62,7 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
             // $projname.$uuid.* indices and
             // the project.$projname.$uuid.* indices for backwards compatibility
             if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
-                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.replace('.', '?'));
+                indexName = String.format("%s?%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'), project.getUID());
                 role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
             }
 

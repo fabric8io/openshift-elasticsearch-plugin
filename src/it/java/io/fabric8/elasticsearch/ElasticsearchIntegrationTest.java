@@ -408,20 +408,31 @@ public abstract class ElasticsearchIntegrationTest {
             .always();
     }
     
-    protected String formatProjectIndexPattern(String project) {
-        return String.format("project.%s.*", project);
+    protected String formatProjectIndexPattern(String project, String uid) {
+        return String.format("project.%s.%s.*", project, uid);
     }
 
     protected void whenContextIsForUser(String user) {
         testContext.put(USERNAME, user);
     }
-    
+
     protected void givenUserIsAdminForProjects(String... projects) throws Exception {
         String user = (String) testContext.get(USERNAME);
         ProjectListBuilder builder = new ProjectListBuilder(false);
         for (String project : projects) {
-            builder.addToItems(new ProjectBuilder(false).withNewMetadata().withName(project).endMetadata().build());
+            builder.addToItems(new ProjectBuilder(false).withNewMetadata().withUid("uuid").withName(project).endMetadata().build());
         }
+        apiServer.expect()
+            .withPath("/apis/project.openshift.io/v1/projects")
+            .andReturn(200, builder.build())
+            .withHeader("Authorization", "Bearer " + user + "-token")
+            .always();
+    }
+
+    protected void givenUserIsAdminForProject(String name, String uuid) throws Exception {
+        String user = (String) testContext.get(USERNAME);
+        ProjectListBuilder builder = new ProjectListBuilder(false);
+        builder.addToItems(new ProjectBuilder(false).withNewMetadata().withUid(uuid).withName(name).endMetadata().build());
         apiServer.expect()
             .withPath("/apis/project.openshift.io/v1/projects")
             .andReturn(200, builder.build())
@@ -432,7 +443,7 @@ public abstract class ElasticsearchIntegrationTest {
     protected void whenSearchingProjects(String... projects) throws Exception {
         testContext.put(URI, "_msearch");
         String indicies = Arrays.asList(projects).stream()
-                .map(p -> formatProjectIndexPattern(p))
+                .map(p -> formatProjectIndexPattern(p,p))
                 .collect(Collectors.joining("\",\""));
         String body = new StringBuilder()
             .append(String.format("{\"index\": [\"%s\"]}\r\n", indicies))
@@ -450,7 +461,7 @@ public abstract class ElasticsearchIntegrationTest {
         Response response = runner.run("_msearch");
         testContext.put(RESPONSE, response);
     }
-    
+
     protected void whenGettingDocument(String uri) throws Exception {
         whenGettingDocument(uri, null);
     }

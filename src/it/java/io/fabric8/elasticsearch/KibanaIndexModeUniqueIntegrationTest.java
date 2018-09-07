@@ -46,7 +46,7 @@ public class KibanaIndexModeUniqueIntegrationTest extends KibanaIndexModeIntegra
         
         //verify search to individual projects
         for (String project : projects) {
-            whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern(project)));
+            whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern(project, "uuid")));
             assertThatResponseIsSuccessful();
         }
         
@@ -82,7 +82,7 @@ public class KibanaIndexModeUniqueIntegrationTest extends KibanaIndexModeIntegra
         
         //verify search to individual projects
         for (String project : projects) {
-            whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern(project)));
+            whenGettingDocument(String.format("%s/_count", formatProjectIndexPattern(project, "uuid")));
             assertThatResponseIsSuccessful();
         }
         

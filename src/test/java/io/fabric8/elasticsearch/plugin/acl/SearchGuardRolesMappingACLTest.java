@@ -22,9 +22,10 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.StringReader;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.xcontent.XContentHelper;
@@ -35,14 +36,18 @@ import io.fabric8.elasticsearch.plugin.KibanaIndexMode;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.Samples;
 import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping.RolesMapping;
+import io.fabric8.elasticsearch.plugin.model.Project;
 
 public class SearchGuardRolesMappingACLTest {
 
     private SearchGuardRolesMapping rolesMapping = new SearchGuardRolesMapping();
     
+    private Set<Project> createProjects(String...names){
+        return Arrays.asList(names).stream().map(p -> new Project(p,"123abc")).collect(Collectors.toSet());
+    }
     
     private OpenshiftRequestContext givenContextFor(String user, String kibIndexMode, boolean isOperations, String...projects) {
-        return new OpenshiftRequestContext(user, "", isOperations, new HashSet<>(Arrays.asList(projects)), "abc", kibIndexMode);
+        return new OpenshiftRequestContext(user, "", isOperations, createProjects(projects), "abc", kibIndexMode);
     }
     
     private ProjectRolesMappingSyncStrategy givenProjectRolesSyncStrategy() {
