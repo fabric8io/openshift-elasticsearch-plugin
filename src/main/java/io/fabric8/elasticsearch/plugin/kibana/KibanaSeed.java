@@ -26,7 +26,6 @@ import java.util.Set;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentFactory;
@@ -60,7 +59,7 @@ public class KibanaSeed implements ConfigurationSettings {
         this.kibanaUtils = kibanaUtils;
     }
     
-    public void setDashboards(final OpenshiftRequestContext context, Client client, String kibanaVersion, final String projectPrefix) {
+    public void setDashboards(final OpenshiftRequestContext context, String kibanaVersion, final String projectPrefix) {
         if(!pluginClient.indexExists(defaultKibanaIndex)) {
             LOGGER.debug("Default Kibana index '{}' does not exist. Skipping Kibana seeding", defaultKibanaIndex);
             return;
@@ -72,12 +71,12 @@ public class KibanaSeed implements ConfigurationSettings {
         // We want to seed the Kibana user index initially
         // since the logic from Kibana has changed to create before this plugin
         // starts...
-        boolean changed = initialSeedKibanaIndex(context, client);
+        boolean changed = initialSeedKibanaIndex(context);
         
         if (context.isOperationsUser()) {
-            changed = seedOperationsIndexPatterns(context, client, kibanaVersion, projectPrefix);
+            changed = seedOperationsIndexPatterns(context, kibanaVersion, projectPrefix);
         } else {
-            changed = seedUsersIndexPatterns(context, client, kibanaVersion, projectPrefix);
+            changed = seedUsersIndexPatterns(context, kibanaVersion, projectPrefix);
         }
 
         if ( changed ) {
@@ -85,7 +84,7 @@ public class KibanaSeed implements ConfigurationSettings {
         }
     }
 
-    private boolean seedOperationsIndexPatterns(final OpenshiftRequestContext context, final  Client client, String kibanaVersion, final String projectPrefix) {
+    private boolean seedOperationsIndexPatterns(final OpenshiftRequestContext context, String kibanaVersion, final String projectPrefix) {
         boolean changed = false;
         boolean defaultSet = false;
         for (String pattern : settings.getKibanaOpsIndexPatterns()) {
@@ -111,7 +110,7 @@ public class KibanaSeed implements ConfigurationSettings {
         return changed;
     }
     
-    private boolean seedUsersIndexPatterns(final OpenshiftRequestContext context, final  Client client,  final String kibanaVersion, final String projectPrefix) {
+    private boolean seedUsersIndexPatterns(final OpenshiftRequestContext context,  final String kibanaVersion, final String projectPrefix) {
         boolean changed = false;
         // GET .../.kibana/index-pattern/_search?pretty=true&fields=
         // compare results to projects; handle any deltas (create, delete?)
@@ -191,7 +190,7 @@ public class KibanaSeed implements ConfigurationSettings {
         return result;
     }
 
-    private boolean initialSeedKibanaIndex(final OpenshiftRequestContext context, Client esClient) {
+    private boolean initialSeedKibanaIndex(final OpenshiftRequestContext context) {
         try {
             String userIndex = context.getKibanaIndex();
             boolean kibanaIndexExists = pluginClient.indexExists(userIndex);

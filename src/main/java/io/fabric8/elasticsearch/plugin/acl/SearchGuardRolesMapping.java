@@ -39,6 +39,7 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
     public static final String KIBANA_SHARED_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared";
     public static final String KIBANA_SHARED_NON_OPS_ROLE = SearchGuardRoles.ROLE_PREFIX + "_ocp_kibana_shared_non_ops";
     private static final String USER_HEADER = "users";
+    private static final String BACKEND_ROLES = "backendroles";
     private Map<String, RolesMapping> mappings = new HashMap<>();
     private Long version;
     
@@ -46,9 +47,8 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
 
         private Boolean protect;
         private String name;
-
         private Set<String> users = new HashSet<String>();
-
+        private Set<String> backendroles = new HashSet<String>();
         private String expire;
 
         public Boolean getProtected() {
@@ -72,15 +72,31 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
         }
 
         public void setUsers(Collection<String> users) {
+            if(users == null ) {
+                users = new HashSet<>();
+            }
             this.users = new HashSet<>(users);
         }
 
+        public void setBackendRoles(Collection<String> roles) {
+            if(roles == null ) {
+                roles = new HashSet<>();
+            }
+            this.backendroles = new HashSet<>(roles);
+        }
+
+        public Set<String> getBackendRoles() {
+            return this.backendroles;
+        }
+        
+        
         @Override
         public String toString() {
             return new StringBuilder()
                     .append("name=").append(getName()).append("\n")
                     .append("expire=").append(getExpire()).append("\n")
                     .append("users=").append(getUsers().toArray()).append("\n")
+                    .append("backendroles=").append(getBackendRoles().toArray()).append("\n")
                     .toString();
         }
 
@@ -135,6 +151,7 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
             RolesMapping mapping = new RolesMapping();
             mapping.setName(key);
             mapping.setUsers((List<String>)(rawMappings.get(USER_HEADER)));
+            mapping.setBackendRoles((List<String>)(rawMappings.get(BACKEND_ROLES)));
             if(rawMappings.containsKey(EXPIRES)) {
                 mapping.setExpire((String)rawMappings.get(EXPIRES));
             }
@@ -158,6 +175,9 @@ public class SearchGuardRolesMapping implements Iterable<SearchGuardRolesMapping
                     builder.field(EXPIRES, mapping.getExpire());
                 }
                 builder.array(USER_HEADER, mapping.getUsers().toArray());
+                if(!mapping.getBackendRoles().isEmpty()) {
+                    builder.array(BACKEND_ROLES, mapping.getBackendRoles().toArray());
+                }
                 builder.endObject();
             }
             return builder;

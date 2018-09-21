@@ -16,8 +16,6 @@
 
 package io.fabric8.elasticsearch.plugin.acl;
 
-import org.elasticsearch.common.inject.Inject;
-
 import io.fabric8.elasticsearch.plugin.PluginSettings;
 
 /**
@@ -31,7 +29,6 @@ public class SearchGuardSyncStrategyFactory {
     
     private final PluginSettings settings;
 
-    @Inject
     public SearchGuardSyncStrategyFactory(final PluginSettings settings) {
         this.settings = settings;
     }

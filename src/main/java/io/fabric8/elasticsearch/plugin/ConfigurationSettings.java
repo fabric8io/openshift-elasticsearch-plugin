@@ -81,11 +81,6 @@ public interface ConfigurationSettings extends KibanaIndexMode{
         ".operations.*", ".orphaned.*", "project.*", ".all"
     };
 
-    /**
-     * Enabling/disabling portions of this plugin.  Default: true
-     */
-    static final String OPENSHIFT_DYNAMIC_ENABLED_FLAG = "openshift.acl.dynamic.enabled";
-
     static final String OPENSHIFT_ACL_EXPIRE_IN_MILLIS = "openshift.acl.expire_in_millis";
 
     /**
@@ -94,16 +89,10 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String OPENSHIFT_ACL_ROLE_STRATEGY = "openshift.acl.role_strategy";
     static final String DEFAULT_ACL_ROLE_STRATEGY = "user";
 
-    static final String OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG = "openshift.kibana.rewrite.enabled";
-
     /**
      * List of index patterns to create for operations users
      */
     static final String OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS = "openshift.kibana.ops_index_patterns";
-
-
-    static final boolean OPENSHIFT_DYNAMIC_ENABLED_DEFAULT = true;
-    static final boolean OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT = true;
 
     static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";
     static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "project";
