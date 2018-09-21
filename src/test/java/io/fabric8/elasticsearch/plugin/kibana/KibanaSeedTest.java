@@ -32,7 +32,6 @@ import java.util.concurrent.ExecutionException;
 
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.update.UpdateResponse;
-import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.Settings;
 import org.junit.After;
 import org.junit.Before;
@@ -59,7 +58,6 @@ public class KibanaSeedTest {
     private PluginClient pluginClient = mock(PluginClient.class);
     private PluginSettings settings = new PluginSettings(Settings.EMPTY);
     private IndexMappingLoader loader = mock(IndexMappingLoader.class);
-    private Client client = mock(Client.class);
     private OpenshiftRequestContext context;
     
     @Before
@@ -95,7 +93,7 @@ public class KibanaSeedTest {
     }
     
     private void whenSettingTheDashboards() {
-        seeder.setDashboards(context, client, ConfigurationSettings.DEFAULT_KIBANA_VERSION, ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
+        seeder.setDashboards(context, ConfigurationSettings.DEFAULT_KIBANA_VERSION, ConfigurationSettings.OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX);
     }
     
     /*

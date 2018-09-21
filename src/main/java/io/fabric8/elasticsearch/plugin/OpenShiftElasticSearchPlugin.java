@@ -96,10 +96,15 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final KibanaUtils kUtils = new KibanaUtils(pluginSettings, pluginClient);
         final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient, kUtils);
         final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
-        this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, contextFactory, threadPool, requestUtils, aclDocumentManager);
+        this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, threadPool, requestUtils, aclDocumentManager);
         this.kibanaReindexAction = new KibanaUserReindexAction(pluginSettings, client, threadPool.getThreadContext());
         OpenShiftElasticSearchService osElasticService = new OpenShiftElasticSearchService(aclDocumentManager, pluginSettings);
         clusterService.addLocalNodeMasterListener(osElasticService);
+        
+        PluginServiceFactory.setApiService(apiService);
+        PluginServiceFactory.setContextFactory(contextFactory);
+        PluginServiceFactory.setThreadContext(threadPool.getThreadContext());
+        PluginServiceFactory.markReady();
 
         List<Object> list = new ArrayList<>();
         list.add(aclDocumentManager);
@@ -125,7 +130,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
     public UnaryOperator<RestHandler> getRestHandlerWrapper(final ThreadContext threadContext) {
         return (rh) -> aclFilter.wrap(rh, sgPlugin.getRestHandlerWrapper(threadContext));
     }
-
+    
     @Override
     public List<RestHandler> getRestHandlers(Settings settings, RestController restController,
             ClusterSettings clusterSettings, IndexScopedSettings indexScopedSettings, SettingsFilter settingsFilter,

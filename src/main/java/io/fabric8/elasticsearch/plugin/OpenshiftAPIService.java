@@ -99,26 +99,27 @@ public class OpenshiftAPIService {
     /**
      * Execute a LocalSubectAccessReview
      * 
-     * @param token           a token to check
-     * @param project         the namespace to check against
-     * @param verb            the verb (e.g. view)
-     * @param resource        the resource (e.g. pods/log)
-     * @param group           the group of the resource being checked
-     * @param scopes          the scopes:
+     * @param token             a token to check
+     * @param project           the namespace to check against
+     * @param verb              the verb (e.g. view)
+     * @param resource          the resource (e.g. pods/log)
+     * @param resourceAPIGroup  the group of the resource being checked
+     * @param scopes            the scopes:
      *                            null  - use token scopes
      *                            empty - remove scopes
      *                            list  - an array of scopes
      *                            
      * @return  true if the SAR is satisfied
      */
-    public boolean localSubjectAccessReview(final String token, final String project, final String verb, final String resource, final String group, final String [] scopes) {
+    public boolean localSubjectAccessReview(final String token, 
+            final String project, final String verb, final String resource, final String resourceAPIGroup, final String [] scopes) {
         try (DefaultOpenShiftClient client = buildClient(token)) {
             XContentBuilder payload = XContentFactory.jsonBuilder()
                 .startObject()
                     .field("kind","LocalSubjectAccessReview")
                     .field("apiVersion","authorization.openshift.io/v1")
                     .field("verb", verb)
-                    .field("group", group)
+                    .field("resourceAPIGroup", resourceAPIGroup)
                     .field("resource", resource)
                     .field("namespace", project)
                     .array("scopes", scopes)

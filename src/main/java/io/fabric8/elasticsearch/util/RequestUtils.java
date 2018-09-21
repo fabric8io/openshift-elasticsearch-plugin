@@ -19,9 +19,11 @@ package io.fabric8.elasticsearch.util;
 import java.net.SocketAddress;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import org.apache.commons.lang.ArrayUtils;
@@ -57,6 +59,32 @@ public class RequestUtils implements ConfigurationSettings  {
         this.defaultKibanaIndex = pluginSettings.getDefaultKibanaIndex();
         this.proxyUserHeader = pluginSettings.getSettings().get(SEARCHGUARD_AUTHENTICATION_PROXY_HEADER, DEFAULT_AUTH_PROXY_HEADER);
         this.apiService = apiService;
+    }
+    
+    public void logRequest(final RestRequest request) {
+        if (LOGGER.isDebugEnabled()) {
+            try {
+                LOGGER.debug("Handling Request... {}", request.uri());
+                String user = getUser(request);
+                String token = getBearerToken(request);
+                LOGGER.debug("Evaluating request for user '{}' with a {} token", user,
+                        (StringUtils.isNotEmpty(token) ? "non-empty" : "empty"));
+                if (LOGGER.isTraceEnabled()) {
+                    List<String> headers = new ArrayList<>();
+                    for (Entry<String, List<String>> entry : request.getHeaders().entrySet()) {
+                        if (RequestUtils.AUTHORIZATION_HEADER.equals(entry.getKey())) {
+                            headers.add(entry.getKey() + "=Bearer <REDACTED>");
+                        } else {
+                            headers.add(entry.getKey() + "=" + entry.getValue());
+                        }
+                    }
+                    LOGGER.trace("Request headers: {}", headers);
+                }
+
+            } catch (Exception e) {
+                LOGGER.debug("unable to log request: " + e.getMessage());
+            }
+        }
     }
     
     public boolean hasUserHeader(RestRequest request) {

@@ -64,24 +64,20 @@ public class OpenShiftElasticSearchService extends AbstractLifecycleComponent
 
     @Override
     public void onMaster() {
-        boolean dynamicEnabled = settings.isEnabled();
-        LOGGER.debug("Starting with Dynamic ACL feature enabled: {}", dynamicEnabled);
-        if (dynamicEnabled) {
-            // expiration thread
-            LOGGER.info("Starting the ACL expiration thread...");
-            this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
-                    EsExecutors.daemonThreadFactory(settings.getSettings(), "openshift_elasticsearch_service"));
-            this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-            this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        // expiration thread
+        LOGGER.info("Starting the ACL expiration thread...");
+        this.scheduler = (ScheduledThreadPoolExecutor) Executors.newScheduledThreadPool(1,
+                EsExecutors.daemonThreadFactory(settings.getSettings(), "openshift_elasticsearch_service"));
+        this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        this.scheduler.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
 
-            Runnable expire = new Runnable() {
-                @Override
-                public void run() {
-                    aclManager.expire();
-                }
-            };
-            this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 1000 * 60, settings.getACLExpiresInMillis(), TimeUnit.MILLISECONDS);
-        }
+        Runnable expire = new Runnable() {
+            @Override
+            public void run() {
+                aclManager.expire();
+            }
+        };
+        this.scheduledFuture = this.scheduler.scheduleWithFixedDelay(expire, 1000 * 60, settings.getACLExpiresInMillis(), TimeUnit.MILLISECONDS);
     }
 
     @Override

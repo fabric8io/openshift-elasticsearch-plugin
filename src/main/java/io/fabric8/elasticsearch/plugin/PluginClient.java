@@ -84,7 +84,6 @@ public class PluginClient {
             @Override
             public Object call() throws Exception {
                 LOGGER.debug("Deleted document: '{}/{}/{}'", index, type, id);
-                addCommonHeaders();
                 DeleteResponse response = client.prepareDelete(index, type, id).get();
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Document deleted: '{}'", response.status());
@@ -103,7 +102,6 @@ public class PluginClient {
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Updating Document: '{}/{}/{}' source: '{}'", index, type, id, source);
                 }
-                addCommonHeaders();
                 UpdateResponse response = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
                         .setDocAsUpsert(true).get();
 
@@ -124,7 +122,6 @@ public class PluginClient {
 
             @Override
             public SearchResponse call() throws Exception {
-                addCommonHeaders();
                 return client.prepareSearch(indicies).setTypes(types).get();
             }
 
@@ -135,7 +132,6 @@ public class PluginClient {
         return execute(new Callable<GetIndexResponse>() {
             @Override
             public GetIndexResponse call() throws Exception {
-                addCommonHeaders();
                 return client.admin().indices().prepareGetIndex().addIndices(indicies).get();
             }
         });
@@ -146,23 +142,26 @@ public class PluginClient {
 
             @Override
             public GetResponse call() throws Exception {
-                addCommonHeaders();
                 return client.prepareGet(index, type, id).get();
             }
         });
     }
     
     public UpdateResponse update(String index, String type, String id, String source) {
+        return execute(new Callable<UpdateResponse>() {
 
-        LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
-
-        UpdateRequestBuilder builder = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
-                .setDocAsUpsert(true);
-        addCommonHeaders();
-        UpdateResponse response = builder.get();
-
-        LOGGER.debug("Created with update? '{}'", response.status());
-        return response;
+            @Override
+            public UpdateResponse call() throws Exception {
+                LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
+                
+                UpdateRequestBuilder builder = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
+                        .setDocAsUpsert(true);
+                UpdateResponse response = builder.get();
+                
+                LOGGER.debug("Created with update? '{}'", response.status());
+                return response;
+            }
+        });
     }
 
     public IndexResponse createDocument(String index, String type, String id, String source) {
@@ -172,7 +171,6 @@ public class PluginClient {
             public IndexResponse call() throws Exception {
                 LOGGER.trace("create document: '{}/{}/{}' source: '{}'", index, type, id, source);
                 IndexRequestBuilder builder = client.prepareIndex(index, type, id).setSource(source, XContentType.JSON);
-                addCommonHeaders();
                 IndexResponse response = builder.get();
                 return response;
             }
@@ -180,43 +178,64 @@ public class PluginClient {
     }
 
     public GetIndexResponse getIndices(String... indices) throws InterruptedException, ExecutionException {
-        if (LOGGER.isTraceEnabled()) {
-            LOGGER.trace("Getting indices '{}'", StringUtils.join(indices, ", "));
-        }
-        GetIndexRequestBuilder builder = client.admin().indices().prepareGetIndex().setIndices(indices);
-        addCommonHeaders();
-        return builder.get();
+        return execute(new Callable<GetIndexResponse>() {
+
+            @Override
+            public GetIndexResponse call() throws Exception {
+                if (LOGGER.isTraceEnabled()) {
+                    LOGGER.trace("Getting indices '{}'", StringUtils.join(indices, ", "));
+                }
+                GetIndexRequestBuilder builder = client.admin().indices().prepareGetIndex().setIndices(indices);
+                return builder.get();
+            }
+            
+        });
     }
 
     public CreateIndexResponse copyIndex(final String index, final String target, Settings settings, String... types)
             throws InterruptedException, ExecutionException, IOException {
-        LOGGER.trace("Copying {} index to {} for types {}", index, target, types);
-        GetIndexResponse response = getIndices(index);
-        CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(target);
-        if(settings != null) {
-            builder.setSettings(settings);
-        }
-        for (String type : types) {
-            builder.addMapping(type, response.mappings().get(index).get(type).getSourceAsMap());
-        }
-        addCommonHeaders();
-        return builder.get();
+        return execute(new Callable<CreateIndexResponse>() {
+
+            @Override
+            public CreateIndexResponse call() throws Exception {
+                LOGGER.trace("Copying {} index to {} for types {}", index, target, types);
+                GetIndexResponse response = getIndices(index);
+                CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(target);
+                if(settings != null) {
+                    builder.setSettings(settings);
+                }
+                for (String type : types) {
+                    builder.addMapping(type, response.mappings().get(index).get(type).getSourceAsMap());
+                }
+                return builder.get();
+            }
+            
+        });
     }
 
     public UpdateSettingsResponse updateSettings(final String index, Settings settings) {
-        UpdateSettingsRequestBuilder builder = client.admin().indices().prepareUpdateSettings(index)
-                .setSettings(settings);
-        addCommonHeaders();
-        return builder.get();
+        return execute(new Callable<UpdateSettingsResponse>() {
+
+            @Override
+            public UpdateSettingsResponse call() throws Exception {
+                UpdateSettingsRequestBuilder builder = client.admin().indices().prepareUpdateSettings(index)
+                        .setSettings(settings);
+                return builder.get();
+            }
+        });
     }
 
     public RefreshResponse refreshIndices(String... indices) {
-        RefreshRequestBuilder builder = client.admin().indices().prepareRefresh(indices);
-        addCommonHeaders();
-        RefreshResponse response = builder.get();
-        LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", indices, response.getSuccessfulShards(),
-                response.getTotalShards());
-        return response;
+        return execute(new Callable<RefreshResponse>() {
+            @Override
+            public RefreshResponse call() throws Exception {
+                RefreshRequestBuilder builder = client.admin().indices().prepareRefresh(indices);
+                RefreshResponse response = builder.get();
+                LOGGER.debug("Refreshed '{}' successfully on {} of {} shards", indices, response.getSuccessfulShards(),
+                        response.getTotalShards());
+                return response;
+            }
+        });
     }
 
     public boolean indexExists(final String index) {
@@ -225,7 +244,6 @@ public class PluginClient {
             public Boolean call() throws Exception {
                 LOGGER.trace("Checking for existance of index '{}'", index);
                 IndicesExistsRequestBuilder builder = client.admin().indices().prepareExists(index);
-                addCommonHeaders();
                 IndicesExistsResponse response = builder.get();
                 boolean exists = response.isExists();
                 LOGGER.trace("Index '{}' exists? {}", index, exists);
@@ -240,7 +258,6 @@ public class PluginClient {
             public Boolean call() throws Exception {
                 LOGGER.trace("Checking for existence of document: '{}/{}/{}'", index, type, id);
                 GetRequestBuilder builder = client.prepareGet().setIndex(index).setType(type).setId(id);
-                addCommonHeaders();
                 GetResponse response = builder.get();
                 final boolean exists = response.isExists();
                 LOGGER.trace("Document '{}/{}/{}' exists? {}", index, type, id, exists);
@@ -263,7 +280,6 @@ public class PluginClient {
             public Set<String> call() throws Exception {
                 LOGGER.trace("Retrieving indices for alias '{}'", alias);
                 GetAliasesRequestBuilder builder = client.admin().indices().prepareGetAliases(alias);
-                addCommonHeaders();
                 GetAliasesResponse response = builder.get();
                 Iterator<String> keysIt = response.getAliases().keysIt();
                 Set<String> indices = new HashSet<>();
@@ -294,7 +310,6 @@ public class PluginClient {
                     return acknowledged;
                 }
                 IndicesAliasesRequestBuilder builder = client.admin().indices().prepareAliases();
-                addCommonHeaders();
                 for (Map.Entry<String, String> entry : aliases.entrySet()) {
                     LOGGER.debug("Creating alias for {} as {}", entry.getKey(), entry.getValue());
                     builder.addAlias(entry.getKey(), entry.getValue());
@@ -313,9 +328,13 @@ public class PluginClient {
         }
     }
 
-    private <T> T execute(Callable<T> callable) {
+    /**
+     * Execute a callable action directly against Elasticsearch
+     * bypassing authorization restrictions
+     */
+    public <T> T execute(Callable<T> callable) {
         try (StoredContext context = threadContext.stashContext()) {
-            threadContext.putTransient(ConfigConstants.SG_CHANNEL_TYPE, "direct");
+            addCommonHeaders();
             return callable.call();
         } catch (Exception e) {
             throw new ElasticsearchException(e);

@@ -39,8 +39,6 @@ public class PluginSettings implements ConfigurationSettings {
     private final String searchGuardIndex;
     private final String kibanaVersion;
     private final String kbnVersionHeader;
-    private final Boolean enabled;
-    private final Boolean reWriteEnabled;
     private final Set<String> opsIndexPatterns;
     private final long expireInMillis;
     private final Settings settings;
@@ -63,9 +61,6 @@ public class PluginSettings implements ConfigurationSettings {
         this.searchGuardIndex = settings.get(SEARCHGUARD_CONFIG_INDEX_NAME, DEFAULT_SECURITY_CONFIG_INDEX);
         this.kibanaVersion = settings.get(KIBANA_CONFIG_VERSION, DEFAULT_KIBANA_VERSION);
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
-        this.enabled = settings.getAsBoolean(OPENSHIFT_DYNAMIC_ENABLED_FLAG, OPENSHIFT_DYNAMIC_ENABLED_DEFAULT);
-        this.reWriteEnabled = settings.getAsBoolean(OPENSHIFT_KIBANA_REWRITE_ENABLED_FLAG,
-                OPENSHIFT_KIBANA_REWRITE_ENABLED_DEFAULT);
         this.opsIndexPatterns = new HashSet<String>(Arrays.asList(settings.getAsArray(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, DEFAULT_KIBANA_OPS_INDEX_PATTERNS)));
         this.expireInMillis = settings.getAsLong(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, new Long(1000 * 60));
 
@@ -109,14 +104,6 @@ public class PluginSettings implements ConfigurationSettings {
 
     public String getKbnVersionHeader() {
         return kbnVersionHeader;
-    }
-
-    public Boolean isEnabled() {
-        return enabled;
-    }
-
-    public Boolean isKibanaRewriteEnabled() {
-        return reWriteEnabled;
     }
 
     public void setKibanaIndexMode(String kibanaIndexMode) {

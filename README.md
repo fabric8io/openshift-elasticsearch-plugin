@@ -5,7 +5,6 @@ This is an OpenShift plugin to ElasticSearch to:
 * Transform kibana index requests to support multitenant deployments for
   non-operations users when so configured.
 
-
 *Note:*
 Previous versions of this plugin created a Kibana profile for each user regardless of their role,
 which is still the default mode of operation.  It is now possible to configure the Kibana index mode
@@ -13,6 +12,30 @@ to allow [operations users](./src/main/java/io/fabric8/elasticsearch/util/Reques
 the Kibana index to store dashboards and visualizations.  It is highly
 recommended that operations teams establish agreements and naming conventions so users do not
 overwrite each others work.
+
+## Configuring the Authorization Backend
+```
+searchguard:
+  dynamic:
+  ...
+    authc:
+      openshift_domain:
+        enabled: true
+        order: 0
+        http_authenticator:
+          challenge: false
+          type: io.fabric8.elasticsearch.plugin.auth.OpenShiftTokenAuthentication
+        authentication_backend:
+          type: io.fabric8.elasticsearch.plugin.auth.OpenShiftTokenAuthentication
+          config:
+            note: The following is optional and adds the group 'prometheus' to the user if SAR is satisfied
+            subjectAccessReviews:
+              prometheus:
+                namespace: openshift-logging
+                verb: view
+                resource: prometheus
+                resourceAPIGroup: metrics.openshift.io
+```
 
 ## Configuring your initial ACLs
 The OpenShift-Elasticsearch-Plugin assumes the initial ACLs are seeded when the cluster is started.
@@ -67,6 +90,15 @@ The following additional parameters can be set in set in `elasticsearch.yml`:
 *Note*: The `io.fabric8.elasticsearch.kibana.mapping.*` properties are required and must be defined for the plugin to function. A sample file
 may be found in the `samples` folder.
 
+## Removed Configuration Parameters
+The following config parameters were removed:
+
+|Property|Version|
+|-------|--------|
+|*_io.fabric8.elasticsearch.acl.user_profile_prefix_*| |
+|*openshift.acl.dynamic.enabled* | 5.6.10.4 |
+|*openshift.kibana.rewrite.enabled* | 5.6.10.4 |
+
 ## Development
 
 Manually install custom version of SearchGuard
@@ -75,7 +107,7 @@ Manually install custom version of SearchGuard
 
 Following are the dependencies
 
-* [ElasticSearch] (https://github.com/elastic/elasticsearch/tree/5.6.9)
+* [ElasticSearch] (https://github.com/elastic/elasticsearch/tree/5.6.10)
 * [Search-Guard] (https://github.com/floragunncom/search-guard/tree)
 * [Search-Guard-SSL] (https://github.com/floragunncom/search-guard-ssl/tree)
 
