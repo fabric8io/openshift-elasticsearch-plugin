@@ -72,7 +72,6 @@ import io.fabric8.elasticsearch.util.RequestUtils;
 public class OpenShiftElasticSearchPlugin extends Plugin implements ConfigurationSettings, ActionPlugin, NetworkPlugin {
 
     private final Settings settings;
-    private KibanaUserReindexAction kibanaReindexAction;
     private DynamicACLFilter aclFilter;
     private SearchGuardPlugin sgPlugin;
 
@@ -97,7 +96,6 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient, kUtils);
         final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
         this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, threadPool, requestUtils, aclDocumentManager);
-        this.kibanaReindexAction = new KibanaUserReindexAction(pluginSettings, client, threadPool.getThreadContext());
         OpenShiftElasticSearchService osElasticService = new OpenShiftElasticSearchService(aclDocumentManager, pluginSettings);
         clusterService.addLocalNodeMasterListener(osElasticService);
         
@@ -118,7 +116,6 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         list.add(kUtils);
         list.add(seed);
         list.add(aclFilter);
-        list.add(kibanaReindexAction);
         list.add(osElasticService);
         list.add(new FieldStatsResponseFilter(pluginClient));
         list.addAll(sgPlugin.createComponents(client, clusterService, threadPool, resourceWatcherService, scriptService,
@@ -157,7 +154,6 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
     public List<Class<? extends ActionFilter>> getActionFilters() {
         List<Class<? extends ActionFilter>> list = new ArrayList<>();
         list.add(FieldStatsResponseFilter.class);
-        list.add(KibanaUserReindexAction.class);
         list.addAll(sgPlugin.getActionFilters());
         return list;
     }

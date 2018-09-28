@@ -33,6 +33,7 @@ import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
 import io.fabric8.elasticsearch.plugin.kibana.KibanaSeed;
+import io.fabric8.elasticsearch.plugin.rest.RestChannelInterceptor;
 import io.fabric8.elasticsearch.util.RequestUtils;
 
 /**
@@ -48,6 +49,7 @@ public class DynamicACLFilter implements ConfigurationSettings {
     private final ACLDocumentManager aclManager;
     private final RequestUtils utils;
     private final ThreadContext threadContext;
+    private final String defaultKibanaIndex;
 
     public DynamicACLFilter(final PluginSettings settings, 
             final KibanaSeed seed, 
@@ -60,6 +62,7 @@ public class DynamicACLFilter implements ConfigurationSettings {
         this.kibanaVersion = settings.getKibanaVersion();
         this.kbnVersionHeader = settings.getKbnVersionHeader();
         this.cdmProjectPrefix = settings.getCdmProjectPrefix();
+        this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
         this.utils = utils;
         this.aclManager = aclManager;
     }
@@ -78,7 +81,8 @@ public class DynamicACLFilter implements ConfigurationSettings {
                 @Override
                 public void handleRequest(RestRequest request, RestChannel channel, NodeClient client) throws Exception {
                     if ((request = continueProcessing(request, channel)) != null) {
-                        original.handleRequest(request, channel, client);
+                        RestChannelInterceptor interceptor = new RestChannelInterceptor(channel, threadContext, defaultKibanaIndex);
+                        original.handleRequest(request, interceptor, client);
                     }
                 }
             };
