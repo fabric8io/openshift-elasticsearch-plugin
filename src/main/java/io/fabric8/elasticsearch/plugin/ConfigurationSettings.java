@@ -52,7 +52,7 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String KIBANA_CONFIG_VERSION = "kibana.version";
     static final String KIBANA_VERSION_HEADER = "kibana.version.header";
 
-    static final String DEFAULT_KIBANA_VERSION = "5.6.10";
+    static final String DEFAULT_KIBANA_VERSION = "5.6.12";
     static final String DEFAULT_KIBANA_VERSION_HEADER = "kbn-version";
     /** Kibana settings here **/
 
