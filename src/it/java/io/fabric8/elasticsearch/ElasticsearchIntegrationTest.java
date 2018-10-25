@@ -383,7 +383,7 @@ public abstract class ElasticsearchIntegrationTest {
                 "");
         apiServer.expect()
             .post()
-            .withPath("/apis/authorization.openshift.io/v1/namespaces/default/localsubjectaccessreviews")
+            .withPath("/apis/authorization.openshift.io/v1/subjectaccessreviews")
             .andReturn(201, response)
             .withHeader("Authorization", "Bearer " + user + "-token")
             .always();
