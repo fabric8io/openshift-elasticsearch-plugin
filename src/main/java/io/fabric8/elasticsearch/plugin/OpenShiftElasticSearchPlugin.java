@@ -18,9 +18,11 @@ package io.fabric8.elasticsearch.plugin;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -212,6 +214,9 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         settings.add(Setting.boolSetting("openshift.operations.allow_cluster_reader", false, Property.NodeScope));
         settings.add(Setting.simpleString("openshift.kibana.index.mode", Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ACL_ROLE_STRATEGY, Property.NodeScope));
+        settings.add(Setting.listSetting(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, Arrays.asList(DEFAULT_KIBANA_OPS_INDEX_PATTERNS), 
+                Function.identity(), Property.NodeScope, Property.Dynamic));
+            
         return settings;
     }
 

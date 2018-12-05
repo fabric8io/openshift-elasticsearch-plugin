@@ -41,7 +41,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
         final String userName = "nonadminuser";
         //artificially seed user's kibanaIndex
         String kibanaIndex = getKibanaIndex(KibanaIndexMode.UNIQUE, userName, false);
-        givenDocumentIsIndexed(kibanaIndex, "config", "0", "myKibanaIndex");
+        givenDocumentIsIndexed(kibanaIndex, "config",  KibanaIndexModeIntegrationBase.OLD_KIBANA_VERSION, "myKibanaIndex");
         givenDocumentIsIndexed("project.test.uuid1.1970.01.01", "test", "0", "test.uuid1-doc0");
         givenDocumentIsIndexed("project.test.uuid2.1970.01.01", "test", "0", "test.uuid2-doc0");
 
@@ -62,7 +62,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
         final String userName = "nonadminuser";
         //artificially seed user's kibanaIndex
         String kibanaIndex = getKibanaIndex(KibanaIndexMode.UNIQUE, userName, false);
-        givenDocumentIsIndexed(kibanaIndex, "config", "0", "myKibanaIndex");
+        givenDocumentIsIndexed(kibanaIndex, "config", KibanaIndexModeIntegrationBase.OLD_KIBANA_VERSION, "myKibanaIndex");
         givenUserIsNotClusterAdmin(userName);
         givenUserIsAdminForProjects(projects);
         
@@ -89,7 +89,7 @@ public class AccessControlIntegrationTest extends ElasticsearchIntegrationTest {
         final String userName = "nonadminuser";
         //artificially seed user's kibanaIndex
         String kibanaIndex = getKibanaIndex(KibanaIndexMode.UNIQUE, userName, false);
-        givenDocumentIsIndexed(kibanaIndex, "config", "0", "myKibanaIndex");
+        givenDocumentIsIndexed(kibanaIndex, "config",  KibanaIndexModeIntegrationBase.OLD_KIBANA_VERSION, "myKibanaIndex");
         givenUserIsNotClusterAdmin(userName);
         givenUserIsAdminForProjects(projects);
         

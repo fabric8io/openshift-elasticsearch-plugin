@@ -51,6 +51,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchTimeoutException;
+import org.elasticsearch.action.DocWriteResponse.Result;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
@@ -58,6 +59,7 @@ import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.support.WriteRequest.RefreshPolicy;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.node.NodeClient;
@@ -312,7 +314,11 @@ public abstract class ElasticsearchIntegrationTest {
 
         seedSearchGuardAcls();
         // seed kibana index like kibana
-        givenDocumentIsIndexed(".kibana", "config", "0", "defaultKibanaIndex");
+        XContentBuilder contentBuilder = XContentFactory.jsonBuilder()
+                .startObject()
+                    .field("defaultIndex",".all")
+                .endObject();
+        givenDocumentIsIndexed(".kibana", "config", ConfigurationSettings.DEFAULT_KIBANA_VERSION, contentBuilder);
 
         // create ops user to avoid issue:
         // https://github.com/fabric8io/openshift-elasticsearch-plugin/issues/106
@@ -328,8 +334,23 @@ public abstract class ElasticsearchIntegrationTest {
         ThreadContext threadContext = esNode1.client().threadPool().getThreadContext();
         try (StoredContext cxt = threadContext.stashContext()) {
             threadContext.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
-            esNode1.client().prepareIndex(index, type, id)
-            .setSource(content).execute().get();
+            IndexResponse response = esNode1.client().prepareIndex(index, type, id)
+                    .setSource(content)
+                    .setRefreshPolicy(RefreshPolicy.IMMEDIATE)
+                    .execute()
+                    .get();
+            if(!Result.CREATED.equals(response.getResult())){
+                throw new RuntimeException("Test setup failed trying to index a document.  Exp. CREATED but was: " + response.getResult());
+            }
+        }
+    }
+
+    protected void givenDocumentIsRemoved(String index, String type, String id)
+            throws Exception {
+        ThreadContext threadContext = esNode1.client().threadPool().getThreadContext();
+        try (StoredContext cxt = threadContext.stashContext()) {
+            threadContext.putHeader(ConfigConstants.SG_CONF_REQUEST_HEADER, "true");
+            esNode1.client().prepareDelete(index, type, id).execute().get();
         }
     }
     

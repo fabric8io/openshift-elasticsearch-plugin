@@ -16,7 +16,12 @@
 
 package io.fabric8.elasticsearch.plugin.kibana;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,8 +30,14 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.logging.Loggers;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.search.SearchHit;
 
+import com.github.zafarkhaja.semver.Version;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+
+import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
@@ -35,19 +46,21 @@ import io.fabric8.elasticsearch.plugin.model.Project;
 public class KibanaUtils {
     
     private static final Logger LOGGER = Loggers.getLogger(KibanaUtils.class);
-    private static final String INDICIES_TYPE = "index-pattern";
+    public static final String INDICIES_TYPE = "index-pattern";
     public static final Project ALL_ALIAS = new Project(".all", null);
-    private static final Project OPERATIONS = new Project(".operations", null);
     public static final Project EMPTY_PROJECT = new Project(".empty-project", null);
             
     private final PluginClient pluginClient;
     private String projectPrefix;
     private final Pattern reIndexPattern;
+    private final Version defaultVersion;
+    private final JsonPath defaultPath = JsonPath.compile("$.defaultIndex");
 
     public KibanaUtils(final PluginSettings settings, final PluginClient pluginClient) {
         this.pluginClient = pluginClient;
         this.projectPrefix = StringUtils.isNotBlank(settings.getCdmProjectPrefix()) ? settings.getCdmProjectPrefix() : "";
         this.reIndexPattern = Pattern.compile("^" + projectPrefix + "\\.(?<name>[a-zA-Z0-9-]*)\\.(?<uid>.*)\\.\\*$");
+        this.defaultVersion = Version.valueOf(ConfigurationSettings.DEFAULT_KIBANA_VERSION);
     }
     
     /**
@@ -98,13 +111,59 @@ public class KibanaUtils {
         if (project.equals(ALL_ALIAS)) {
             return ALL_ALIAS.getName();
         }
-        String uid = project.getUID() != null ? "." + project.getUID() : "";
-        if (project.equals(OPERATIONS)) {
-            return project.getName() + ".*";
-        } else if (project.equals(EMPTY_PROJECT)) { 
+        if (project.equals(EMPTY_PROJECT)) { 
             return prefix + project.getName().substring(1) + ".*";
-        } else {
-            return String.format("%s%s%s.*", prefix, project.getName(), uid);
+        }
+        if (project.getUID() == null) {
+            return project.getName() + (project.getName().endsWith(".*") ? "" : ".*");
+        }
+        String uid = project.getUID() != null ? "." + project.getUID() : "";
+        return String.format("%s%s%s.*", prefix, project.getName(), uid);
+    }
+    
+    /**
+     * Gets the default index-pattern if not set or set on the wrong version of 
+     * Kibana or empty if it doesnt need to be set
+     * 
+     * @param kibanaIndex The index to Check
+     * @param defaultIfNotSet The value to use if not set
+     * @return The default index-pattern
+     */
+    public String getDefaultIndexPattern(String kibanaIndex, String defaultIfNotSet) {
+        // default if config doesnt exist or is not set
+        // the value if config doesnt exist but previous does
+        try {
+            SearchResponse response = pluginClient.search(kibanaIndex, "config");
+            final long totalHits = response.getHits().getTotalHits();
+            if(totalHits == 0) {
+                return defaultIfNotSet;
+            } else if (totalHits == 1){
+                try {
+                    return defaultPath.read(response.getHits().getHits()[0].getSourceAsString());
+                }catch(PathNotFoundException e) {
+                    return defaultIfNotSet;
+                }
+            }
+            Map<Version, String> patternMap = new HashMap<>();
+            for (SearchHit hit : response.getHits().getHits()) {
+                String source = hit.getSourceAsString();
+                String defaultIndex = defaultIfNotSet;
+                try {
+                    defaultIndex = defaultPath.read(source);
+                }catch(PathNotFoundException e) {
+                    // skip
+                }
+                patternMap.put(Version.valueOf(hit.getId()), defaultIndex);
+            }
+            List<Version> versions = new ArrayList<>(patternMap.keySet());
+            Collections.sort(versions);
+            if(versions.contains(defaultVersion)) {
+                return StringUtils.defaultIfBlank(patternMap.get(defaultVersion), "");
+            } else {
+                return patternMap.get(versions.get(versions.size() - 1));
+            }
+        }catch (IndexNotFoundException e) {
+            return defaultIfNotSet;
         }
     }
 }
