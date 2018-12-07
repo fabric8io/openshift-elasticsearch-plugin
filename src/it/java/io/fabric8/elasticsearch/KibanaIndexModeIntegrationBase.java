@@ -29,7 +29,8 @@ import okhttp3.Response;
 
 public abstract class KibanaIndexModeIntegrationBase extends ElasticsearchIntegrationTest {
 
-
+    protected static final String OLD_KIBANA_VERSION = "4.6.4";
+    
     @SuppressWarnings("unchecked")
     protected void assertThatMessageEquals(String message) throws Exception {
         Response response = (Response) testContext.get(RESPONSE);

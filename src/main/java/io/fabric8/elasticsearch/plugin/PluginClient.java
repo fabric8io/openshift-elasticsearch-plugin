@@ -48,7 +48,6 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.action.update.UpdateRequestBuilder;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.logging.Loggers;
@@ -94,11 +93,11 @@ public class PluginClient {
         });
     }
 
-    public void updateDocument(String index, String type, String id, String source) {
-        execute(new Callable<Object>() {
+    public UpdateResponse updateDocument(String index, String type, String id, String source) {
+        return execute(new Callable<UpdateResponse>() {
 
             @Override
-            public Object call() throws Exception {
+            public UpdateResponse call() throws Exception {
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Updating Document: '{}/{}/{}' source: '{}'", index, type, id, source);
                 }
@@ -108,7 +107,7 @@ public class PluginClient {
                 if (LOGGER.isDebugEnabled()) {
                     LOGGER.debug("Document Updated: '{}'", response.status());
                 }
-                return null;
+                return response;
             }
         });
     }
@@ -147,23 +146,6 @@ public class PluginClient {
         });
     }
     
-    public UpdateResponse update(String index, String type, String id, String source) {
-        return execute(new Callable<UpdateResponse>() {
-
-            @Override
-            public UpdateResponse call() throws Exception {
-                LOGGER.debug("UPDATE: '{}/{}/{}' source: '{}'", index, type, id, source);
-                
-                UpdateRequestBuilder builder = client.prepareUpdate(index, type, id).setDoc(source, XContentType.JSON)
-                        .setDocAsUpsert(true);
-                UpdateResponse response = builder.get();
-                
-                LOGGER.debug("Created with update? '{}'", response.status());
-                return response;
-            }
-        });
-    }
-
     public IndexResponse createDocument(String index, String type, String id, String source) {
         return execute(new Callable<IndexResponse>() {
 
