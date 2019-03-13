@@ -139,7 +139,8 @@ public class KibanaUtils {
                 return defaultIfNotSet;
             } else if (totalHits == 1){
                 try {
-                    return defaultPath.read(response.getHits().getHits()[0].getSourceAsString());
+                    String value = defaultPath.read(response.getHits().getHits()[0].getSourceAsString());
+                    return StringUtils.isNotEmpty(value) ? value : defaultIfNotSet;
                 }catch(PathNotFoundException e) {
                     return defaultIfNotSet;
                 }
