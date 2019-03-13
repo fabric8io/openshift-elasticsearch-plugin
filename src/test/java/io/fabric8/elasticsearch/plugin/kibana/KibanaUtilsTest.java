@@ -108,6 +108,17 @@ public class KibanaUtilsTest {
     }
 
     @Test
+    public void testGetDefaultIndexPatternWhenConfigIsCurrentAndDefaultIsNull() {
+        // given current config doesnt exist
+        Map<String, BytesReference> docs = new HashMap<>();
+        docs.put(ConfigurationSettings.DEFAULT_KIBANA_VERSION, new BytesArray("{\"defaultIndex\":null}"));
+        givenSearchResultForDocuments(".kibana.foo", docs);
+        String defaultPattern = utils.getDefaultIndexPattern(".kibana.foo", "test-index-pattern");
+        // assert we return empty to do nothing
+        assertEquals("test-index-pattern", defaultPattern);
+    }
+
+    @Test
     public void testGetDefaultIndexPatternWhenConfigIsCurrentAndDefaultIsSet() {
         // given current config doesnt exist
         Map<String, BytesReference> docs = new HashMap<>();
