@@ -32,8 +32,11 @@ import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.update.UpdateResponse;
+import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.get.GetResult;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -69,11 +72,25 @@ public class KibanaSeedTest {
                 new HashSet<Project>(), ".kibana_123", KibanaIndexMode.SHARED_OPS);
         when(loader.getOperationsMappingsTemplate()).thenReturn("{\"foo\":\"bar\"");
         when(pluginClient.updateDocument(anyString(), anyString(), anyString(), anyString())).thenReturn(mock(UpdateResponse.class));
+   
+        GetResponse response = new GetResponse(new GetResult(context.getKibanaIndex(), 
+                "config", ConfigurationSettings.DEFAULT_KIBANA_VERSION, 1L, false, 
+                new BytesArray("{\"defaultIndex\":\"\"}"), null));
+        when(pluginClient.getDocument(eq(context.getKibanaIndex()), eq("config"),
+                eq(ConfigurationSettings.DEFAULT_KIBANA_VERSION))).thenReturn(response);
     }
     
     @After
     public void tearDown() {
         reset(pluginClient);
+    }
+    
+    private void givenKibanaConfigWithDefaultIndex(String index) {
+        GetResponse response = new GetResponse(new GetResult(context.getKibanaIndex(), 
+                "config", ConfigurationSettings.DEFAULT_KIBANA_VERSION, 1L, true, 
+                new BytesArray("{\"defaultIndex\":\"" + index + "\"}"), null));
+        when(pluginClient.getDocument(eq(context.getKibanaIndex()), eq("config"),
+                eq(ConfigurationSettings.DEFAULT_KIBANA_VERSION))).thenReturn(response);
     }
     
     private void givenDefaultKibanaIndexExist(boolean exists) {
@@ -137,6 +154,11 @@ public class KibanaSeedTest {
         for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
             verify(pluginClient, times(1)).createDocument(eq(context.getKibanaIndex()), eq("index-pattern"), eq(pattern), anyString());
         }
+        
+        // then config doc should be updated with default
+        verify(pluginClient, times(1)).updateDocument(eq(context.getKibanaIndex()), eq("config"), 
+                eq(ConfigurationSettings.DEFAULT_KIBANA_VERSION), anyString());
+        
         // thenKibanaIndexShouldBeRefreshed
         verify(pluginClient, times(1)).refreshIndices(eq(context.getKibanaIndex()));
     }
@@ -148,6 +170,8 @@ public class KibanaSeedTest {
         givenDefaultKibanaIndexExist(true);
         //given index-patterns do not exist
         givenKibanaIndexExist(true);
+        givenKibanaConfigWithDefaultIndex("foo");
+        givenDocumentExistFor(context.getKibanaIndex(), "config", ConfigurationSettings.DEFAULT_KIBANA_VERSION, true);
         for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
             givenDocumentExistFor(context.getKibanaIndex(), "index-pattern", pattern, true);
         }
@@ -158,8 +182,40 @@ public class KibanaSeedTest {
         for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
             verify(pluginClient, never()).createDocument(eq(context.getKibanaIndex()), eq("index-pattern"), eq(pattern), anyString());
         }
+
+        // then config doc should be updated with default
+        verify(pluginClient, never()).updateDocument(eq(context.getKibanaIndex()), eq("config"), eq(ConfigurationSettings.DEFAULT_KIBANA_VERSION), anyString());
+        
         // thenKibanaIndexShouldBeRefreshed
         verify(pluginClient, never()).refreshIndices(eq(context.getKibanaIndex()));
     }
-
+    
+    @Test
+    public void testSeedOperationsDefaultsIndexPatternsWhenNoDefault() throws Exception {
+        
+        givenDefaultKibanaIndexExist(true);
+        //given index-patterns exist
+        givenKibanaIndexExist(true);
+        givenKibanaConfigWithDefaultIndex("");
+        givenDocumentExistFor(context.getKibanaIndex(), "config", ConfigurationSettings.DEFAULT_KIBANA_VERSION, true);
+        for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
+            givenDocumentExistFor(context.getKibanaIndex(), "index-pattern", pattern, true);
+        }
+        
+        givenCopyKibanaIndexIsSuccessful();
+        
+        whenSettingTheDashboards();
+        
+        //thenOperationsIndexPatternsShouldBeCreated();
+        for (String pattern : ConfigurationSettings.DEFAULT_KIBANA_OPS_INDEX_PATTERNS) {
+            verify(pluginClient, never()).createDocument(eq(context.getKibanaIndex()), eq("index-pattern"), eq(pattern), anyString());
+        }
+        
+        // then config doc should be updated with default
+        verify(pluginClient, times(1)).updateDocument(eq(context.getKibanaIndex()), eq("config"), 
+                eq(ConfigurationSettings.DEFAULT_KIBANA_VERSION), anyString());
+        
+        // thenKibanaIndexShouldBeRefreshed
+        verify(pluginClient, times(1)).refreshIndices(eq(context.getKibanaIndex()));
+    }
 }

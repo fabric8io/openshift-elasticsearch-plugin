@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.index.IndexNotFoundException;
@@ -138,12 +139,7 @@ public class KibanaUtils {
             if(totalHits == 0) {
                 return defaultIfNotSet;
             } else if (totalHits == 1){
-                try {
-                    String value = defaultPath.read(response.getHits().getHits()[0].getSourceAsString());
-                    return StringUtils.isNotEmpty(value) ? value : defaultIfNotSet;
-                }catch(PathNotFoundException e) {
-                    return defaultIfNotSet;
-                }
+                return getDefaultFromContent(response.getHits().getHits()[0].getSourceAsString(), defaultIfNotSet);
             }
             Map<Version, String> patternMap = new HashMap<>();
             for (SearchHit hit : response.getHits().getHits()) {
@@ -167,4 +163,21 @@ public class KibanaUtils {
             return defaultIfNotSet;
         }
     }
+    
+    public String getDefaultIndexPattern(GetResponse response) {
+        if(!response.isExists()) {
+            return "";
+        }
+        return getDefaultFromContent(response.getSourceAsString(), "");
+    }
+    
+    private String getDefaultFromContent(String content, String defaultIfNotSet) {
+        try {
+            String value = defaultPath.read(content);
+            return StringUtils.isNotEmpty(value) ? value : defaultIfNotSet;
+        }catch(PathNotFoundException e) {
+            return defaultIfNotSet;
+        }
+    }
+    
 }
