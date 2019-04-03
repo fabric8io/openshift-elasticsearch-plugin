@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
@@ -78,9 +79,10 @@ public class KibanaSeed implements ConfigurationSettings {
 
         if (action.v2() != null && !Project.EMPTY.equals(action.v2())) {
             boolean defaultIndexPatternExists = pluginClient.documentExists(context.getKibanaIndex(), INDICIES_TYPE, action.v2().getName());
-            boolean kibanaConfigExists = pluginClient.documentExists(context.getKibanaIndex(), CONFIG_DOC_TYPE, kibanaVersion);
-            if(!defaultIndexPatternExists || !kibanaConfigExists){
+            GetResponse config = pluginClient.getDocument(context.getKibanaIndex(), CONFIG_DOC_TYPE, kibanaVersion);
+            if(!defaultIndexPatternExists || !config.isExists() || StringUtils.isBlank(kibanaUtils.getDefaultIndexPattern(config))){
                 setDefaultProject(context.getKibanaIndex(), action.v2(), kibanaVersion);
+                action =  Tuple.tuple(true, action.v2());
             }
         }
 
