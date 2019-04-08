@@ -197,7 +197,6 @@ public class KibanaSeed implements ConfigurationSettings {
                 LOGGER.debug("Copying '{}' to '{}'", defaultKibanaIndex, userIndex);
                 Settings settings = Settings.builder()
                         .put("index.number_of_shards", 1)
-                        .put("index.number_of_replicas", 0)
                         .build();
                 pluginClient.copyIndex(defaultKibanaIndex, userIndex, settings, CONFIG_DOC_TYPE);
                 return true;
