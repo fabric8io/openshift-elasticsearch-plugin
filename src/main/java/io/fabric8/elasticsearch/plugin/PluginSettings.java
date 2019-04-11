@@ -42,6 +42,9 @@ public class PluginSettings implements ConfigurationSettings {
     private final Set<String> opsIndexPatterns;
     private final long expireInMillis;
     private final Settings settings;
+    private final String masterUrl;
+    private final Boolean isTrustCerts;
+    private final String openshiftCaPath;
     
     public PluginSettings(final Settings settings) {
         this.settings = settings;
@@ -63,6 +66,15 @@ public class PluginSettings implements ConfigurationSettings {
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
         this.opsIndexPatterns = new HashSet<String>(Arrays.asList(settings.getAsArray(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, DEFAULT_KIBANA_OPS_INDEX_PATTERNS)));
         this.expireInMillis = settings.getAsLong(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, new Long(1000 * 60));
+
+        this.masterUrl = settings.get(OPENSHIFT_MASTER);
+        this.openshiftCaPath = settings.get(OPENSHIFT_CA_PATH);
+        // Do not overwrite default K8S behavior
+        if (settings.get(OPENSHIFT_TRUST_CERT) != null) {
+            this.isTrustCerts = settings.getAsBoolean(OPENSHIFT_TRUST_CERT, true);
+        } else {
+            this.isTrustCerts = null;
+        }
 
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
@@ -112,5 +124,17 @@ public class PluginSettings implements ConfigurationSettings {
     
     public Set<String> getKibanaOpsIndexPatterns() {
         return opsIndexPatterns;
+    }
+
+    public String getMasterUrl() {
+        return masterUrl;
+    }
+
+    public String getOpenshiftCaPath() {
+        return openshiftCaPath;
+    }
+
+    public Boolean isTrustCerts() {
+        return isTrustCerts;
     }
 }

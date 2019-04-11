@@ -51,18 +51,20 @@ public class OpenshiftAPIService {
     private static final String APPLICATION_JSON = "application/json";
     private static final Logger LOGGER = Loggers.getLogger(OpenshiftAPIService.class);
     private final OpenShiftClientFactory factory;
-    
-    public OpenshiftAPIService() {
-        this(new OpenShiftClientFactory(){});
+    private final PluginSettings settings;
+
+    public OpenshiftAPIService(PluginSettings settings) {
+        this(new OpenShiftClientFactory(){}, settings);
     }
-    
-    public OpenshiftAPIService(OpenShiftClientFactory factory) {
+
+    public OpenshiftAPIService(OpenShiftClientFactory factory, PluginSettings settings) {
         this.factory = factory;
+        this.settings = settings;
     }
     
     public String userName(final String token) {
         Response response = null;
-        try (DefaultOpenShiftClient client = factory.buildClient(token)) {
+        try (DefaultOpenShiftClient client = factory.buildClient(settings, token)) {
             Request okRequest = new Request.Builder()
                     .url(client.getMasterUrl() + "apis/user.openshift.io/v1/users/~")
                     .header(ACCEPT, APPLICATION_JSON)
@@ -83,7 +85,7 @@ public class OpenshiftAPIService {
     }
     
     public Set<Project> projectNames(final String token){
-        try (DefaultOpenShiftClient client = factory.buildClient(token)) {
+        try (DefaultOpenShiftClient client = factory.buildClient(settings, token)) {
             Request request = new Request.Builder()
                 .url(client.getMasterUrl() + "apis/project.openshift.io/v1/projects")
                 .header(ACCEPT, APPLICATION_JSON)
@@ -124,7 +126,7 @@ public class OpenshiftAPIService {
      */
     public boolean localSubjectAccessReview(final String token, 
             final String project, final String verb, final String resource, final String resourceAPIGroup, final String [] scopes) {
-        try (DefaultOpenShiftClient client = factory.buildClient(token)) {
+        try (DefaultOpenShiftClient client = factory.buildClient(settings, token)) {
             XContentBuilder payload = XContentFactory.jsonBuilder()
                 .startObject()
                     .field("kind","SubjectAccessReview")
@@ -189,8 +191,20 @@ public class OpenshiftAPIService {
     }
     
     interface OpenShiftClientFactory {
-        default DefaultOpenShiftClient buildClient(final String token) {
+        default DefaultOpenShiftClient buildClient(final PluginSettings settings, final String token) {
             Config config = new ConfigBuilder().withOauthToken(token).build();
+
+            if (settings.getMasterUrl() != null) {
+                config.setMasterUrl(settings.getMasterUrl());
+            }
+            if (settings.isTrustCerts() != null) {
+                config.setTrustCerts(settings.isTrustCerts());
+            }
+            if (settings.getOpenshiftCaPath() != null) {
+                config.setCaCertFile(settings.getOpenshiftCaPath());
+            }
+            LOGGER.debug("Target cluster is {}, trust cert is {}, ca path is {}",
+                config.getMasterUrl(), config.isTrustCerts(), config.getCaCertFile());
             return new DefaultOpenShiftClient(config);
         }
         

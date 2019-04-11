@@ -107,7 +107,7 @@ public class RequestUtils implements ConfigurationSettings  {
         }
         return  StringUtils.defaultIfEmpty(token, "");
     }
-    
+
     public boolean isClientCertAuth(final ThreadContext threadContext) {
         return threadContext != null && StringUtils.isNotEmpty(threadContext.getTransient("_sg_ssl_transport_principal"));
     }

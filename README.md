@@ -86,6 +86,9 @@ The following additional parameters can be set in set in `elasticsearch.yml`:
 |*_openshift.acl.expire_in_millis_*| The delay in milliseconds before generated ACLs are removed from|
 |*_openshift.config.project_index_prefix_*| The string value that project/namespace indices use as their prefix (default: ``) for example, with the common data model, if the namespace is `test`, the index name will be `project.test.$uuid.YYYY.MM.DD`.  In this case, use `"project"` as the  prefix - do not include the trailing `.`.|
 |*_openshift.kibana.index.mode_*| The setting that determines the kibana index is used by users.  Valid values are one of the following: <ul><li>**unique** (Default) - Each user gets a unique index for kibana visualizations (e.g. .kibana.USER_UUID)</ul></li><ul><li>**ops_shared**       - Users who are in an ops role will share an index (e.g. kibana) while non ops users will have a unique index (e.g. .kibana.USER_UUID)</ul></li>|
+|*openshift.master.url*| If Openshift users must be authenticated to a remote cluster, this parameter must contain its URL (default: `https://kubernetes.default.svc`).|
+|*openshift.trust.certificates*| Trust remote Openshift certificate (default: `true`)|
+|*openshift.ca.path*| Absolute file path to the certificate that has to be used to authenticate remote Openshift cluster (default: `empty`)|
 
 *Note*: The `io.fabric8.elasticsearch.kibana.mapping.*` properties are required and must be defined for the plugin to function. A sample file
 may be found in the `samples` folder.
