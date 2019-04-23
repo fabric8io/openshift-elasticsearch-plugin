@@ -214,9 +214,10 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         settings.add(Setting.boolSetting("openshift.operations.allow_cluster_reader", false, Property.NodeScope));
         settings.add(Setting.simpleString("openshift.kibana.index.mode", Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ACL_ROLE_STRATEGY, Property.NodeScope));
-        settings.add(Setting.listSetting(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, Arrays.asList(DEFAULT_KIBANA_OPS_INDEX_PATTERNS), 
+        settings.add(Setting.listSetting(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, Arrays.asList(DEFAULT_KIBANA_OPS_INDEX_PATTERNS),
                 Function.identity(), Property.NodeScope, Property.Dynamic));
-            
+        settings.add(Setting.simpleString(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, Property.NodeScope));
+
         return settings;
     }
 
