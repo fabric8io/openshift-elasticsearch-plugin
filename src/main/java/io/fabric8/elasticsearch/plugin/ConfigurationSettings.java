@@ -66,6 +66,7 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY = "io.fabric8.elasticsearch.kibana.mapping.empty";
     static final String OPENSHIFT_ES_USER_PROFILE_PREFIX = "io.fabric8.elasticsearch.acl.user_profile_prefix";
 
+    static final String OPENSHIFT_CONFIG_OPS_ALLOW_CLUSTER_READER = "openshift.operations.allow_cluster_reader";
     static final String OPENSHIFT_CONFIG_OPS_PROJECTS = "openshift.operations.project.names";
     static final String[] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String[] { "default", "openshift", "openshift-infra",
         "kube-system" };
@@ -94,6 +95,8 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      */
     static final String OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS = "openshift.kibana.ops_index_patterns";
 
+    static final String OPENSHIFT_CONFIG_TIME_FIELD_NAME = "openshift.config.time_field_name";
+    static final String OPENSHIFT_CONFIG_COMMON_DATA_MODEL = "openshift.config.use_common_data_model";
     static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";
     static final String OPENSHIFT_DEFAULT_PROJECT_INDEX_PREFIX = "project";
 

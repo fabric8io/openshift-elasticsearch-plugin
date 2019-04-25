@@ -82,6 +82,7 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         this.sgPlugin = new SearchGuardPlugin(settings);
     }
 
+    @Override
     public Collection<Object> createComponents(Client client, ClusterService clusterService, ThreadPool threadPool,
             ResourceWatcherService resourceWatcherService, ScriptService scriptService,
             NamedXContentRegistry namedXContentRegistry) {
@@ -206,18 +207,23 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY, Property.NodeScope));
-        settings.add(Setting.boolSetting("openshift.config.use_common_data_model", true, Property.NodeScope));
+        settings.add(Setting.boolSetting(OPENSHIFT_CONFIG_COMMON_DATA_MODEL, true, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX, Property.NodeScope));
-        settings.add(Setting.simpleString("openshift.config.time_field_name", Property.NodeScope));
-        settings.add(Setting.simpleString("openshift.searchguard.keystore.path", Property.NodeScope));
-        settings.add(Setting.simpleString("openshift.searchguard.truststore.path", Property.NodeScope));
-        settings.add(Setting.boolSetting("openshift.operations.allow_cluster_reader", false, Property.NodeScope));
-        settings.add(Setting.simpleString("openshift.kibana.index.mode", Property.NodeScope));
+        settings.add(Setting.simpleString(OPENSHIFT_CONFIG_TIME_FIELD_NAME, Property.NodeScope));
+        settings.add(Setting.simpleString(SG_CLIENT_KS_PATH, Property.NodeScope));
+        settings.add(Setting.simpleString(SG_CLIENT_TS_PATH, Property.NodeScope));
+        settings.add(Setting.boolSetting(OPENSHIFT_CONFIG_OPS_ALLOW_CLUSTER_READER, false, Property.NodeScope));
+        settings.add(Setting.simpleString(OPENSHIFT_KIBANA_INDEX_MODE, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ACL_ROLE_STRATEGY, Property.NodeScope));
         settings.add(Setting.listSetting(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, Arrays.asList(DEFAULT_KIBANA_OPS_INDEX_PATTERNS),
                 Function.identity(), Property.NodeScope, Property.Dynamic));
         settings.add(Setting.simpleString(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, Property.NodeScope));
-
+        settings.add(Setting.simpleString(KIBANA_CONFIG_INDEX_NAME, Property.NodeScope));
+        settings.add(Setting.simpleString(KIBANA_CONFIG_VERSION, Property.NodeScope));
+        settings.add(Setting.simpleString(KIBANA_VERSION_HEADER, Property.NodeScope));
+        settings.add(Setting.simpleString(OPENSHIFT_ES_USER_PROFILE_PREFIX, Property.NodeScope));
+        settings.add(Setting.listSetting(OPENSHIFT_CONFIG_OPS_PROJECTS,Arrays.asList(DEFAULT_OPENSHIFT_OPS_PROJECTS),
+                Function.identity(), Property.NodeScope, Property.Dynamic));
         return settings;
     }
 
