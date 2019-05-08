@@ -94,7 +94,7 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      * List of index patterns to create for operations users
      */
     static final String OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS = "openshift.kibana.ops_index_patterns";
-
+    static final String OPENSHIFT_KIBANA_DISABLE_PROJECT_UID = "openshift.kibana.disable_project_uid";
     static final String OPENSHIFT_CONFIG_TIME_FIELD_NAME = "openshift.config.time_field_name";
     static final String OPENSHIFT_CONFIG_COMMON_DATA_MODEL = "openshift.config.use_common_data_model";
     static final String OPENSHIFT_CONFIG_PROJECT_INDEX_PREFIX = "openshift.config.project_index_prefix";

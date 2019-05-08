@@ -222,8 +222,9 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         settings.add(Setting.simpleString(KIBANA_CONFIG_VERSION, Property.NodeScope));
         settings.add(Setting.simpleString(KIBANA_VERSION_HEADER, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_USER_PROFILE_PREFIX, Property.NodeScope));
-        settings.add(Setting.listSetting(OPENSHIFT_CONFIG_OPS_PROJECTS,Arrays.asList(DEFAULT_OPENSHIFT_OPS_PROJECTS),
+        settings.add(Setting.listSetting(OPENSHIFT_CONFIG_OPS_PROJECTS, Arrays.asList(DEFAULT_OPENSHIFT_OPS_PROJECTS),
                 Function.identity(), Property.NodeScope, Property.Dynamic));
+        settings.add(Setting.boolSetting(OPENSHIFT_KIBANA_DISABLE_PROJECT_UID, false, Property.NodeScope));
         return settings;
     }
 

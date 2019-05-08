@@ -58,11 +58,19 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
                 .setActions(indexName, ALL,PROJECT_ROLE_ACTIONS)
                 .expires(expires);
 
+            // disable project uid
+            indexName = String.format("%s?*", project.getName().replace('.', '?'));
+            role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
             // the project.$projname.$uuid.* indices for backwards compatibility
             if (StringUtils.isNotEmpty(cdmProjectPrefix)) {
                 indexName = String.format("%s?%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'), project.getUID());
+                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+
+                // disable project uid
+                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'));
                 role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
             }
 

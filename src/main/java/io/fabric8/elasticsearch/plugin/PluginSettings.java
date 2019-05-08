@@ -41,6 +41,7 @@ public class PluginSettings implements ConfigurationSettings {
     private final String kbnVersionHeader;
     private final Set<String> opsIndexPatterns;
     private final long expireInMillis;
+    private final boolean disableProjectUID;
     private final Settings settings;
     
     public PluginSettings(final Settings settings) {
@@ -63,7 +64,7 @@ public class PluginSettings implements ConfigurationSettings {
         this.kbnVersionHeader = settings.get(KIBANA_VERSION_HEADER, DEFAULT_KIBANA_VERSION_HEADER);
         this.opsIndexPatterns = new HashSet<String>(Arrays.asList(settings.getAsArray(OPENSHIFT_KIBANA_OPS_INDEX_PATTERNS, DEFAULT_KIBANA_OPS_INDEX_PATTERNS)));
         this.expireInMillis = settings.getAsLong(OPENSHIFT_ACL_EXPIRE_IN_MILLIS, new Long(1000 * 60));
-
+        this.disableProjectUID = settings.getAsBoolean(OPENSHIFT_KIBANA_DISABLE_PROJECT_UID,false);
         LOGGER.info("Using kibanaIndexMode: '{}'", this.kibanaIndexMode);
         LOGGER.debug("searchGuardIndex: {}", this.searchGuardIndex);
         LOGGER.debug("roleStrategy: {}", this.roleStrategy);
@@ -112,5 +113,9 @@ public class PluginSettings implements ConfigurationSettings {
     
     public Set<String> getKibanaOpsIndexPatterns() {
         return opsIndexPatterns;
+    }
+
+    public boolean isDisableProjectUID(){
+        return disableProjectUID;
     }
 }
