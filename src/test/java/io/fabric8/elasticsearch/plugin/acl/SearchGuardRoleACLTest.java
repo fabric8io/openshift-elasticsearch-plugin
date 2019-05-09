@@ -50,11 +50,11 @@ public class SearchGuardRoleACLTest {
     }
     
     private ProjectRolesSyncStrategy givenProjectRolesSyncStrategyFor(String mode) {
-        return new ProjectRolesSyncStrategy(roles, ".kibana", ".project", mode, 10);
+        return new ProjectRolesSyncStrategy(roles, ".kibana", ".project", mode, 10, false);
     }
 
     private UserRolesSyncStrategy givenUserRolesSyncStrategyFor(String mode) {
-        return new UserRolesSyncStrategy(roles, ".kibana", ".project", mode, 15);
+        return new UserRolesSyncStrategy(roles, ".kibana", ".project", mode, 15, false);
     }
     
     @Test

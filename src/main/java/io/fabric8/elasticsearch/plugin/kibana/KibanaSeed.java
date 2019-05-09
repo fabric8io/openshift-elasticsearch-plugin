@@ -47,6 +47,7 @@ public class KibanaSeed implements ConfigurationSettings {
     private final String defaultKibanaIndex;
     private final PluginSettings settings;
     private final KibanaUtils kibanaUtils;
+    private final boolean disableProjectUID;
 
     public KibanaSeed(final PluginSettings settings, final IndexMappingLoader loader, final PluginClient pluginClient,
             final KibanaUtils kibanaUtils) {
@@ -55,6 +56,7 @@ public class KibanaSeed implements ConfigurationSettings {
         this.defaultKibanaIndex = settings.getDefaultKibanaIndex();
         this.settings = settings;
         this.kibanaUtils = kibanaUtils;
+        this.disableProjectUID = settings.isDisableProjectUID();
     }
 
     public void setDashboards(final OpenshiftRequestContext context, String kibanaVersion, final String projectPrefix) {
@@ -179,7 +181,7 @@ public class KibanaSeed implements ConfigurationSettings {
     private List<Project> filterProjectsWithIndices(Set<Project> projects) {
         List<Project> result = new ArrayList<>(projects.size());
         for (Project project : projects) {
-            String indexPattern = kibanaUtils.formatIndexPattern(project);
+            String indexPattern = kibanaUtils.formatIndexPattern(project, false);
             if (pluginClient.indexExists(indexPattern)) {
                 result.add(project);
             }
@@ -209,7 +211,7 @@ public class KibanaSeed implements ConfigurationSettings {
 
     private void setDefaultProject(String kibanaIndex, Project project, String kibanaVersion) {
         // this will create a default index-pattern of in .kibana.USERNAMEHASH
-        String source = new DocumentBuilder().defaultIndex(kibanaUtils.formatIndexPattern(project)).build();
+        String source = new DocumentBuilder().defaultIndex(kibanaUtils.formatIndexPattern(project, false)).build();
         pluginClient.updateDocument(kibanaIndex, CONFIG_DOC_TYPE, kibanaVersion, source);
     }
 
@@ -220,20 +222,26 @@ public class KibanaSeed implements ConfigurationSettings {
                 LOGGER.trace("Skipping creation of index-pattern for project '{}'. It already exists.", project);
                 continue;
             }
-            createIndexPattern(kibanaIndex, project, settings.getCdmProjectPrefix());
+            createIndexPattern(kibanaIndex, project, settings.getCdmProjectPrefix(), false);
+            if(disableProjectUID){
+                createIndexPattern(kibanaIndex, project, settings.getCdmProjectPrefix(), disableProjectUID);
+            }
         }
     }
 
     private void remove(String kibanaIndex, Set<Project> projects) {
 
         for (Project project : projects) {
-            pluginClient.deleteDocument(kibanaIndex, INDICIES_TYPE, kibanaUtils.formatIndexPattern(project));
+            pluginClient.deleteDocument(kibanaIndex, INDICIES_TYPE, kibanaUtils.formatIndexPattern(project, false));
+            if(disableProjectUID){
+                pluginClient.deleteDocument(kibanaIndex, INDICIES_TYPE, kibanaUtils.formatIndexPattern(project, disableProjectUID));
+            }
         }
     }
 
-    private void createIndexPattern(String kibanaIndex, Project project, String projectPrefix) {
+    private void createIndexPattern(String kibanaIndex, Project project, String projectPrefix, boolean disableProjectUID) {
 
-        final String indexPattern = kibanaUtils.formatIndexPattern(project);
+        final String indexPattern = kibanaUtils.formatIndexPattern(project, disableProjectUID);
         String source;
         if (project.equals(KibanaUtils.EMPTY_PROJECT)) {
             source = mappingLoader.getEmptyProjectMappingsTemplate();

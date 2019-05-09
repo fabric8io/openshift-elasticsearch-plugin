@@ -35,18 +35,20 @@ import io.fabric8.elasticsearch.plugin.model.Project;
  */
 public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
 
-
     private final String cdmProjectPrefix;
     private final String kibanaIndexMode;
     private final String expires;
+    private final boolean disableProjectUID;
     
     public ProjectRolesSyncStrategy(SearchGuardRoles roles, 
-            final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode, final long expiresInMillies) {
+            final String userProfilePrefix, final String cdmProjectPrefix, final String kibanaIndexMode,
+                                    final long expiresInMillies, final boolean disableProjectUID) {
         super(roles, userProfilePrefix);
         this.roles = roles;
         this.cdmProjectPrefix = cdmProjectPrefix;
         this.kibanaIndexMode = kibanaIndexMode;
         this.expires = String.valueOf(expiresInMillies);
+        this.disableProjectUID = disableProjectUID;
     }
 
     @Override
@@ -59,9 +61,10 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
                 .expires(expires);
 
             // disable project uid
-            indexName = String.format("%s?*", project.getName().replace('.', '?'));
-            role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
-
+            if(disableProjectUID) {
+                indexName = String.format("%s?*", project.getName().replace('.', '?'));
+                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+            }
             // If using common data model, allow access to both the
             // $projname.$uuid.* indices and
             // the project.$projname.$uuid.* indices for backwards compatibility
@@ -70,8 +73,10 @@ public class ProjectRolesSyncStrategy extends BaseRolesSyncStrategy {
                 role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
 
                 // disable project uid
-                indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'));
-                role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+                if(disableProjectUID) {
+                    indexName = String.format("%s?%s?*", cdmProjectPrefix.replace('.', '?'), project.getName().replace('.', '?'));
+                    role.setActions(indexName, ALL, PROJECT_ROLE_ACTIONS);
+                }
             }
 
             builder.addRole(role.build());

@@ -45,10 +45,12 @@ public class SearchGuardSyncStrategyFactory {
         final long expires = System.currentTimeMillis() + settings.getACLExpiresInMillis();
         if(PROJECT.equals(settings.getRoleStrategy())) {
             return new ProjectRolesSyncStrategy(roles, 
-                    settings.getDefaultKibanaIndex(), settings.getCdmProjectPrefix(), settings.getKibanaIndexMode(), expires);
+                    settings.getDefaultKibanaIndex(), settings.getCdmProjectPrefix(),
+                    settings.getKibanaIndexMode(), expires, settings.isDisableProjectUID());
         }
         return new UserRolesSyncStrategy(roles, 
-                settings.getDefaultKibanaIndex(), settings.getCdmProjectPrefix(), settings.getKibanaIndexMode(), expires);
+                settings.getDefaultKibanaIndex(), settings.getCdmProjectPrefix(),
+                settings.getKibanaIndexMode(), expires, settings.isDisableProjectUID());
     }
     
 }

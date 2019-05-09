@@ -56,14 +56,13 @@ public class KibanaUtils {
     private final Pattern reIndexPattern;
     private final Version defaultVersion;
     private final JsonPath defaultPath = JsonPath.compile("$.defaultIndex");
-    private final boolean disableProjectUID;
+
 
     public KibanaUtils(final PluginSettings settings, final PluginClient pluginClient) {
         this.pluginClient = pluginClient;
         this.projectPrefix = StringUtils.isNotBlank(settings.getCdmProjectPrefix()) ? settings.getCdmProjectPrefix() : "";
         this.reIndexPattern = Pattern.compile("^" + projectPrefix + "\\.(?<name>[a-zA-Z0-9-]*)\\.(?<uid>.*)\\.\\*$");
         this.defaultVersion = Version.valueOf(ConfigurationSettings.DEFAULT_KIBANA_VERSION);
-        this.disableProjectUID = settings.isDisableProjectUID();
     }
     
     /**
@@ -109,7 +108,7 @@ public class KibanaUtils {
         return new Project(index, null);
     }
     
-    public String formatIndexPattern(Project project) {
+    public String formatIndexPattern(Project project, boolean disableProjectUID) {
         String prefix = StringUtils.isNotEmpty(projectPrefix) ? projectPrefix + "." : "";
         if (project.equals(ALL_ALIAS)) {
             return ALL_ALIAS.getName();

@@ -174,24 +174,24 @@ public class KibanaUtilsTest {
 
     @Test
     public void testFormatIndexPatternForAllAlias() {
-        assertEquals(".all", utils.formatIndexPattern(new Project(".all", null)));
+        assertEquals(".all", utils.formatIndexPattern(new Project(".all", null), false));
     }
 
     @Test
     public void testFormatIndexPatternForOperations() {
-        assertEquals(".operations.*", utils.formatIndexPattern(new Project(".operations", null)));
-        assertEquals(".operations.*", utils.formatIndexPattern(new Project(".operations.*", null)));
+        assertEquals(".operations.*", utils.formatIndexPattern(new Project(".operations", null), false));
+        assertEquals(".operations.*", utils.formatIndexPattern(new Project(".operations.*", null), false));
     }
 
     @Test
     public void testFormatIndexPatternFromOrphanedIndexPattern() {
-        assertEquals(".orphaned.*", utils.formatIndexPattern(new Project(".orphaned", null)));
-        assertEquals(".orphaned.*", utils.formatIndexPattern(new Project(".orphaned.*", null)));
+        assertEquals(".orphaned.*", utils.formatIndexPattern(new Project(".orphaned", null), false));
+        assertEquals(".orphaned.*", utils.formatIndexPattern(new Project(".orphaned.*", null), false));
     }
 
     @Test
     public void testFormatIndexPatternForEmptyProject() {
-        assertEquals("project.empty-project.*", utils.formatIndexPattern(new Project(".empty-project", null)));
+        assertEquals("project.empty-project.*", utils.formatIndexPattern(new Project(".empty-project", null), false));
     }
 
     @Test
@@ -199,12 +199,12 @@ public class KibanaUtilsTest {
         PluginSettings settings = mock(PluginSettings.class);
         when(settings.getCdmProjectPrefix()).thenReturn("");
         KibanaUtils utils = new KibanaUtils(settings, client);
-        assertEquals("foo.uuid.*", utils.formatIndexPattern(new Project("foo", "uuid")));
+        assertEquals("foo.uuid.*", utils.formatIndexPattern(new Project("foo", "uuid"), false));
     }
 
     @Test
     public void testFormatIndexPatternWhenCdmPrefixIsSet() {
-        assertEquals("project.foo.uuid.*", utils.formatIndexPattern(new Project("foo", "uuid")));
+        assertEquals("project.foo.uuid.*", utils.formatIndexPattern(new Project("foo", "uuid"), false));
     }
 
     @Test
