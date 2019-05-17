@@ -37,4 +37,11 @@ public class PluginSettingsTest {
         assertEquals("Exp. the plugin default to make kibana index mode unique", "unique", plugin.getKibanaIndexMode());
     }
 
+    @Test
+    public void testGetACLExpiresInMillis() {
+        PluginSettings plugin = new PluginSettings(settings);
+        assertEquals("Exp. the plugin default to make kibana index mode unique", 
+                ConfigurationSettings.DEFAULT_OPENSHIFT_CONTEXT_CACHE_EXPIRE_SECONDS * 1000, plugin.getACLExpiresInMillis());
+    }
+
 }

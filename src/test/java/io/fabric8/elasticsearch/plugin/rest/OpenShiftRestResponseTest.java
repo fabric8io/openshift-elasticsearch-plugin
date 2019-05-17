@@ -18,6 +18,7 @@ package io.fabric8.elasticsearch.plugin.rest;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.Collections;
 import java.util.HashSet;
 
 import org.elasticsearch.action.delete.DeleteResponse;
@@ -50,7 +51,7 @@ public class OpenShiftRestResponseTest implements ConfigurationSettings{
             false);
     
     private static final OpenshiftRequestContext CONTEXT = new OpenshiftRequestContext("myusername", 
-            "mytoken", false, new HashSet<>(), KIBANA_INDEX, KibanaIndexMode.UNIQUE);
+            "mytoken", false, new HashSet<>(), KIBANA_INDEX, KibanaIndexMode.UNIQUE, Collections.emptyList());
     private static final XContent XCONTENT = XContentType.JSON.xContent();
     
     private OpenShiftRestResponse whenCreatingResponseResponse(ToXContent content) throws Exception {

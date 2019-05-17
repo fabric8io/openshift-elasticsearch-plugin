@@ -101,11 +101,17 @@ public class DynamicACLFilter implements ConfigurationSettings {
             if (threadContext.getTransient(OPENSHIFT_REQUEST_CONTEXT) != null) {
                 OpenshiftRequestContext requestContext = threadContext.getTransient(OPENSHIFT_REQUEST_CONTEXT);
                 request = utils.modifyRequest(request, requestContext, channel);
-                if (requestContext != OpenshiftRequestContext.EMPTY) {
-                    utils.logRequest(request);
-                    final String kbnVersion = getKibanaVersion(request);
-                    kibanaSeed.setDashboards(requestContext, kbnVersion, cdmProjectPrefix);
-                    aclManager.syncAcl(requestContext);
+                Boolean syncAndSeed = threadContext.getTransient(SYNC_AND_SEED);
+                if (requestContext != OpenshiftRequestContext.EMPTY){
+                    if(Boolean.TRUE.equals(syncAndSeed)) {
+                        LOGGER.debug("Seeding dashboards and syncing ACLs for user {}", requestContext.getUser());
+                        utils.logRequest(request);
+                        final String kbnVersion = getKibanaVersion(request);
+                        kibanaSeed.setDashboards(requestContext, kbnVersion, cdmProjectPrefix);
+                        aclManager.syncAcl(requestContext);
+                    } else {
+                        LOGGER.debug("Cache hit. Skipping dashboards and syncing ACLs for user {}", requestContext.getUser());
+                    }
                 }
             }
         } catch (Exception e) {

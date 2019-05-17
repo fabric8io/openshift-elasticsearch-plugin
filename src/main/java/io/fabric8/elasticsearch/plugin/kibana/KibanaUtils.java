@@ -54,6 +54,7 @@ public class KibanaUtils {
     private final PluginClient pluginClient;
     private String projectPrefix;
     private final Pattern reIndexPattern;
+    private final Pattern reProjectFromIndex;
     private final Version defaultVersion;
     private final JsonPath defaultPath = JsonPath.compile("$.defaultIndex");
 
@@ -61,6 +62,7 @@ public class KibanaUtils {
         this.pluginClient = pluginClient;
         this.projectPrefix = StringUtils.isNotBlank(settings.getCdmProjectPrefix()) ? settings.getCdmProjectPrefix() : "";
         this.reIndexPattern = Pattern.compile("^" + projectPrefix + "\\.(?<name>[a-zA-Z0-9-]*)\\.(?<uid>.*)\\.\\*$");
+        this.reProjectFromIndex = Pattern.compile("^(" + projectPrefix + ")?\\.(?<name>[a-zA-Z0-9-]*)(\\.(?<uid>.*))?\\.\\d{4}\\.\\d{2}\\.\\d{2}$");
         this.defaultVersion = Version.valueOf(ConfigurationSettings.DEFAULT_KIBANA_VERSION);
     }
     
@@ -74,14 +76,17 @@ public class KibanaUtils {
      * @return a set of projects
      */
     public Set<Project> getProjectsFromIndexPatterns(OpenshiftRequestContext context) {
+        LOGGER.trace("Getting projects from indexPatterns...");
         Set<Project> patterns = new HashSet<>();
-        SearchResponse response = pluginClient.search(context.getKibanaIndex(), INDICIES_TYPE);
+        SearchResponse response = pluginClient.search(context.getKibanaIndex(), INDICIES_TYPE, 1000, false);
         if (response.getHits() != null && response.getHits().getTotalHits() > 0) {
             for (SearchHit hit : response.getHits().getHits()) {
                 String id = hit.getId();
+                LOGGER.trace("Evaluating pattern '{}'", id);
                 Project project = getProjectFromIndexPattern(id);
 
                 if (!project.getName().equals(id) || project.equals(ALL_ALIAS)) {
+                    LOGGER.trace("Adding project '{}'", project);
                     patterns.add(project);
                 }
 
@@ -103,6 +108,23 @@ public class KibanaUtils {
         Matcher matcher = reIndexPattern.matcher(index);
         if (matcher.matches()) {
             return new Project(matcher.group("name"), matcher.group("uid"));
+        }
+        return new Project(index, null);
+    }
+
+    public Project getProjectFromIndex(String index) {
+        
+        if (StringUtils.isEmpty(index)) {
+            return Project.EMPTY;
+        }
+        
+        Matcher matcher = reProjectFromIndex.matcher(index);
+        if (matcher.matches()) {
+            String name = matcher.group("name");
+            if("operations".equals(name) || "orphaned".equals(name)) {
+                name = "." + name;
+            }
+            return new Project(name, matcher.group("uid"));
         }
         return new Project(index, null);
     }
@@ -134,7 +156,7 @@ public class KibanaUtils {
         // default if config doesnt exist or is not set
         // the value if config doesnt exist but previous does
         try {
-            SearchResponse response = pluginClient.search(kibanaIndex, "config");
+            SearchResponse response = pluginClient.search(kibanaIndex, "config", 10, true);
             final long totalHits = response.getHits().getTotalHits();
             if(totalHits == 0) {
                 return defaultIfNotSet;

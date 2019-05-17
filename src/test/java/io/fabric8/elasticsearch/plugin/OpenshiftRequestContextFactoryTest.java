@@ -19,7 +19,6 @@ package io.fabric8.elasticsearch.plugin;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -28,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,7 +35,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.rest.RestRequest;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -44,6 +46,7 @@ import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
+import io.fabric8.elasticsearch.plugin.auth.BackendRoleRetriever;
 import io.fabric8.elasticsearch.plugin.model.Project;
 import io.fabric8.elasticsearch.util.RequestUtils;
 import io.fabric8.elasticsearch.util.TestRestRequest;
@@ -69,6 +72,19 @@ public class OpenshiftRequestContextFactoryTest {
         headers.put(ConfigurationSettings.DEFAULT_AUTH_PROXY_HEADER, Arrays.asList("fooUser"));
         headers.put(authHeader, Arrays.asList(authToken));
         request = new TestRestRequest(headers);
+        PluginServiceFactory.setBackendRoleRetriever(new BackendRoleRetriever() {
+            
+            @Override
+            public Collection<String> retrieveBackendRoles(String token) {
+                return Collections.emptyList();
+            }
+        });
+        PluginServiceFactory.markReady();
+    }
+    
+    @After
+    public void teardown() {
+        PluginServiceFactory.markNotReady();
     }
 
     @Parameters()
@@ -82,9 +98,9 @@ public class OpenshiftRequestContextFactoryTest {
     private void givenUserContextFactory(boolean isOperationsUser) {
         Settings settings = settingsBuilder.build();
         utils = spy(new RequestUtils(new PluginSettings(settings), apiService));
-        doReturn(isOperationsUser).when(utils).isOperationsUser(any(TestRestRequest.class));
+        doReturn(isOperationsUser).when(utils).isOperationsUser(anyString(), anyString());
 
-        factory = new OpenshiftRequestContextFactory(settings, utils, apiService);
+        factory = new OpenshiftRequestContextFactory(settings, utils, apiService, new ThreadContext(settings));
     }
 
     private void givenUserHasProjects() {
@@ -102,7 +118,7 @@ public class OpenshiftRequestContextFactoryTest {
     }
 
     private OpenshiftRequestContext whenCreatingUserContext(String username) throws Exception {
-        doReturn(username).when(utils).assertUser(any(RestRequest.class));
+        doReturn(username).when(utils).assertUser(anyString());
         this.context = factory.create(request);
         return this.context;
     }
@@ -207,7 +223,7 @@ public class OpenshiftRequestContextFactoryTest {
         givenUserContextFactory(true);
         givenUserHasProjects();
         whenCreatingUserContext();
-        assertTrue("Exp. the request context to have a users projects", !context.getProjects().isEmpty());
+        assertTrue("Exp. the request context to not have users projects", context.getProjects().isEmpty());
         assertTrue("Exp. the request context to identify an ops user", context.isOperationsUser());
     }
 

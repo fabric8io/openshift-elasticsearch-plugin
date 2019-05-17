@@ -73,13 +73,14 @@ import io.fabric8.elasticsearch.plugin.acl.SearchGuardRolesMapping;
  *               resource: prometheus 
  *               resourceAPIGroup: metrics.openshift.io
  */
-public class OpenShiftTokenAuthentication implements AuthenticationBackend, HTTPAuthenticator {
+public class OpenShiftTokenAuthentication implements AuthenticationBackend, HTTPAuthenticator, BackendRoleRetriever {
 
     private static final Logger LOGGER = Loggers.getLogger(OpenShiftTokenAuthentication.class);
     private final Map<String, Settings> sars;
 
     public OpenShiftTokenAuthentication(final Settings settings) {
         sars = settings.getGroups("subjectAccessReviews");
+        PluginServiceFactory.setBackendRoleRetriever(this);
     }
 
     @Override
@@ -93,7 +94,7 @@ public class OpenShiftTokenAuthentication implements AuthenticationBackend, HTTP
                 if (requestContext == OpenshiftRequestContext.EMPTY) {
                     return null;
                 }
-                return new AuthCredentials(requestContext.getUser(), retrieveBackendRoles(requestContext)).markComplete();
+                return new AuthCredentials(requestContext.getUser(), requestContext.getBackendRoles()).markComplete();
             } catch (ElasticsearchSecurityException ese) {
                 throw ese;
             } catch (Exception e) {
@@ -110,14 +111,14 @@ public class OpenShiftTokenAuthentication implements AuthenticationBackend, HTTP
             if(context == null || context == OpenshiftRequestContext.EMPTY) {
                 return null;
             }
-            User user = new User(context.getUser(), retrieveBackendRoles(context));
+            User user = new User(context.getUser(), context.getBackendRoles());
             addGeneralRoles(user, credentials, context);
             return user;
         }
         return null;
     }
 
-    private Collection<String> retrieveBackendRoles(OpenshiftRequestContext context) {
+    public Collection<String> retrieveBackendRoles(String token) {
         List<String> roles = new ArrayList<>();
         if (PluginServiceFactory.isReady()) {
             final SecurityManager sm = System.getSecurityManager();
@@ -132,7 +133,7 @@ public class OpenShiftTokenAuthentication implements AuthenticationBackend, HTTP
                     public Boolean run() {
                         try {
                             Settings params = sar.getValue();
-                            return apiService.localSubjectAccessReview(context.getToken(), 
+                            return apiService.localSubjectAccessReview(token, 
                                     params.get("namespace"),
                                     params.get("verb"), 
                                     params.get("resource"), 

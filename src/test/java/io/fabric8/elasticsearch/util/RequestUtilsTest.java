@@ -19,6 +19,7 @@ package io.fabric8.elasticsearch.util;
 import static org.junit.Assert.assertEquals;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public class RequestUtilsTest {
         headers.put(CONTENT_TYPE, Arrays.asList("application/x-ndjson"));
         RestRequest request = new TestRestRequest(headers);
         
-        OpenshiftRequestContext context = new OpenshiftRequestContextFactory.OpenshiftRequestContext("foo", null, false, new HashSet<>(), null, null);
+        OpenshiftRequestContext context = new OpenshiftRequestContextFactory.OpenshiftRequestContext("foo", null, false, new HashSet<>(), null, null, Collections.emptyList());
         RestRequest modifyRequest = util.modifyRequest(request, context , null);
         assertEquals("application/json", modifyRequest.header(CONTENT_TYPE));
     }

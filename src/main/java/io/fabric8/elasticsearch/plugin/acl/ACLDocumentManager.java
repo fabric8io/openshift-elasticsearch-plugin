@@ -100,14 +100,43 @@ public class ACLDocumentManager implements ConfigurationSettings {
             LOGGER.debug(message, obj);
         }
     }
+    
+    @SuppressWarnings("rawtypes")
+    class SyncAndExpireOperation implements ACLDocumentOperation {
+        
+        private SyncFromContextOperation sync;
+        private ExpireOperation expire;
+        
+        SyncAndExpireOperation(OpenshiftRequestContext context){
+            long now = System.currentTimeMillis();
+            sync = new SyncFromContextOperation(context, now);
+            expire = new ExpireOperation(now);
+        }
 
+        @Override
+        public void execute(Collection<SearchGuardACLDocument> docs) {
+            //purposely expire and then sync to add back in
+            expire.execute(docs);
+            sync.execute(docs);
+        }
+
+        @Override
+        public BulkRequest buildRequest(Client client, BulkRequestBuilder builder,
+                Collection<SearchGuardACLDocument> docs) throws IOException {
+            return expire.buildRequest(client, builder, docs);
+        }
+        
+    }
+    
     @SuppressWarnings("rawtypes")
     class SyncFromContextOperation implements ACLDocumentOperation {
 
         private OpenshiftRequestContext context;
+        private long now;
 
-        public SyncFromContextOperation(OpenshiftRequestContext context) {
+        public SyncFromContextOperation(OpenshiftRequestContext context, final long now) {
             this.context = context;
+            this.now = now;
         }
         
         @Override
@@ -115,10 +144,10 @@ public class ACLDocumentManager implements ConfigurationSettings {
             LOGGER.debug("Syncing from context to ACL...");
             for (SearchGuardACLDocument doc : docs) {
                 if(ConfigurationSettings.SEARCHGUARD_MAPPING_TYPE.equals(doc.getType())){
-                    RolesMappingSyncStrategy rolesMappingSync = documentFactory.createRolesMappingSyncStrategy((SearchGuardRolesMapping) doc);
+                    RolesMappingSyncStrategy rolesMappingSync = documentFactory.createRolesMappingSyncStrategy((SearchGuardRolesMapping) doc, now);
                     rolesMappingSync.syncFrom(context);
                 } else if(ConfigurationSettings.SEARCHGUARD_ROLE_TYPE.equals(doc.getType())) {
-                    RolesSyncStrategy rolesSync = documentFactory.createRolesSyncStrategy((SearchGuardRoles) doc);
+                    RolesSyncStrategy rolesSync = documentFactory.createRolesSyncStrategy((SearchGuardRoles) doc, now);
                     rolesSync.syncFrom(context);
                 }
             }
@@ -189,6 +218,7 @@ public class ACLDocumentManager implements ConfigurationSettings {
                 IndexRequestBuilder indexBuilder = client
                         .prepareIndex(searchGuardIndex, doc.getType(), SEARCHGUARD_CONFIG_ID)
                         .setOpType(OpType.INDEX)
+                        .setVersion(doc.getVersion())
                         .setSource(content);
                 builder.add(indexBuilder.request());
             }
@@ -196,12 +226,8 @@ public class ACLDocumentManager implements ConfigurationSettings {
         }
     }
 
-    public void expire() {
-        syncAcl(new ExpireOperation(System.currentTimeMillis()));
-    }
-
     public void syncAcl(OpenshiftRequestContext context) {
-        if(!syncAcl(new SyncFromContextOperation(context))){
+        if(!syncAcl(new SyncAndExpireOperation(context))){
             LOGGER.warn("Unable to sync ACLs for request from user: {}", context.getUser());
         }
     }    

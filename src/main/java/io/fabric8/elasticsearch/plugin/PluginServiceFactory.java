@@ -18,6 +18,8 @@ package io.fabric8.elasticsearch.plugin;
 
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 
+import io.fabric8.elasticsearch.plugin.auth.BackendRoleRetriever;
+
 /**
  * Static factory class to provide late binding between
  * SG Authentication implementations and this plugin's
@@ -29,6 +31,7 @@ public class PluginServiceFactory {
     private static OpenshiftAPIService apiService;
     private static boolean isReady;
     private static ThreadContext threadContext;
+    private static BackendRoleRetriever backendRoleRetriever;
 
     private PluginServiceFactory() {
     }
@@ -67,6 +70,14 @@ public class PluginServiceFactory {
 
     public static void setThreadContext(ThreadContext threadContext) {
         PluginServiceFactory.threadContext = threadContext;
+    }
+
+    public static BackendRoleRetriever getBackendRoleRetriever() {
+        return backendRoleRetriever;
+    }
+
+    public static void setBackendRoleRetriever(BackendRoleRetriever backendRoleRetriever) {
+        PluginServiceFactory.backendRoleRetriever = backendRoleRetriever;
     }
     
 }

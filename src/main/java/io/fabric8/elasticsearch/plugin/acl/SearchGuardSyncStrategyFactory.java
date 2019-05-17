@@ -33,16 +33,16 @@ public class SearchGuardSyncStrategyFactory {
         this.settings = settings;
     }
     
-    public RolesMappingSyncStrategy createRolesMappingSyncStrategy(SearchGuardRolesMapping mapping) {
-        final long expires = System.currentTimeMillis() + settings.getACLExpiresInMillis();
+    public RolesMappingSyncStrategy createRolesMappingSyncStrategy(SearchGuardRolesMapping mapping, long currentTime) {
+        final long expires = currentTime + settings.getACLExpiresInMillis();
         if(PROJECT.equals(settings.getRoleStrategy())) {
             return new ProjectRolesMappingSyncStrategy(mapping, expires);
         }
         return new UserRolesMappingSyncStrategy(mapping, expires);
     }
     
-    public RolesSyncStrategy createRolesSyncStrategy(SearchGuardRoles roles) {
-        final long expires = System.currentTimeMillis() + settings.getACLExpiresInMillis();
+    public RolesSyncStrategy createRolesSyncStrategy(SearchGuardRoles roles, long currentTime) {
+        final long expires = currentTime + settings.getACLExpiresInMillis();
         if(PROJECT.equals(settings.getRoleStrategy())) {
             return new ProjectRolesSyncStrategy(roles, 
                     settings.getDefaultKibanaIndex(), settings.getCdmProjectPrefix(), settings.getKibanaIndexMode(), expires);

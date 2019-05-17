@@ -18,19 +18,24 @@ package io.fabric8.elasticsearch.plugin.kibana;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.search.SearchHit;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
 import io.fabric8.elasticsearch.plugin.PluginClient;
+import io.fabric8.elasticsearch.plugin.PluginClient.BulkBuilder;
 import io.fabric8.elasticsearch.plugin.PluginSettings;
 import io.fabric8.elasticsearch.plugin.model.Project;
 
@@ -114,7 +119,6 @@ public class KibanaSeed implements ConfigurationSettings {
 
     private Tuple<Boolean, Project> seedUsersIndexPatterns(final OpenshiftRequestContext context, final String kibanaVersion) {
         boolean changed = false;
-        Project defaultProject = Project.EMPTY;
         Set<Project> projectsFromIndexPatterns = kibanaUtils.getProjectsFromIndexPatterns(context);
         LOGGER.debug("Found '{}' Index patterns for user", projectsFromIndexPatterns.size());
 
@@ -130,10 +134,12 @@ public class KibanaSeed implements ConfigurationSettings {
         Collections.sort(projectsWithIndices);
 
         // If none have been set yet
+        BulkBuilder bulkBuilder = pluginClient.newBulkBuilder();
+        Project defaultProject = projectsWithIndices.isEmpty() ? Project.EMPTY : projectsWithIndices.get(0);
         if (projectsFromIndexPatterns.isEmpty()) {
-            create(context.getKibanaIndex(), projectsWithIndices, projectsFromIndexPatterns);
+            create(bulkBuilder, context.getKibanaIndex(), projectsWithIndices, projectsFromIndexPatterns);
+            bulkBuilder.execute();
             changed = true;
-            defaultProject = projectsWithIndices.isEmpty() ? null : projectsWithIndices.get(0);
         } else {
 
             List<Project> common = new ArrayList<Project>(projectsFromIndexPatterns);
@@ -157,10 +163,12 @@ public class KibanaSeed implements ConfigurationSettings {
 
             // for any to create (remaining in projects) call createIndices,
             // createSearchmapping?, create dashboard
-            create(context.getKibanaIndex(), projectsWithIndices, projectsFromIndexPatterns);
+            create(bulkBuilder, context.getKibanaIndex(), projectsWithIndices, projectsFromIndexPatterns);
+            
 
             // cull any that are in ES but not in OS (remaining in indexPatterns)
-            remove(context.getKibanaIndex(), projectsFromIndexPatterns);
+            remove(bulkBuilder, context.getKibanaIndex(), projectsFromIndexPatterns);
+            bulkBuilder.execute();
 
             common.addAll(projectsWithIndices);
             Collections.sort(common);
@@ -177,14 +185,25 @@ public class KibanaSeed implements ConfigurationSettings {
      * with it
      */
     private List<Project> filterProjectsWithIndices(Set<Project> projects) {
-        List<Project> result = new ArrayList<>(projects.size());
+        List<String> patterns = new ArrayList<>(projects.size());
         for (Project project : projects) {
             String indexPattern = kibanaUtils.formatIndexPattern(project);
-            if (pluginClient.indexExists(indexPattern)) {
-                result.add(project);
-            }
+            patterns.add(indexPattern);
         }
-        return result;
+        LOGGER.trace("Evaluating {} indexPattern for existing index.", patterns.size());
+        Set<Project> result = new HashSet<>(projects.size());
+        SearchResponse response = pluginClient.search(patterns.toArray(new String[]{}), ArrayUtils.EMPTY_STRING_ARRAY, 1000, false);
+        if (response.getHits() == null ) {
+            LOGGER.warn("Searching for indexPatterns returned a response with a null hits (e.g. response.getHits())");
+            return Collections.emptyList();
+        }
+        for (SearchHit hit : response.getHits().getHits()){
+            LOGGER.trace("Evaluating index {}", hit.getIndex());
+            Project project = kibanaUtils.getProjectFromIndex(hit.getIndex());
+            LOGGER.trace("Found index for project {}", project);
+            result.add(project);
+        }
+        return new ArrayList<>(result);
     }
 
     private boolean initialSeedKibanaIndex(final OpenshiftRequestContext context) {
@@ -213,25 +232,25 @@ public class KibanaSeed implements ConfigurationSettings {
         pluginClient.updateDocument(kibanaIndex, CONFIG_DOC_TYPE, kibanaVersion, source);
     }
 
-    private void create(String kibanaIndex, List<Project> projects, Set<Project> projectsWithIndexPatterns) {
+    private void create(BulkBuilder bulkBuilder, String kibanaIndex, List<Project> projects, Set<Project> projectsWithIndexPatterns) {
         LOGGER.trace("Creating index-patterns for projects: '{}'", projects);
         for (Project project : projects) {
             if (projectsWithIndexPatterns.contains(project)) { // no need to update
                 LOGGER.trace("Skipping creation of index-pattern for project '{}'. It already exists.", project);
                 continue;
             }
-            createIndexPattern(kibanaIndex, project, settings.getCdmProjectPrefix());
+            createIndexPattern(bulkBuilder, kibanaIndex, project, settings.getCdmProjectPrefix());
         }
     }
 
-    private void remove(String kibanaIndex, Set<Project> projects) {
+    private void remove(BulkBuilder bulkBuilder, String kibanaIndex, Set<Project> projects) {
 
         for (Project project : projects) {
-            pluginClient.deleteDocument(kibanaIndex, INDICIES_TYPE, kibanaUtils.formatIndexPattern(project));
+            bulkBuilder.deleteDocument(kibanaIndex, INDICIES_TYPE, kibanaUtils.formatIndexPattern(project));
         }
     }
 
-    private void createIndexPattern(String kibanaIndex, Project project, String projectPrefix) {
+    private void createIndexPattern(BulkBuilder bulkBuilder, String kibanaIndex, Project project, String projectPrefix) {
 
         final String indexPattern = kibanaUtils.formatIndexPattern(project);
         String source;
@@ -244,7 +263,7 @@ public class KibanaSeed implements ConfigurationSettings {
         if (source != null) {
             LOGGER.trace("Creating index-pattern for project '{}'", project);
             source = source.replaceAll("\\$TITLE\\$", indexPattern);
-            pluginClient.createDocument(kibanaIndex, INDICIES_TYPE, indexPattern, source);
+            bulkBuilder.createDocument(kibanaIndex, INDICIES_TYPE, indexPattern, source);
         } else {
             LOGGER.debug("The source for the index mapping is null.  Skipping trying to create index pattern {}",
                     indexPattern);

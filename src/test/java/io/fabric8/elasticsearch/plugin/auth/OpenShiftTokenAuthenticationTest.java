@@ -27,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,7 +64,8 @@ public class OpenShiftTokenAuthenticationTest {
     private RestRequest request;
     private String username = "tokenUserName@test.com";
     private OpenshiftRequestContextFactory contextFactory = mock(OpenshiftRequestContextFactory.class);
-    private OpenshiftRequestContext context = new OpenshiftRequestContext(username, "theAuthToken", true, new HashSet<>(), ".kibana", KibanaIndexMode.SHARED_OPS);
+    private OpenshiftRequestContext context = 
+            new OpenshiftRequestContext(username, "theAuthToken", true, new HashSet<>(), ".kibana", KibanaIndexMode.SHARED_OPS, Collections.emptyList());
     private ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
     private OpenshiftAPIService apiService = mock(OpenshiftAPIService.class);
     
@@ -89,6 +91,13 @@ public class OpenShiftTokenAuthenticationTest {
         PluginServiceFactory.setContextFactory(contextFactory);
         PluginServiceFactory.setThreadContext(threadContext);
         PluginServiceFactory.setApiService(apiService);
+        PluginServiceFactory.setBackendRoleRetriever(new BackendRoleRetriever() {
+            
+            @Override
+            public Collection<String> retrieveBackendRoles(String token) {
+                return Collections.emptyList();
+            }
+        });
         PluginServiceFactory.markReady();
     }
     
@@ -108,7 +117,7 @@ public class OpenShiftTokenAuthenticationTest {
         when(contextFactory.create(any(RestRequest.class))).thenReturn(context);
         
         threadContext.putTransient(ConfigurationSettings.OPENSHIFT_REQUEST_CONTEXT, 
-            new OpenshiftRequestContext(username, "atoken", false, Collections.emptySet(), null, null));
+            new OpenshiftRequestContext(username, "atoken", false, Collections.emptySet(), null, null, Collections.emptyList()));
         
         User expUser = new User(username);
         expUser.addRole(BaseRolesSyncStrategy.formatUserRoleName(username));
