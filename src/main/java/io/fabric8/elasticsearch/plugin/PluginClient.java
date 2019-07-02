@@ -42,6 +42,8 @@ import org.elasticsearch.action.admin.indices.refresh.RefreshRequestBuilder;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequestBuilder;
 import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsResponse;
+import org.elasticsearch.action.bulk.BulkRequestBuilder;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
@@ -111,17 +113,57 @@ public class PluginClient {
             }
         });
     }
+    
+    public class BulkBuilder {
+        
+        private final BulkRequestBuilder builder = client.prepareBulk();
+        private final PluginClient pluginClient;
+        
+        BulkBuilder(PluginClient pluginClient){
+            this.pluginClient = pluginClient;
+        }
+        
+        public BulkBuilder createDocument(String index, String type, String id, String source) {
+            LOGGER.trace("bulk create document: '{}/{}/{}'", index, type, id);
+            builder.add(client.prepareIndex(index, type, id).setSource(source, XContentType.JSON));
+            return this;
+        }
 
-    public SearchResponse search(String index, String type) {
-        return search(new String[] { index }, new String[] { type });
+        public BulkBuilder deleteDocument(String index, String type, String id) {
+            LOGGER.trace("bulk delete document: '{}/{}/{}'", index, type, id);
+            builder.add(client.prepareDelete(index, type, id));
+            return this;
+        }
+        
+        public BulkResponse execute() {
+            return pluginClient.execute(new Callable<BulkResponse>() {
+                @Override
+                public BulkResponse call() throws Exception {
+                    return builder.get();
+                }
+            });  
+        }
+    }
+    
+    
+    public BulkBuilder newBulkBuilder() {
+        return new BulkBuilder(this);
     }
 
-    public SearchResponse search(String[] indicies, String[] types) {
+    public SearchResponse search(String index, String type, int size, boolean fetchSource) {
+        return search(new String[] { index }, new String[] { type }, size, fetchSource);
+    }
+
+    public SearchResponse search(String[] indicies, String[] types, int size, boolean fetchSource) {
         return execute(new Callable<SearchResponse>() {
 
             @Override
             public SearchResponse call() throws Exception {
-                return client.prepareSearch(indicies).setTypes(types).get();
+                return client.prepareSearch(indicies)
+                        .setTypes(types)
+                        .setSize(size)
+                        .setFetchSource(fetchSource)
+                        .get();
             }
 
         });

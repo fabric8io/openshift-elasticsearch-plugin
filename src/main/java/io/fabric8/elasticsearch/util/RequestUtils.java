@@ -112,13 +112,11 @@ public class RequestUtils implements ConfigurationSettings  {
         return threadContext != null && StringUtils.isNotEmpty(threadContext.getTransient("_sg_ssl_transport_principal"));
     }
 
-    public boolean isOperationsUser(final RestRequest request) {
+    public boolean isOperationsUser(final String user, final String token) {
         return executePrivilegedAction(new PrivilegedAction<Boolean>(){
 
             @Override
             public Boolean run() {
-                final String user = StringUtils.defaultIfEmpty(getUser(request), "<UNKNOWN>");
-                final String token = getBearerToken(request);
                 boolean allowed = false;
                 try {
                     allowed = apiService.localSubjectAccessReview(token, "default", "view", "pods/log","", ArrayUtils.EMPTY_STRING_ARRAY);
@@ -141,12 +139,11 @@ public class RequestUtils implements ConfigurationSettings  {
         return AccessController.doPrivileged(action);
     }
         
-    public String assertUser(RestRequest request){
+    public String assertUser(final String token){
         return executePrivilegedAction(new PrivilegedAction<String>() {
 
             @Override
             public String run() {
-                final String token = getBearerToken(request);
                 return apiService.userName(token);
             }
             

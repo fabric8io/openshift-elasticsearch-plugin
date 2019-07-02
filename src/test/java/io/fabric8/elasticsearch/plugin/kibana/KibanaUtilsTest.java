@@ -17,6 +17,8 @@
 package io.fabric8.elasticsearch.plugin.kibana;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -68,7 +70,7 @@ public class KibanaUtilsTest {
         ShardSearchFailure[] failures = null;
         SearchResponse response = new SearchResponse(sections, "", 0, 0, 0, 0L, failures);
 
-        when(client.search(anyString(), anyString())).thenReturn(response);
+        when(client.search(anyString(), anyString(),anyInt(), anyBoolean())).thenReturn(response);
     }
 
     private void givenSearchResultForDocuments(String indexPattern, Map<String, BytesReference> docs) {
@@ -88,12 +90,12 @@ public class KibanaUtilsTest {
         ShardSearchFailure[] failures = null;
         SearchResponse response = new SearchResponse(sections, "", 0, 0, 0, 0L, failures);
 
-        when(client.search(anyString(), anyString())).thenReturn(response);
+        when(client.search(anyString(), anyString(),anyInt(), anyBoolean())).thenReturn(response);
     }
 
     @SuppressWarnings("unchecked")
     private void givenSearchThrowsError() {
-        when(client.search(anyString(), anyString())).thenThrow(IndexNotFoundException.class);
+        when(client.search(anyString(), anyString(),anyInt(), anyBoolean())).thenThrow(IndexNotFoundException.class);
     }
 
     @Test
@@ -264,6 +266,32 @@ public class KibanaUtilsTest {
     @Test
     public void testGetProjectFromIndexPatternWhenSeededPattern() {
         assertEquals(new Project("foo", "uuid"), utils.getProjectFromIndexPattern("project.foo.uuid.*"));
+    }
+
+    @Test
+    public void testGetProjectFromIndexWhenEmpty() {
+        assertEquals(Project.EMPTY, utils.getProjectFromIndex(""));
+    }
+
+    @Test
+    public void testGetProjectFromIndexWhenOperations() {
+        assertEquals(new Project(".operations", null), utils.getProjectFromIndex(".operations.2019.05.16"));
+    }
+
+    @Test
+    public void testGetProjectFromIndexWhenAllAlias() {
+        assertEquals(new Project(".all", null), utils.getProjectFromIndex(".all"));
+    }
+
+    @Test
+    public void testGetProjectFromIndexWhenUserCreated() {
+        assertEquals(new Project("foo", null), utils.getProjectFromIndex("foo"));
+    }
+
+    @Test
+    public void testGetProjectFromIndexWhenSeededPattern() {
+        assertEquals(new Project("test-project-285", "7f8e058f-7815-11e9-9dff-525400b6beac"), 
+                utils.getProjectFromIndex("project.test-project-285.7f8e058f-7815-11e9-9dff-525400b6beac.2019.05.16"));
     }
 
 }

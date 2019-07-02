@@ -93,14 +93,12 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         final OpenshiftAPIService apiService = new OpenshiftAPIService();
         final RequestUtils requestUtils = new RequestUtils(pluginSettings, apiService);
         final OpenshiftRequestContextFactory contextFactory = new OpenshiftRequestContextFactory(settings, requestUtils,
-                apiService);
+                apiService, threadPool.getThreadContext());
         final SearchGuardSyncStrategyFactory documentFactory = new SearchGuardSyncStrategyFactory(pluginSettings);
         final KibanaUtils kUtils = new KibanaUtils(pluginSettings, pluginClient);
         final KibanaSeed seed = new KibanaSeed(pluginSettings, indexMappingLoader, pluginClient, kUtils);
         final ACLDocumentManager aclDocumentManager = new ACLDocumentManager(pluginClient, pluginSettings, documentFactory, threadPool);
         this.aclFilter = new DynamicACLFilter(pluginSettings, seed, client, threadPool, requestUtils, aclDocumentManager);
-        OpenShiftElasticSearchService osElasticService = new OpenShiftElasticSearchService(aclDocumentManager, pluginSettings);
-        clusterService.addLocalNodeMasterListener(osElasticService);
         
         PluginServiceFactory.setApiService(apiService);
         PluginServiceFactory.setContextFactory(contextFactory);
@@ -119,7 +117,6 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
         list.add(kUtils);
         list.add(seed);
         list.add(aclFilter);
-        list.add(osElasticService);
         list.add(new FieldStatsResponseFilter(pluginClient));
         list.addAll(sgPlugin.createComponents(client, clusterService, threadPool, resourceWatcherService, scriptService,
                 namedXContentRegistry));
@@ -204,6 +201,8 @@ public class OpenShiftElasticSearchPlugin extends Plugin implements Configuratio
     @Override
     public List<Setting<?>> getSettings() {
         List<Setting<?>> settings = sgPlugin.getSettings();
+        settings.add(Setting.intSetting(OPENSHIFT_CONTEXT_CACHE_MAXSIZE, DEFAULT_OPENSHIFT_CONTEXT_CACHE_MAXSIZE, Property.NodeScope));
+        settings.add(Setting.longSetting(OPENSHIFT_CONTEXT_CACHE_EXPIRE_SECONDS, DEFAULT_OPENSHIFT_CONTEXT_CACHE_EXPIRE_SECONDS, 0, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS, Property.NodeScope));
         settings.add(Setting.simpleString(OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_EMPTY, Property.NodeScope));

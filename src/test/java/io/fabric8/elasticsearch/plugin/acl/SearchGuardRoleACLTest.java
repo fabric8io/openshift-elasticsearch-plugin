@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.StringReader;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,7 +47,7 @@ public class SearchGuardRoleACLTest {
     }
     
     private OpenshiftRequestContext givenContextFor(String user, boolean isOperations, String mode, String...projects) {
-        return new OpenshiftRequestContext(user, "", isOperations, createProjects(projects), "someKibanaIndexValue", mode);
+        return new OpenshiftRequestContext(user, "", isOperations, createProjects(projects), "someKibanaIndexValue", mode, Collections.emptyList());
     }
     
     private ProjectRolesSyncStrategy givenProjectRolesSyncStrategyFor(String mode) {

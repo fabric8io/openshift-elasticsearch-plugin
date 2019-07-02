@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
@@ -69,7 +70,7 @@ public class KibanaSeedTest {
         KibanaUtils utils = new KibanaUtils(settings, pluginClient);
         seeder = new KibanaSeed(settings, loader, pluginClient, utils);
         context = new OpenshiftRequestContextFactory.OpenshiftRequestContext(USER, TOKEN, true, 
-                new HashSet<Project>(), ".kibana_123", KibanaIndexMode.SHARED_OPS);
+                new HashSet<Project>(), ".kibana_123", KibanaIndexMode.SHARED_OPS, Collections.emptyList());
         when(loader.getOperationsMappingsTemplate()).thenReturn("{\"foo\":\"bar\"");
         when(pluginClient.updateDocument(anyString(), anyString(), anyString(), anyString())).thenReturn(mock(UpdateResponse.class));
    

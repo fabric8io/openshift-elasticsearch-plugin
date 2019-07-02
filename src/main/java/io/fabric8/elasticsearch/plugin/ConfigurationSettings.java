@@ -60,6 +60,7 @@ public interface ConfigurationSettings extends KibanaIndexMode{
      * The maximum time time in milliseconds to wait for SearchGuard to sync the
      * ACL from a write from this plugin until load by searchguard
      */
+    
     /** OpenShift settings here **/
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_APP = "io.fabric8.elasticsearch.kibana.mapping.app";
     static final String OPENSHIFT_ES_KIBANA_SEED_MAPPINGS_OPERATIONS = "io.fabric8.elasticsearch.kibana.mapping.ops";
@@ -71,6 +72,7 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     static final String[] DEFAULT_OPENSHIFT_OPS_PROJECTS = new String[] { "default", "openshift", "openshift-infra",
         "kube-system" };
     static final String OPENSHIFT_REQUEST_CONTEXT = "x-openshift-request-context";
+    static final String SYNC_AND_SEED = "x-openshift-sync-and-seed-acls";
 
     static final String DEFAULT_AUTH_PROXY_HEADER = "X-Proxy-Remote-User";
     static final String DEFAULT_SECURITY_CONFIG_INDEX = "searchguard";
@@ -83,6 +85,11 @@ public interface ConfigurationSettings extends KibanaIndexMode{
     };
 
     static final String OPENSHIFT_ACL_EXPIRE_IN_MILLIS = "openshift.acl.expire_in_millis";
+    
+    static final String OPENSHIFT_CONTEXT_CACHE_MAXSIZE = "openshift.context.cache.maxsize";
+    static final String OPENSHIFT_CONTEXT_CACHE_EXPIRE_SECONDS = "openshift.context.cache.expireseconds";
+    static final int DEFAULT_OPENSHIFT_CONTEXT_CACHE_MAXSIZE = 500;
+    static final long DEFAULT_OPENSHIFT_CONTEXT_CACHE_EXPIRE_SECONDS = 120;
 
     /**
      * The strategy to use for generating roles and role mappings
