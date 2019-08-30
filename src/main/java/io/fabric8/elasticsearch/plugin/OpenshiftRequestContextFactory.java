@@ -141,7 +141,7 @@ public class OpenshiftRequestContextFactory
         if (StringUtils.isNotBlank(token)){
             try {
                 return contextCache.get(token);
-            } catch(ExecutionException e) {
+            } catch(Exception e) {
                 LOGGER.error("Error trying to fetch user's context from the cache",e);
             }
         }

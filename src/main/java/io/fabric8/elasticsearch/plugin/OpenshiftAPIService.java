@@ -65,6 +65,7 @@ public class OpenshiftAPIService {
         try (DefaultOpenShiftClient client = factory.buildClient(token)) {
             Request okRequest = new Request.Builder()
                     .url(client.getMasterUrl() + "apis/user.openshift.io/v1/users/~")
+                    .header("Authorization", "Bearer " + token)
                     .header(ACCEPT, APPLICATION_JSON)
                     .build();
             response = client.getHttpClient().newCall(okRequest).execute();
@@ -86,6 +87,7 @@ public class OpenshiftAPIService {
         try (DefaultOpenShiftClient client = factory.buildClient(token)) {
             Request request = new Request.Builder()
                 .url(client.getMasterUrl() + "apis/project.openshift.io/v1/projects")
+                .header("Authorization", "Bearer " + token)
                 .header(ACCEPT, APPLICATION_JSON)
                 .build();
             Response response = client.getHttpClient().newCall(request).execute();
@@ -142,6 +144,7 @@ public class OpenshiftAPIService {
             payload.endObject();
             Request request = new Request.Builder()
                     .url(String.format("%sapis/authorization.openshift.io/v1/subjectaccessreviews", client.getMasterUrl(), project))
+                    .header("Authorization", "Bearer " + token)
                     .header(CONTENT_TYPE, APPLICATION_JSON)
                     .header(ACCEPT, APPLICATION_JSON)
                     .post(RequestBody.create(MediaType.parse(APPLICATION_JSON), payload.string()))
