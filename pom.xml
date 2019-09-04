@@ -74,7 +74,7 @@
         <elasticsearch.plugin.name>openshift-elasticsearch</elasticsearch.plugin.name>
         <elasticsearch.version>5.6.16</elasticsearch.version>
         <kubernetes-client.version>4.4.2</kubernetes-client.version>
-        <searchguard.version>5.6.16-19.3</searchguard.version>
+        <searchguard.version>5.6.16.19-3</searchguard.version>
         <searchguard-ssl.version>5.6.16-23</searchguard-ssl.version>
         <!-- used by vendor builds to use vendor version of searchguard plugins -->
         <version.suffix />
