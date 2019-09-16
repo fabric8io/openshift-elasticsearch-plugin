@@ -41,7 +41,10 @@ public abstract class KibanaIndexModeIntegrationBase extends ElasticsearchIntegr
     
     @Before
     public void setup() throws Exception {
-        givenDocumentIsIndexed("project.multi-tenancy-1.uuid.1970.01.01", "test", "0", "multi-tenancy-1-doc0");
+        //https://bugzilla.redhat.com/show_bug.cgi?id=1746377
+        for (int i = 0; i < 1100; ++ i) {
+            givenDocumentIsIndexed("project.multi-tenancy-1.uuid.1970.01.01", "test", String.valueOf(i), "multi-tenancy-1-doc0");
+        }
         givenDocumentIsIndexed("project.multi-tenancy-2.uuid.1970.01.01", "test", "0", "multi-tenancy-2-doc0");
         givenDocumentIsIndexed("project.multi-tenancy-3.uuid.1970.01.01", "test", "0", "multi-tenancy-3-doc0");
     }

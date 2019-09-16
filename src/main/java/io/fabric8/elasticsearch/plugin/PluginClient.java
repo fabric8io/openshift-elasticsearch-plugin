@@ -57,6 +57,7 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.concurrent.ThreadContext;
 import org.elasticsearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.search.sort.SortOrder;
 
 import com.floragunn.searchguard.support.ConfigConstants;
 
@@ -163,6 +164,7 @@ public class PluginClient {
                         .setTypes(types)
                         .setSize(size)
                         .setFetchSource(fetchSource)
+                        .addSort("_index", SortOrder.ASC)
                         .get();
             }
 

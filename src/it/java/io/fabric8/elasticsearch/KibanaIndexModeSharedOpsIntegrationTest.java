@@ -45,6 +45,17 @@ public class KibanaIndexModeSharedOpsIntegrationTest extends KibanaIndexModeInte
         //verify access to unique kibana index
         whenGettingDocument(String.format("%s/config/%s", kibanaIndex, OLD_KIBANA_VERSION));
         assertThatResponseIsSuccessful();
+
+        
+        //verify seeded index patterns
+        for (String project : projects) {
+            whenGettingDocument(String.format("%s/index-pattern/%s", kibanaIndex, formatProjectIndexPattern(project, "uuid")));
+            assertThatResponseIsSuccessful();
+        }
+
+        //verify access to index pattern for project we dont administer
+        whenGettingDocument(String.format("%s/index-pattern/%s", kibanaIndex, formatProjectIndexPattern("multi-tenancy-3", "uuid")));
+        assertThatResponseIsNotFound();
         
         //verify search to individual projects
         for (String project : projects) {
