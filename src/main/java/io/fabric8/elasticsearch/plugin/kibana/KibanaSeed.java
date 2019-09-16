@@ -22,15 +22,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
 import org.elasticsearch.action.get.GetResponse;
-import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.logging.Loggers;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.search.SearchHit;
 
 import io.fabric8.elasticsearch.plugin.ConfigurationSettings;
 import io.fabric8.elasticsearch.plugin.OpenshiftRequestContextFactory.OpenshiftRequestContext;
@@ -192,16 +190,14 @@ public class KibanaSeed implements ConfigurationSettings {
         }
         LOGGER.trace("Evaluating {} indexPattern for existing index.", patterns.size());
         Set<Project> result = new HashSet<>(projects.size());
-        SearchResponse response = pluginClient.search(patterns.toArray(new String[]{}), ArrayUtils.EMPTY_STRING_ARRAY, 1000, false);
-        if (response.getHits() == null ) {
-            LOGGER.warn("Searching for indexPatterns returned a response with a null hits (e.g. response.getHits())");
-            return Collections.emptyList();
-        }
-        for (SearchHit hit : response.getHits().getHits()){
-            LOGGER.trace("Evaluating index {}", hit.getIndex());
-            Project project = kibanaUtils.getProjectFromIndex(hit.getIndex());
-            LOGGER.trace("Found index for project {}", project);
-            result.add(project);
+        GetIndexResponse response = pluginClient.getIndex(patterns.toArray(new String[]{}));
+        for (String index : response.getIndices()) {
+            LOGGER.trace("Evaluating index {}", index);
+            Project project = kibanaUtils.getProjectFromIndex(index);
+            if(projects.contains(project)) {
+                LOGGER.trace("Found index for project {}", project);
+                result.add(project);
+            }
         }
         return new ArrayList<>(result);
     }

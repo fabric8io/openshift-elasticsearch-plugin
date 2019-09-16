@@ -523,6 +523,13 @@ public abstract class ElasticsearchIntegrationTest {
         assertEquals(String.format("Exp. %s to be forbidden for %s", username, uri), 403, response.code());
     }
 
+    protected void assertThatResponseIsNotFound() {
+        String username = (String) testContext.get(USERNAME);
+        Response response = (Response) testContext.get(RESPONSE);
+        String uri = (String) testContext.get(URI);
+        assertEquals(String.format("Exp. %s to be not found for %s", username, uri), 404, response.code());
+    }
+    
     protected void assertThatResponseIsUnauthorized() {
         String username = (String) testContext.get(USERNAME);
         Response response = (Response) testContext.get(RESPONSE);
