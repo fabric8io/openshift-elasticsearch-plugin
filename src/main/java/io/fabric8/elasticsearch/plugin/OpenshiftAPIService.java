@@ -37,7 +37,9 @@ import io.fabric8.elasticsearch.plugin.model.Project;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.fabric8.kubernetes.client.utils.HttpClientUtils;
 import io.fabric8.openshift.client.DefaultOpenShiftClient;
+import io.fabric8.openshift.client.OpenShiftConfig;
 import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
@@ -194,8 +196,8 @@ public class OpenshiftAPIService {
     interface OpenShiftClientFactory {
         default DefaultOpenShiftClient buildClient(final String token) {
             Config config = new ConfigBuilder().withOauthToken(token).build();
-            return new DefaultOpenShiftClient(config);
+            config.setHttp2Disable(true);
+            return new DefaultOpenShiftClient(HttpClientUtils.createHttpClient(config), new OpenShiftConfig(config));
         }
-        
     }
 }
