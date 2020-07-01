@@ -194,6 +194,7 @@ public class OpenshiftAPIService {
     interface OpenShiftClientFactory {
         default DefaultOpenShiftClient buildClient(final String token) {
             Config config = new ConfigBuilder().withOauthToken(token).build();
+            config.setHttp2Disable(true);
             return new DefaultOpenShiftClient(config);
         }
         
