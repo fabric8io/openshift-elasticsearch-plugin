@@ -82,17 +82,22 @@ public class OpenshiftAPIService {
         } catch (IOException e) {
             LOGGER.error("Error retrieving username from token", e);
             throw new ElasticsearchException(e);
-        }        
+        } finally {
+            if (response != null ) {
+                response.close();
+            }
+        }
     }
     
     public Set<Project> projectNames(final String token){
+        Response response = null;
         try (DefaultOpenShiftClient client = factory.buildClient(token)) {
             Request request = new Request.Builder()
                 .url(client.getMasterUrl() + "apis/project.openshift.io/v1/projects")
                 .header("Authorization", "Bearer " + token)
                 .header(ACCEPT, APPLICATION_JSON)
                 .build();
-            Response response = client.getHttpClient().newCall(request).execute();
+            response = client.getHttpClient().newCall(request).execute();
             if(response.code() != RestStatus.OK.getStatus()) {
                 throw new ElasticsearchSecurityException("Unable to retrieve users's project list", RestStatus.fromCode(response.code()));
             }
@@ -108,6 +113,10 @@ public class OpenshiftAPIService {
         } catch (IOException e) {
             LOGGER.error("Error retrieving project list", e);
             throw new ElasticsearchException(e);
+        } finally {
+            if (response != null ) {
+                response.close();
+            }
         }
     }
     
@@ -128,6 +137,7 @@ public class OpenshiftAPIService {
      */
     public boolean localSubjectAccessReview(final String token, 
             final String project, final String verb, final String resource, final String resourceAPIGroup, final String [] scopes) {
+        Response response = null;
         try (DefaultOpenShiftClient client = factory.buildClient(token)) {
             XContentBuilder payload = XContentFactory.jsonBuilder()
                 .startObject()
@@ -152,7 +162,7 @@ public class OpenshiftAPIService {
                     .post(RequestBody.create(MediaType.parse(APPLICATION_JSON), payload.string()))
                     .build();
             log(request);
-            Response response = client.getHttpClient().newCall(request).execute();
+            response = client.getHttpClient().newCall(request).execute();
             final String body = IOUtils.toString(response.body().byteStream());
             log(response, body);
             if(response.code() != RestStatus.CREATED.getStatus()) {
@@ -161,6 +171,10 @@ public class OpenshiftAPIService {
             return JsonPath.read(body, "$.allowed");
         } catch (IOException e) {
             LOGGER.error("Error determining user's role", e);
+        } finally {
+            if (response != null ) {
+                response.close();
+            }
         }
         return false;
     }
